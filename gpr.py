@@ -1240,7 +1240,8 @@ def main():
             samples = args.sample.split(',')
         else:
             sample = "W" if args.lepton == "1" else "Z"
-            samples = [sample + x for x in ['HH', 'HL', 'LL']]
+            # samples = [sample + x for x in ['HH', 'HL', 'LL']]
+            samples = [sample + x for x in ['LL']]
         f = ROOT.TFile(args.vjets)
         h_vjets = utils.get_hist(f, f'{samples[0]}_{hist_name}')
         for sample in samples[1:]:
