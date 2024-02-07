@@ -25,8 +25,9 @@ and the following output file for RF input:
 from plotting import plot
 import ROOT
 import numpy as np
-import sys
+import os
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+import variable
 
 ##############################################################################
 ###                               UTILITIES                                ###
@@ -129,30 +130,6 @@ def get_response_matrix(h):
 
     return mig_mtx
 
-##############################################################################
-###                               VARIABLES                                ###
-##############################################################################
-
-class Variable:
-    def __init__(self, name, xtitle, unit):
-        self.name = name
-        self.xtitle = xtitle
-        self.unit = unit
-    
-    def __format__(self, __format_spec: str) -> str:
-        if __format_spec:
-            if self.unit:
-                return f'{self.xtitle} [{self.unit}]'
-            else:
-                return f'{self.xtitle}'
-        else:
-            return self.name
-    
-        
-variables = {
-    'vv_m': Variable(name="vv_m", xtitle="m(VV)", unit="GeV"),
-}
-
 
 ##############################################################################
 ###                                PLOTTING                                ###
@@ -222,13 +199,14 @@ def plot_fid_reco(mtx, var, **kwargs):
 ##############################################################################
 
 
-def get_bins(sample, lepton, var):
+def get_bins(sample, lepton, var: variable.Variable):
     if var.name == "vv_m":
         return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
     raise NotImplementedError()
 
 
 def main():
+    ### Args ###
     parser = ArgumentParser(
         description="Plots the migration matrix, efficiency and fiducial accuracy. Saves the response matrix as histograms for use in ResonanceFinder.", 
         formatter_class=ArgumentDefaultsHelpFormatter
@@ -236,11 +214,15 @@ def main():
     parser.add_argument('filepath', help='Path to the CxAODReader output histograms')
     parser.add_argument('sample', help='Sample name used in CxAODReader, such as "SMVV"')
     parser.add_argument("lepton", choices=['0', '1', '2'])
-    parser.add_argument('-o', '--output', default='.')
+    parser.add_argument('-o', '--output', default='./output')
     args = parser.parse_args()
 
+    ### Output dir ###
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
+
     ### Config ###
-    vars = ['vv_m']
+    vars = [variable.vv_m]
     common_subtitle = '#sqrt{s}=13 TeV, 140 fb^{-1}'
     output_basename = f'{args.output}/{args.sample}_{args.lepton}lep'
     plot.file_formats = ['png', 'pdf']
@@ -252,8 +234,6 @@ def main():
 
     ### Run ###
     for var in vars:
-        var = variables[var]
-        
         ### Get base histogram ###
         bins = get_bins(args.sample, args.lepton, var)
         mtx = f.Get(f'{args.sample}_VV{args.lepton}Lep_Merg_unfoldingMtx_{var}')

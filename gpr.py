@@ -48,15 +48,18 @@ For each bin fit, will also generate the following plots:
 import ROOT
 ROOT.gROOT.SetBatch(ROOT.kTRUE)
 
-from sklearn.gaussian_process.kernels import RationalQuadratic, RBF, Matern, WhiteKernel, ConstantKernel
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn import preprocessing
-from plotting import plot
+import os
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import numpy as np
 import pandas as pd
 from scipy import stats
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from sklearn.gaussian_process.kernels import RationalQuadratic, RBF, Matern, WhiteKernel, ConstantKernel
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn import preprocessing
+
+from plotting import plot
 import unfolding
+import variable
 
 
 ###############################################################################
@@ -1185,13 +1188,14 @@ def main():
     '''
     See file header.
     '''
+    ### Args ###
     parser = ArgumentParser(
         description="Plots the migration matrix, efficiency and fiducial accuracy. Saves the response matrix as histograms for use in ResonanceFinder.", 
         formatter_class=ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('-o', '--output', default='.')
+    parser.add_argument('-o', '--output', default='./output')
     parser.add_argument("--lepton", required=True, choices=['0', '1', '2'])
-    parser.add_argument("--var", required=True, help='Variable to fit against; this must be present in a histogram {var}__v__fatjet_m')
+    parser.add_argument("--var", required=True, help='Variable to fit against; this must be present in a histogram {var}__v__fatjet_m and in the variable.py module.')
     parser.add_argument('--vjets', help='Path to the V+jets CxAODReader histograms. '
         'If you pass this, will fit to just this file (i.e. V+jets MC or preproduced event subtraction histograms). '
         'Do not pass in the other sample files; they will be ignored.')
@@ -1206,8 +1210,12 @@ def main():
     parser.add_argument('--fromCsvOnly', action='store_true', help="Don't do the fit, just save the fit results in the CSV to a ROOT histogram.")
     args = parser.parse_args()
 
+    ### Output dir ###
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
+
     ### Get config ###
-    var = unfolding.variables[args.var]
+    var = getattr(variable, args.var)
     bins_x = get_bins_x()
     bins_y = get_bins_y(args.var)
 
