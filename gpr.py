@@ -58,8 +58,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn import preprocessing
 
 from plotting import plot
-import unfolding
-import variable
+import utils
 
 
 ###############################################################################
@@ -1074,11 +1073,11 @@ class ContourScanner:
         self.optimal_marker.SetMarkerSize(2)
 
 
-def gpr_likelihood_contours(h_cr, bin:tuple, var:unfolding.Variable, lep:str, 
+def gpr_likelihood_contours(h_cr, bin : tuple, var : utils.Variable, lep : str, 
     gpr_version='rbf', 
     filebase='', 
     subtitle=[], 
-    fit_results:FitResults=None
+    fit_results : FitResults = None
 ):
     '''
     Fits a single gpr to the CR, scanning a grid of hyperparameters. Makes the 
@@ -1200,7 +1199,7 @@ def main():
         'If you pass this, will fit to just this file (i.e. V+jets MC or preproduced event subtraction histograms). '
         'Do not pass in the other sample files; they will be ignored.')
     parser.add_argument('--sample', help='If you pass --vjets but the sample name is not "W" or "Z", '
-        'you can use this argument to modify it.')
+        'you can use this argument to modify it. This should be a comma delimited string of sample names, which will be added together.')
     parser.add_argument('--data', help='Path to the data CxAODReader histograms')
     parser.add_argument('--diboson', help='Path to the diboson CxAODReader histograms')
     parser.add_argument('--ttbar')
@@ -1215,7 +1214,7 @@ def main():
         os.makedirs(args.output)
 
     ### Get config ###
-    var = getattr(variable, args.var)
+    var : utils.Variable = getattr(utils, args.var)
     bins_x = get_bins_x()
     bins_y = get_bins_y(args.var)
 
@@ -1237,9 +1236,16 @@ def main():
     hist_name = f'VV{args.lepton}Lep_Merg_{var.name}__v__fatjet_m'
 
     if hasattr(args, 'vjets'):
-        sample = getattr(args, 'sample', "W" if args.lepton == "1" else "Z")
+        if args.sample is not None:
+            samples = args.sample.split(',')
+        else:
+            sample = "W" if args.lepton == "1" else "Z"
+            samples = [sample + x for x in ['HH', 'HL', 'LL']]
         f = ROOT.TFile(args.vjets)
-        h_vjets = f.Get(f'{sample}_{hist_name}')
+        h_vjets = utils.get_hist(f, f'{samples[0]}_{hist_name}')
+        for sample in samples[1:]:
+            h = utils.get_hist(f, f'{sample}_{hist_name}')
+            h_vjets.Add(h)
     else: 
         f_data = ROOT.TFile(args.data)
         f_diboson = ROOT.TFile(args.diboson)
@@ -1265,7 +1271,7 @@ def main():
         binstr = f'{bin[0]},{bin[1]}'
         common_subtitle = [
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{var.xtitle} #in {bin} [{var.unit}]'
+            f'{var.title} #in {bin} [{var.unit}]'
         ]
 
         h_full = plot.projectX(h_vjets, bin)

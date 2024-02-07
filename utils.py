@@ -2,7 +2,7 @@
 @file variable.py
 @author Riley Xu - riley.xu@gmail.com, riley.xu@cern.ch
 @date February 7, 2024
-@brief Variable naming utility class 
+@brief Variable naming and other utilities 
 '''
 class Variable:
     '''
@@ -31,3 +31,9 @@ class Variable:
     
 vv_m = Variable(name="vv_m", title="m(VV)", unit="GeV")
 
+
+def get_hist(tfile, hist_name):
+    h = tfile.Get(hist_name)
+    if not h or h.ClassName() == 'TObject':
+        raise RuntimeError(f"Couldn't retrieve histogram {hist_name} from {tfile}")
+    return h

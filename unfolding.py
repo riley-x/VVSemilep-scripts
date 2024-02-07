@@ -27,7 +27,7 @@ import ROOT
 import numpy as np
 import os
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-import variable
+import utils
 
 ##############################################################################
 ###                               UTILITIES                                ###
@@ -199,7 +199,7 @@ def plot_fid_reco(mtx, var, **kwargs):
 ##############################################################################
 
 
-def get_bins(sample, lepton, var: variable.Variable):
+def get_bins(sample, lepton, var: utils.Variable):
     if var.name == "vv_m":
         return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
     raise NotImplementedError()
@@ -222,7 +222,7 @@ def main():
         os.makedirs(args.output)
 
     ### Config ###
-    vars = [variable.vv_m]
+    vars = [utils.vv_m]
     common_subtitle = '#sqrt{s}=13 TeV, 140 fb^{-1}'
     output_basename = f'{args.output}/{args.sample}_{args.lepton}lep'
     plot.file_formats = ['png', 'pdf']
