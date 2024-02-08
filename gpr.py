@@ -271,13 +271,15 @@ def format_error(val, err):
     else:
         return f'{val:.2f} #pm {err:.2f}'
 
-def set_sqrtn_errors(h):
+def set_sqrtn_errors(h, width_scaled=False):
     for i in range(h.GetNcells()):
         val = h.GetBinContent(i)
         err = h.GetBinError(i)
         if val <= 0:
             h.SetBinContent(i, 0)
             h.SetBinError(i, 0)
+        elif width_scaled:
+            h.SetBinError(i, np.sqrt(val / h.GetBinWidth(i)))
         else:
             h.SetBinError(i, np.sqrt(val))
 
@@ -320,6 +322,18 @@ class FitResults:
             # symmetrize the error
         return h
 
+    def get_graph(self, lep, vary, fitter, bins):
+        g = ROOT.TGraphAsymmErrors(len(bins) - 1)
+        for i in range(len(bins) - 1):
+            y_mid = (bins[i+1] + bins[i]) / 2
+            bin = f'{bins[i]},{bins[i+1]}'
+            entry = self.get_entry(lep, vary, fitter, bin)
+            g.SetPoint(i, y_mid, entry['val'])
+            g.SetPointError(i, y_mid - bins[i], bins[i+1] - y_mid, entry['err_down'], entry['err_up'])
+        return g
+
+
+
 
 ###############################################################################
 ###                                 PLOTTING                                ###
@@ -353,7 +367,9 @@ def plot_gpr_fit(
     @param h_cr
         Data point histogram
     @param h_sr
-        Drawn as red points with label "Signal Region". 
+        Drawn as red points with label "Signal Region". Setting this option will cause
+        the function to assume [h_cr] is MC, and change labels accordingly. Also, it
+        will add a dashed band to indicate the sqrt(n) errors in the CR.
     @param gpr
         A scikit GaussianProcessRegressor object that has been fit to the data
     @param gpr_range
@@ -369,6 +385,13 @@ def plot_gpr_fit(
     if h_sr is not None:
         h_sr.SetLineColor(plot.colors.red)
         h_sr.SetMarkerSize(0)
+
+        h_sqrtn_errs = h_cr.Clone()
+        set_sqrtn_errors(h_sqrtn_errs, width_scaled=True)
+        h_sqrtn_errs.SetFillColor(plot.colors.gray)
+        h_sqrtn_errs.SetFillStyle(3245)
+        h_sqrtn_errs.SetLineWidth(0)
+        h_sqrtn_errs.SetMarkerSize(0)
 
     ### Ratios ###
     X_ratios = []
@@ -393,13 +416,14 @@ def plot_gpr_fit(
     hists = [g_gpr, h_cr]
     plot_opts = ['3C', 'E']
     legend = [
-        [h_cr, 'Data', 'LE'],
+        [h_cr, 'Control Region' if h_sr else 'Data', 'LE'],
         [g_gpr, f'GPR Mean #pm {gpr_sigmas}#sigma', 'LF'],
     ]
     if h_sr:
-        hists.append(h_sr)
-        plot_opts.append('E')
+        hists.extend([h_sr, h_sqrtn_errs])
+        plot_opts.extend(['E', 'E2'])
         legend.insert(-1, [h_sr, 'Signal Region', 'LE'])
+        legend.insert(-1, [h_sqrtn_errs, '#sqrt{N} errors', 'F'])
 
     ### Draw ###
     kwargs.setdefault('text_pos', 'topright')
@@ -586,142 +610,6 @@ def plot_pf(
     return x_mid, x_lower, x_upper
 
 
-def _fractional_uncertainties(hists, opts, postfix='3', percents=False):
-    '''
-    Ratio callback that returns histograms for each input histo where the bin value is 
-    the fractional uncertainty (error / value).
-
-    Since the errors are 0, make sure to plot with markersize > 0 or HIST mode. Updates
-    [opts] with some default plotting options.
-    '''
-    mult = 100 if percents else 1
-    rs = []
-    for h in hists:
-        if 'TH' in h.ClassName():
-            h = h.Clone()
-            for i in range(h.GetNbinsX() + 2):
-                v = h.GetBinContent(i)
-                if v > 0:
-                    h.SetBinContent(i, mult * h.GetBinError(i) / v)
-                else:
-                    h.SetBinContent(i, 0)
-                h.SetBinError(i, 0)
-            rs.append(h)
-        else:
-            h = h.Clone()
-            for i in range(h.GetN()):
-                v = h.GetPointY(i)
-                if v > 0:
-                    h.SetPointY(i, mult * max(h.GetErrorYhigh(i), h.GetErrorYlow(i)) / v)
-                else:
-                    h.SetPointY(i, 0)
-                h.SetPointEYlow(i, 0)
-                h.SetPointEYhigh(i, 0)
-            rs.append(h)
-
-    opts['ytitle' + postfix] = ('%' if percents else 'Frac.') + ' Uncer.'
-    opts['ignore_outliers_y' + postfix] = 0
-    opts['opts' + postfix] = 'HIST'
-    opts['linecolor' + postfix] = opts.get('linecolor', plot.colors.tableu)
-    return rs
-
-
-def plot_summary_distribution(hists, 
-    subplot2='ratios',
-    subplot3='errors',
-    ratio_denom=lambda i: 0,
-    **kwargs
-):
-    '''
-    Creates a plot of the full fitted distribution, like m(VV), using discrete bins.
-    Creates two subplots, the first shows the Fit / MC ratio, and the second shows
-    the percent uncertainty.
-    
-    @param hists2, hists3
-        Subplot specifications. Can be either
-            * 'ratios', which will plot the ratio to the histogram given by [ratio_denom].
-            * 'errors', which will plot the relative % error of each point.
-        Or a function f(hists, opts) -> new_hists. Set to None to omit.
-    @param ratio_denom 
-        A function (i_hist) -> i_denom that given an index into [hists], returns the index
-        of the histogram that should be used as the denominator in the ratio plot. If
-        i_denom == i_hist then omits this histogram from the ratio plot.
-    '''
-
-    ### Style ###
-    # Do this before cloning for the ratio plots
-    for i,h in enumerate(hists):
-        h.SetLineWidth(2)
-        h.SetLineColor(plot.colors.tableu(i))
-        h.SetFillColorAlpha(plot.colors.tableu(i), 0.2)
-        h.SetMarkerColor(plot.colors.tableu(i))
-        h.SetMarkerStyle(ROOT.kFullCircle + i)
-        # h.SetMarkerSize(0.05)
-
-    ### Options ###
-    kwargs.setdefault('textpos', 'topright')
-    kwargs.setdefault('opts', 'P2+')
-    kwargs.setdefault('legend_opts', 'PE')
-    kwargs.setdefault('x_range', None)
-    kwargs.setdefault('y_range', [0, None])
-
-    ### Ratio subplot ###
-    if subplot2 == 'ratios' or subplot3 == 'ratios':
-        _hists = []
-        for i,h in enumerate(hists):
-            i_denom = ratio_denom(i)
-            if i == i_denom: continue
-            h_denom = hists[i_denom]
-
-            r = h.Clone()
-            if 'TGraph' in r.ClassName():
-                r = plot.graph_divide(r, h_denom)
-            else:
-                r.Divide(h_denom)
-            _hists.append(r)
-
-        if subplot2 == 'ratios':
-            postfix = '2'
-            hists2 = _hists
-        else:
-            postfix = '3'
-            hists3 = _hists
-        kwargs.setdefault('opts' + postfix, 'P2+')
-        kwargs.setdefault('ytitle' + postfix, '#frac{Fit}{MC}')
-        kwargs.setdefault('ignore_outliers_y' + postfix, 0)
-        kwargs.setdefault('hline' + postfix, {'y': 1, 'style': ROOT.kDashed})
-        kwargs.setdefault('legend' + postfix, None)
-    elif callable(subplot2):
-        hists2 = subplot2(hists, kwargs)
-    
-    ### Fractional uncertainty ###
-    if subplot2 == 'errors' or subplot3 == 'errors':
-        _hists = _fractional_uncertainties(hists, {}, percents=True)
-        if subplot2 == 'errors':
-            postfix = '2'
-            hists2 = _hists
-        else:
-            postfix = '3'
-            hists3 = _hists
-        kwargs.setdefault('opts' + postfix, 'P2+')
-        kwargs.setdefault('ytitle' + postfix, '% Error')
-        kwargs.setdefault('y_range' + postfix, [0, None])
-        kwargs.setdefault('ignore_outliers_y' + postfix, 0)
-    elif callable(subplot3):
-        hists3 = subplot3(hists, kwargs)
-
-    ### Plot ###
-    if subplot3 is not None:
-        def callback(*args):
-            args[0].frame.GetYaxis().ChangeLabel(1, -1, 0)
-        kwargs.setdefault('title_offset_x', 1)
-        plot.plot_discrete_bins(hists, hists2, hists3, plotter=plot.plot_ratio3, callback=callback, **kwargs)
-    elif subplot2 is not None:
-        plot.plot_discrete_bins(hists, hists2, plotter=plot.plot_ratio, **kwargs)
-    else:
-        plot.plot_discrete_bins(hists, plotter=plot.plot, **kwargs)
-
-
 def plot_updown_fits(
     scanner : ContourScanner, 
     h_cr=None, 
@@ -738,7 +626,7 @@ def plot_updown_fits(
         * 3 individual fit plots for each hyperparameter setting
     
     @param h_cr
-        The main histogram that was fitted.
+        The main histogram that was fitted. [h_cr] should have been scaled by bin widths.
     @param h_mc
         If [h_cr] was derived from MC, pass instead this option containing the full MC 
         histogram, which will be plotted instead, with the full closure test. This replaces
@@ -837,6 +725,145 @@ def plot_updown_fits(
         ]
 
     plot.plot(hists, **opts)
+
+
+def _fractional_uncertainties(hists, opts, postfix='3', percents=False):
+    '''
+    Ratio callback that returns histograms for each input histo where the bin value is 
+    the fractional uncertainty (error / value).
+
+    Since the errors are 0, make sure to plot with markersize > 0 or HIST mode. Updates
+    [opts] with some default plotting options.
+    '''
+    mult = 100 if percents else 1
+    rs = []
+    for h in hists:
+        if 'TH' in h.ClassName():
+            h = h.Clone()
+            for i in range(h.GetNbinsX() + 2):
+                v = h.GetBinContent(i)
+                if v > 0:
+                    h.SetBinContent(i, mult * h.GetBinError(i) / v)
+                else:
+                    h.SetBinContent(i, 0)
+                h.SetBinError(i, 0)
+            rs.append(h)
+        else:
+            h = h.Clone()
+            for i in range(h.GetN()):
+                v = h.GetPointY(i)
+                if v > 0:
+                    h.SetPointY(i, mult * max(h.GetErrorYhigh(i), h.GetErrorYlow(i)) / v)
+                else:
+                    h.SetPointY(i, 0)
+                h.SetPointEYlow(i, 0)
+                h.SetPointEYhigh(i, 0)
+            rs.append(h)
+
+    opts['ytitle' + postfix] = ('%' if percents else 'Frac.') + ' Uncer.'
+    opts['ignore_outliers_y' + postfix] = 0
+    opts['opts' + postfix] = 'HIST'
+    opts['linecolor' + postfix] = opts.get('linecolor', plot.colors.tableu)
+    return rs
+
+
+def plot_summary_distribution(hists, 
+    subplot2='ratios',
+    subplot3='errors',
+    ratio_denom=lambda i: 0,
+    **kwargs
+):
+    '''
+    Creates a plot of the full fitted distribution, like m(VV), using discrete bins.
+    Creates two subplots, the first shows the Fit / MC ratio, and the second shows
+    the percent uncertainty.
+    
+    @param hists2, hists3
+        Subplot specifications. Can be either
+            * 'ratios', which will plot the ratio to the histogram given by [ratio_denom].
+            * 'errors', which will plot the relative % error of each point.
+        Or a function f(hists, opts) -> new_hists. Set to None to omit.
+    @param ratio_denom 
+        A function (i_hist) -> i_denom that given an index into [hists], returns the index
+        of the histogram that should be used as the denominator in the ratio plot. If
+        i_denom == i_hist then omits this histogram from the ratio plot.
+    '''
+
+    ### Style ###
+    # Do this before cloning for the ratio plots
+    for i,h in enumerate(hists):
+        h.SetLineWidth(2)
+        h.SetLineColor(plot.colors.tableu(i))
+        h.SetFillColorAlpha(plot.colors.tableu(i), 0.2)
+        h.SetMarkerColor(plot.colors.tableu(i))
+        h.SetMarkerStyle(ROOT.kFullCircle + i)
+        # h.SetMarkerSize(0.05)
+
+    ### Options ###
+    kwargs.setdefault('textpos', 'topright')
+    kwargs.setdefault('opts', 'P2+')
+    kwargs.setdefault('legend_opts', 'PE')
+    kwargs.setdefault('x_range', None)
+    kwargs.setdefault('y_range', [0, None])
+    kwargs.setdefault('ytitle', 'Events / Bin Width')
+
+    ### Ratio subplot ###
+    if subplot2 == 'ratios' or subplot3 == 'ratios':
+        _hists = []
+        for i,h in enumerate(hists):
+            i_denom = ratio_denom(i)
+            if i == i_denom: continue
+            h_denom = hists[i_denom]
+
+            r = h.Clone()
+            if 'TGraph' in r.ClassName():
+                r = plot.graph_divide(r, h_denom)
+            else:
+                r.Divide(h_denom)
+            _hists.append(r)
+
+        if subplot2 == 'ratios':
+            postfix = '2'
+            hists2 = _hists
+        else:
+            postfix = '3'
+            hists3 = _hists
+        kwargs.setdefault('opts' + postfix, 'P2+')
+        kwargs.setdefault('ytitle' + postfix, '#frac{Fit}{MC}')
+        kwargs.setdefault('ignore_outliers_y' + postfix, 0)
+        kwargs.setdefault('hline' + postfix, {'y': 1, 'style': ROOT.kDashed})
+        kwargs.setdefault('legend' + postfix, None)
+    elif callable(subplot2):
+        hists2 = subplot2(hists, kwargs)
+    
+    ### Fractional uncertainty ###
+    if subplot2 == 'errors' or subplot3 == 'errors':
+        _hists = _fractional_uncertainties(hists, {}, percents=True)
+        if subplot2 == 'errors':
+            postfix = '2'
+            hists2 = _hists
+        else:
+            postfix = '3'
+            hists3 = _hists
+        kwargs.setdefault('opts' + postfix, 'P2+')
+        kwargs.setdefault('ytitle' + postfix, '% Error')
+        kwargs.setdefault('y_range' + postfix, [0, None])
+        kwargs.setdefault('ignore_outliers_y' + postfix, 0)
+    elif callable(subplot3):
+        hists3 = subplot3(hists, kwargs)
+
+    ### Plot ###
+    if subplot3 is not None:
+        def callback(*args):
+            args[0].frame.GetYaxis().ChangeLabel(1, -1, 0)
+        kwargs.setdefault('title_offset_x', 1)
+        plot.plot_discrete_bins(hists, hists2, hists3, plotter=plot.plot_ratio3, callback=callback, **kwargs)
+    elif subplot2 is not None:
+        plot.plot_discrete_bins(hists, hists2, plotter=plot.plot_ratio, **kwargs)
+    else:
+        plot.plot_discrete_bins(hists, plotter=plot.plot, **kwargs)
+
+
 
 
 
@@ -1100,15 +1127,16 @@ class ContourScanner:
 
 def gpr_likelihood_contours(
     h_cr, 
-    bin : tuple, 
     var : utils.Variable, 
     lep : str,
+    sr_window: tuple[float, float],
+    fit_range: tuple[float, float],
     h_mc : ROOT.TH1F = None, 
-    sr_window: tuple[float, float]=None,
     gpr_version='rbf', 
     filebase='', 
     subtitle=[], 
-    fit_results : FitResults = None
+    fit_results : FitResults = None,
+    vary_bin : tuple[float, float] = None, 
 ):
     '''
     Fits a single gpr to the CR, scanning a grid of hyperparameters. Makes the 
@@ -1121,8 +1149,12 @@ def gpr_likelihood_contours(
     Assumes the GPR has two hyperparameters: length scale and overall variance (constant
     kernel).
 
+    
     @param fit_results
         A [FitResults] object to save fit results to a csv file.
+    @param vary_bin
+        A tuple (min, max) of the cross variable [var] that we're currently fitting. This
+        used only with [fit_results].  
     @param filebase
         Base path for output plot files
     @param h_mc
@@ -1149,7 +1181,7 @@ def gpr_likelihood_contours(
 
     ### Plot integral yields ###
     plot_opts = {
-        'filename': filebase + 'nlml_cont',
+        'filename': filebase + 'yields',
         'subtitle': [
             *subtitle,
             scanner.optimal_title,
@@ -1168,7 +1200,7 @@ def gpr_likelihood_contours(
         subtitle=subtitle,
         xtitle=f'{var:title}',
         ytitle='Events / Bin Width',
-        x_range=fit_range,
+        x_range=[50, 250],
     )
 
     ### p(f|X,y) distribution ###
@@ -1180,8 +1212,8 @@ def gpr_likelihood_contours(
 
     ### CSV summary output ###
     if fit_results:
-        w = bin[1] - bin[0]
-        binstr = f'{bin[0]},{bin[1]}'
+        w = vary_bin[1] - vary_bin[0]
+        binstr = f'{vary_bin[0]},{vary_bin[1]}'
         
         ### NLML fit ###
         fit_results.set_entry(
@@ -1212,13 +1244,18 @@ def get_bins_x():
     out = np.concatenate(([50, 53, 56, 59], np.arange(62, 250, 5)))
     return np.array(out, dtype=float)
 
-def get_bins_y(var):
+def get_bins_y(var, lepton):
     if var == "vv_m":
-        return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
+        if lepton == '0':
+            return [500, 600, 700, 800, 900, 1020, 1170, 1400, 3000]
+        elif lepton == '1':
+            return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
     raise NotImplementedError()
 
+def get_fit_range(lepton_channel, var, bin):
+    return (50, 180)
+
 sr_window = (72, 102)
-fit_range = (50, 250)
 gpr_version = 'rbf'
 
 ##############################################################################
@@ -1260,20 +1297,49 @@ def main():
     ### Get config ###
     var : utils.Variable = getattr(utils, args.var)
     bins_x = get_bins_x()
-    bins_y = get_bins_y(args.var)
+    bins_y = get_bins_y(args.var, args.lepton)
 
     ### Output ###
     fit_results = FitResults(f'{args.output}/gpr_fit_results.csv')
     plot.save_transparent_png = False
     plot.file_formats = ['png', 'pdf']
 
-    def save_histogram():
+    def finalize():
+        csv_base_spec = {
+            'lep': args.lepton, 
+            'vary': var.name, 
+            'bins': bins_y,
+        }
+
+        ### Plot summary distribution ###
+        fitters = [
+            'vjets_mc',
+            f'{gpr_version}_nlml',
+            f'{gpr_version}_pf_scan2sig',
+        ]
+        legend = [
+            'MC',
+            'GPR MMLE Fit',
+            'GPR Marginal Posterior',
+        ]
+        if not args.isMC:
+            fitters = fitters[1:]
+            legend = legend[1:]
+        graphs = [fit_results.get_graph(**csv_base_spec, fitter=x) for x in fitters]
+        plot_summary_distribution(
+            graphs,
+            filename=f'{args.output}/gpr_{args.lepton}lep_{var.name}_summary',
+            xtitle=f'{var:title}',
+        )
+
+        ### Save output histogram ###
         f_output = ROOT.TFile(f'{args.output}/gpr_{args.lepton}lep_{var.name}_vjets_yield.root', 'RECREATE')
-        h = fit_results.get_histogram(lep=args.lepton, vary=var.name, fitter=gpr_version + '_pf_scan2sig', bins=bins_y, histname=f'Vjets_SR_{var}')
+        
+        h = fit_results.get_histogram(**csv_base_spec, fitter=gpr_version + '_pf_scan2sig',  histname=f'Vjets_SR_{var}')
         h.Write()
     
     if args.fromCsvOnly:
-        save_histogram()
+        finalize()
         return
 
     ### Get histograms ###
@@ -1319,6 +1385,8 @@ def main():
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
             f'{var.title} #in {bin} [{var.unit}]'
         ]
+        fit_range = get_fit_range(args.lepton, args.var, bin)
+
 
         ### Histogram manipulation ###
         h_full = plot.projectX(h_vjets, bin)
@@ -1335,17 +1403,18 @@ def main():
         gpr_likelihood_contours(
             h_cr=h_cr, 
             h_mc=h_mc,
-            bin=bin,
+            vary_bin=bin,
             var=var,
             lep=args.lepton,
             filebase=f'{args.output}/gpr_{args.lepton}lep_{var.name}_{binstr}_',
             sr_window=sr_window,
             gpr_version=gpr_version,
             fit_results=fit_results,
+            fit_range=fit_range,
             subtitle=common_subtitle,
         )
 
-    save_histogram()
+    finalize()
     
 
 
