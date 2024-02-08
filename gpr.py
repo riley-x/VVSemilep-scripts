@@ -775,17 +775,20 @@ def plot_summary_distribution(hists,
 ):
     '''
     Creates a plot of the full fitted distribution, like m(VV), using discrete bins.
-    Creates two subplots, the first shows the Fit / MC ratio, and the second shows
-    the percent uncertainty.
+    Creates two subplots, the first shows the Fit / MC ratio, and the second shows the
+    percent uncertainty.
+
+    In [kwargs] you can pass additional options to [plot.plot_discrete_bins]. Most
+    notably, you will probably want to specify 'filename' and 'edge_labels'.
     
-    @param hists2, hists3
+    @param subplot2, subplot3
         Subplot specifications. Can be either
             * 'ratios', which will plot the ratio to the histogram given by [ratio_denom].
             * 'errors', which will plot the relative % error of each point.
-        Or a function f(hists, opts) -> new_hists. Set to None to omit.
+        Or a function f(hists, **kwargs) -> new_hists. Set to None to omit.
     @param ratio_denom 
         A function (i_hist) -> i_denom that given an index into [hists], returns the index
-        of the histogram that should be used as the denominator in the ratio plot. If
+        of the histogram that should be used as the denominator in the 'ratios' plot. If
         i_denom == i_hist then omits this histogram from the ratio plot.
     '''
 
@@ -834,7 +837,7 @@ def plot_summary_distribution(hists,
         kwargs.setdefault('hline' + postfix, {'y': 1, 'style': ROOT.kDashed})
         kwargs.setdefault('legend' + postfix, None)
     elif callable(subplot2):
-        hists2 = subplot2(hists, kwargs)
+        hists2 = subplot2(hists, **kwargs)
     
     ### Fractional uncertainty ###
     if subplot2 == 'errors' or subplot3 == 'errors':
@@ -850,7 +853,7 @@ def plot_summary_distribution(hists,
         kwargs.setdefault('y_range' + postfix, [0, None])
         kwargs.setdefault('ignore_outliers_y' + postfix, 0)
     elif callable(subplot3):
-        hists3 = subplot3(hists, kwargs)
+        hists3 = subplot3(hists, **kwargs)
 
     ### Plot ###
     if subplot3 is not None:
@@ -1161,6 +1164,12 @@ def gpr_likelihood_contours(
         If [h_cr] is derived from MC, pass this histogram with the original MC errors and 
         includes the SR region, which will be used for the closure test.
     '''
+    ### MC ###
+    if h_mc:
+        mc_sr_yield = plot.integral_user(h_mc, sr_window, use_width=True, return_error=True)
+    else:
+        mc_sr_yield = None
+
     ### Fit ###
     fitter = GPR(gpr_version)
     fitter.fit(h_cr, fit_range)
@@ -1207,13 +1216,22 @@ def gpr_likelihood_contours(
     pfs = plot_pf(scanner.h_pf, 
         filename=filebase + 'p_intr',
         subtitle=subtitle,
-        mc_yield=plot.integral_user(h_mc, sr_window, use_width=True, return_error=True) if h_mc else None,
+        mc_yield=mc_sr_yield,
     )
 
     ### CSV summary output ###
     if fit_results:
         w = vary_bin[1] - vary_bin[0]
         binstr = f'{vary_bin[0]},{vary_bin[1]}'
+
+        ### MC yield ###
+        if h_mc:
+            fit_results.set_entry(
+                lep=lep, vary=var.name, fitter='vjets_mc', bin=binstr, 
+                val=mc_sr_yield[0] / w, 
+                err_up=mc_sr_yield[1] / w, 
+                err_down=mc_sr_yield[1] / w,
+            )
         
         ### NLML fit ###
         fit_results.set_entry(
@@ -1262,12 +1280,7 @@ gpr_version = 'rbf'
 ###                                  MAIN                                  ###
 ##############################################################################
 
-
-def main():
-    '''
-    See file header.
-    '''
-    ### Args ###
+def parse_args():
     parser = ArgumentParser(
         description="Plots the migration matrix, efficiency and fiducial accuracy. Saves the response matrix as histograms for use in ResonanceFinder.", 
         formatter_class=ArgumentDefaultsHelpFormatter
@@ -1288,7 +1301,15 @@ def main():
     parser.add_argument('--ttbarMu', default=1, help='Scale factor for the ttbar sample. Default = 1.')
     parser.add_argument('--stopMu', default=1, help='Scale factor for the stop sample. Default = 1.')
     parser.add_argument('--fromCsvOnly', action='store_true', help="Don't do the fit, just save the fit results in the CSV to a ROOT histogram.")
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    '''
+    See file header.
+    '''
+    ### Args ###
+    args = parse_args()
 
     ### Output dir ###
     if not os.path.exists(args.output):
@@ -1305,6 +1326,11 @@ def main():
     plot.file_formats = ['png', 'pdf']
 
     def finalize():
+        '''
+        Some final actions after running the full fit for a single variable. This reads
+        data from the CSV file, so it can be run without doing the fits all over again
+        using the --fromCsvOnly option.
+        '''
         csv_base_spec = {
             'lep': args.lepton, 
             'vary': var.name, 
@@ -1320,7 +1346,7 @@ def main():
         legend = [
             'MC',
             'GPR MMLE Fit',
-            'GPR Marginal Posterior',
+            'GPR Marg Post',
         ]
         if not args.isMC:
             fitters = fitters[1:]
@@ -1329,7 +1355,13 @@ def main():
         plot_summary_distribution(
             graphs,
             filename=f'{args.output}/gpr_{args.lepton}lep_{var.name}_summary',
+            subtitle=[
+                '#sqrt{s}=13 TeV, 140 fb^{-1}',
+                f'{args.lepton}-lepton channel',
+            ],
+            legend=legend,
             xtitle=f'{var:title}',
+            edge_labels=[str(x) for x in bins_y],
         )
 
         ### Save output histogram ###
@@ -1387,7 +1419,6 @@ def main():
         ]
         fit_range = get_fit_range(args.lepton, args.var, bin)
 
-
         ### Histogram manipulation ###
         h_full = plot.projectX(h_vjets, bin)
         h_full = h_full.Rebin(len(bins_x) - 1, h_full.GetName() + '_rebin', bins_x)
@@ -1400,6 +1431,7 @@ def main():
         h_full.Scale(1, 'width')
         h_sr, h_cr = get_sr_cr(h_full, sr_window)
 
+        ### Run ###
         gpr_likelihood_contours(
             h_cr=h_cr, 
             h_mc=h_mc,
