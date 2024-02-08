@@ -46,11 +46,15 @@ def get_migration_matrix(h):
     h = h.Clone()
 
     ### Remove negative bins ###
-    for y in range(1, h.GetNbinsY() + 1):
-        for x in range(1, h.GetNbinsX() + 1):
+    tot_preclean = h.ProjectionX('_px', 1, h.GetNbinsY())
+    for x in range(1, h.GetNbinsX() + 1):
+        for y in range(1, h.GetNbinsY() + 1):
             v = h.GetBinContent(x, y)
             if v < 0:
-                plot.warning(f"get_migration_matrix() Negative bin ({x}, {y}): {v}")
+                plot.warning("get_migration_matrix() Negative bin @ "
+                             f"fid [{h.GetXaxis().GetBinLowEdge(x)}, {h.GetXaxis().GetBinLowEdge(x+1)}], " 
+                             f"reco [{h.GetYaxis().GetBinLowEdge(y)}, {h.GetYaxis().GetBinLowEdge(y+1)}]: "
+                             f"{v} / {tot_preclean.GetBinContent(x)} ({100 * v / tot_preclean.GetBinContent(x):.2f}%)")
                 h.SetBinContent(x, y, 0)
     
     ### Normalize each column ###
@@ -131,6 +135,78 @@ def get_response_matrix(h):
     return mig_mtx
 
 
+def optimize_binning(
+        h, fid_range,
+        threshold_diag=0.6,
+        threshold_err=1,
+):
+    '''
+    Attempts to optimize the binning for unfolding such that migration matrix is
+    well-behaved. It checks for the following conditions:
+        1. The diagonal entries have at least [thresold_diag] fraction of the events.
+        2. The fractional MC stat error of the fiducial distribution < [threshold_err] in
+           each bin.
+
+    @param h
+        Input 2d histogram of fid vs reco. The y axis should be the reco distribution of a
+        variable, and the x axis should be the fiducial distrubtion of the same variable.
+    @param fid_range
+        The final range that should be covered by the bins.
+    '''
+    ### Range ###
+    h_1d = h.ProjectionX()
+    i_start = h_1d.FindFixBin(fid_range[0])
+    i_end = h_1d.FindFixBin(fid_range[1])
+    i = i_start
+
+    ### Denominator in truth bin ###
+    h_fid = h.ProjectionX('_px', i_start, i_end - 1) # end is inclusive :)
+
+    ### Running bins ###
+    bin_edges = [fid_range[0]]
+    bin_indices = [i] # unused...
+    last_merge_size = 0
+
+    ### Loop once per NEW (merged) bin ###
+    while i < i_end:
+        ### Find size of this bin ###
+        n_tot = 0
+        n_diag = 0
+        err_tot = 0
+        merge_size = 0
+        while (n_diag <= 0
+               or n_diag / n_tot < threshold_diag
+               or merge_size < last_merge_size
+               or err_tot**0.5 / n_tot > threshold_err):
+            
+            ### Last bin incomplete ###
+            if i + merge_size >= i_end:
+                # Merge it with the previously completed bin by popping the last edge
+                bin_edges.pop()
+                bin_indices.pop()
+                break
+
+            ### Merge diagonal ###
+            # This is essentially adding "L" blocks 
+            n_tot += h_fid.GetBinContent(i + merge_size)
+            err_tot += h_fid.GetBinError(i + merge_size)**2
+            # First add top of "L"
+            for x in range(i, i + merge_size):
+                n_diag += h.GetBinContent(x, i + merge_size)
+            # Then add right of "L"
+            for y in range(i, i + merge_size + 1):
+                n_diag += h.GetBinContent(i + merge_size, y)
+            merge_size += 1
+
+        ### Add end of this bin ###
+        i += merge_size
+        bin_edges.append(h.GetXaxis().GetBinLowEdge(i))
+        bin_indices.append(i)
+        last_merge_size = merge_size
+
+    print('Optimized bins:', h.GetName(), bin_edges)
+    return bin_edges
+
 ##############################################################################
 ###                                PLOTTING                                ###
 ##############################################################################
@@ -160,6 +236,7 @@ def plot_migration_matrix(mtx, var, **kwargs):
         **kwargs,
     )
 
+
 def plot_eff_acc(mtx, var, **kwargs):
     efficiency = get_unfolding_efficiency(mtx)
     accuracy = get_unfolding_accuracy(mtx)
@@ -167,10 +244,11 @@ def plot_eff_acc(mtx, var, **kwargs):
         xtitle=f'{var:title}',
         ytitle='Efficiency',
         ytitle2='#splitline{Fiducial}{Accuracy}',
-        y_range=[0, 0.5],
-        y_range2=[0.5, 1],
+        # y_range=[0, 0.5],
+        # y_range2=[0.5, 1],
         **kwargs
     )
+
 
 def plot_fid_reco(mtx, var, **kwargs):
     fid = mtx.ProjectionX()
@@ -198,10 +276,12 @@ def plot_fid_reco(mtx, var, **kwargs):
 ###                                  MAIN                                  ###
 ##############################################################################
 
-
-def get_bins(sample, lepton, var: utils.Variable):
+def get_bins(sample, lepton_channel, var: utils.Variable):
     if var.name == "vv_m":
-        return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
+        if lepton_channel == '0':
+            return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1450, 1590.0, 1770, 1950, 2150, 2350, 2600, 3000]
+        elif lepton_channel == '1':
+            return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
     raise NotImplementedError()
 
 
@@ -215,6 +295,7 @@ def main():
     parser.add_argument('sample', help='Sample name used in CxAODReader, such as "SMVV"')
     parser.add_argument("lepton", choices=['0', '1', '2'])
     parser.add_argument('-o', '--output', default='./output')
+    parser.add_argument('--optimizeToRange', help='Automatically optimize the binning. Pass in a "min,max" range of values that the binning should cover.')
     args = parser.parse_args()
 
     ### Output dir ###
@@ -223,7 +304,10 @@ def main():
 
     ### Config ###
     vars = [utils.vv_m]
-    common_subtitle = '#sqrt{s}=13 TeV, 140 fb^{-1}'
+    common_subtitle = [
+        '#sqrt{s}=13 TeV, 140 fb^{-1}',
+        f'{args.lepton}-lepton channel, {args.sample}',
+    ]
     output_basename = f'{args.output}/{args.sample}_{args.lepton}lep'
     plot.file_formats = ['png', 'pdf']
 
@@ -235,15 +319,20 @@ def main():
     ### Run ###
     for var in vars:
         ### Get base histogram ###
-        bins = get_bins(args.sample, args.lepton, var)
         mtx = f.Get(f'{args.sample}_VV{args.lepton}Lep_Merg_unfoldingMtx_{var}')
+
+        ### Rebin ###
+        if args.optimizeToRange:
+            bins = optimize_binning(mtx, [float(x) for x in args.optimizeToRange.split(',')])
+        else:
+            bins = get_bins(args.sample, args.lepton, var)
         mtx = plot.rebin2d(mtx, bins, bins)
     
         ### Plot ###
         plot_migration_matrix(mtx, var,
             filename=f'{output_basename}_{var}_migration_matrix',
             subtitle=[
-                common_subtitle,
+                *common_subtitle,
                 '% migration from each fiducial bin'
             ],
         )
