@@ -5,43 +5,61 @@
 @date February 1, 2024
 @brief Postscripts for running the GPR V+jets fit
 
-To setup,
+-----------------------------------------------------------------------------------------
+SETUP
+-----------------------------------------------------------------------------------------
+
     setupATLAS
     lsetup "root recommended"
     lsetup "python centos7-3.9"
+
 Note that this can't be setup at the same time with AnalysisBase or else you get a lot of
 conflicts :(
 
-To run
+-----------------------------------------------------------------------------------------
+CONFIG
+-----------------------------------------------------------------------------------------
+Check the hardcoded binnings in the CONFIG block near the bottom.
+
+
+-----------------------------------------------------------------------------------------
+Run
+-----------------------------------------------------------------------------------------
+
     gpr.py --lepton 1 --var vv_m \
         --data path/to/CxAODReader/outputs/hist-data.root \
         --ttbar path/to/CxAODReader/outputs/hist-ttbar.root \
         --stop path/to/CxAODReader/outputs/hist-stop.root \
         --diboson path/to/CxAODReader/outputs/hist-diboson.root \
         
-This runs the GPR fit to a single variable in one channel. It uses as inputs the {var}__v__fatjet_m
-histograms in the reader, which are filled with the inclusive SR+MCR. When you pass in the files as
-above, the fit will be run using the event subtraction scheme,
-    data - ttbar - stop - diboson
-Set the signal strength parameters --ttbarMu and --stopMu if you want to scale the respective samples. 
+This runs the GPR fit to a single variable in one channel. It uses as inputs the
+{var}__v__fatjet_m histograms in the reader, which are filled with the inclusive SR+MCR.
+For each sample, will run a fit for each bin specified in [get_bins_y]. When you pass in
+the files as above, the fit will be run using the event subtraction scheme,
 
-For each sample, will run a fit for each bin specified in [get_bins_y]. In general, see the CONFIG
-section below for some hardcodes. Note also that this file uses the Variables specified in [unfolding.py].
+    vjets = data - ttbar - stop - diboson
 
-The fit runs the full contour scan to obtain the marginalized posterior. Results are saved into a file
-gpr_fit_results.csv containing both a 2sigma contour scan and the simple MMLE fit, and a ROOT histogram in
-gpr_{lep}_{var}_vjets_yield.root which can be input into ResonanceFinder. Note that the histogram file
-can be created from the CSV directly without rerunning the fits, it you need to edit or rerun a specific bin.
+Set the signal strength parameters --ttbarMu and --stopMu if you want to scale the
+respective samples. 
+
+
+The fit runs the full contour scan to obtain the marginalized posterior. Results are saved
+into a file gpr_fit_results.csv containing both a 2sigma contour scan and the simple MMLE
+fit, and a ROOT histogram in gpr_{lep}_{var}_vjets_yield.root which can be input into
+ResonanceFinder. Note that the histogram file can be created from the CSV directly without
+rerunning the fits, it you need to edit or rerun a specific bin.
 
 For each bin fit, will also generate the following plots:
     - nlml_cont: contour lines of the NLML space as a function of the two hyperparameters.
     - yields: fitted SR yields in the same space.
     - fit_opt: posterior prediction using the MMLE fit
-    - fit_m1s/fit_p1s: posterior predictions using +-1 sigma in the hyperparameter space fits
+    - fit_m1s/fit_p1s: posterior predictions using +-1 sigma in the hyperparameter space
+      fits
     - fit_pm1s: the above 3 posterior means superimposed onto the same plot
     - p_intr: the marginalized posterior distribution
 '''
 
+from __future__ import annotations
 
 # WARNING! The sklearn imports seem to cause segfaults with ROOT, even when they're not
 # used. However they don't always happen, so you can just rerun until it works.
@@ -253,7 +271,15 @@ def format_error(val, err):
     else:
         return f'{val:.2f} #pm {err:.2f}'
 
-
+def set_sqrtn_errors(h):
+    for i in range(h.GetNcells()):
+        val = h.GetBinContent(i)
+        err = h.GetBinError(i)
+        if val <= 0:
+            h.SetBinContent(i, 0)
+            h.SetBinError(i, 0)
+        else:
+            h.SetBinError(i, np.sqrt(val))
 
 ###############################################################################
 ###                                 RESULTS                                 ###
@@ -312,9 +338,9 @@ def create_gpr_graph(gpr, range, sigmas=2, color=plot.colors.blue):
     return g_gpr
 
 
-def plot_gpr_fit(h_cr, gpr, gpr_range, 
+def plot_gpr_fit(
+    h_cr, gpr, gpr_range, 
     h_sr=None, 
-    h_mc=None, 
     gpr_sigmas=2,
     gpr_color=plot.colors.blue,
     **kwargs,
@@ -328,8 +354,6 @@ def plot_gpr_fit(h_cr, gpr, gpr_range,
         Data point histogram
     @param h_sr
         Drawn as red points with label "Signal Region". 
-    @param h_mc
-        Plotted as shaded error boxes that is labeld "MC Stat Error",
     @param gpr
         A scikit GaussianProcessRegressor object that has been fit to the data
     @param gpr_range
@@ -345,11 +369,6 @@ def plot_gpr_fit(h_cr, gpr, gpr_range,
     if h_sr is not None:
         h_sr.SetLineColor(plot.colors.red)
         h_sr.SetMarkerSize(0)
-    if h_mc is not None:
-        h_mc.SetFillColor(plot.colors.gray)
-        h_mc.SetFillStyle(3245)
-        h_mc.SetLineWidth(0)
-        h_mc.SetMarkerSize(0)
 
     ### Ratios ###
     X_ratios = []
@@ -361,7 +380,7 @@ def plot_gpr_fit(h_cr, gpr, gpr_range,
 
     ratio_hists = []
     ratio_opts = []
-    for h,o in zip([h_cr, h_sr, h_mc], ['E', 'E', 'E2']):
+    for h,o in zip([h_cr, h_sr], ['E', 'E']):
         if h is None: continue
         h = h.Clone()
         for i in range(h.GetNbinsX()):
@@ -381,24 +400,18 @@ def plot_gpr_fit(h_cr, gpr, gpr_range,
         hists.append(h_sr)
         plot_opts.append('E')
         legend.insert(-1, [h_sr, 'Signal Region', 'LE'])
-    if h_mc: 
-        hists.append(h_mc)
-        plot_opts.append('E2')
-        legend.insert(-1, [h_mc, 'MC Stat Error', 'F'])
 
     ### Draw ###
     kwargs.setdefault('text_pos', 'topright')
     kwargs.setdefault('legend', legend)
-    kwargs.setdefault('ytitle2', ('MC' if h_mc else 'Data') + ' / GPR')
+    kwargs.setdefault('ytitle2', ('MC' if h_sr else 'Data') + ' / GPR')
     kwargs.setdefault('opts', plot_opts)
     kwargs.setdefault('opts2', ratio_opts)
     kwargs.setdefault('y_range', [0, None])
     kwargs.setdefault('y_range2', [0.5, 1.5])
     kwargs.setdefault('hline', {'y':1, 'style':ROOT.kDashed})
     kwargs.setdefault('outlier_arrows', False)
-    plot.plot_ratio(hists, ratio_hists,
-        **kwargs,
-    )
+    plot.plot_ratio(hists, ratio_hists, **kwargs)
 
     return g_gpr
 
@@ -478,7 +491,12 @@ def plot_yield_scan(h_yields, marker, **kwargs):
     plot.plot([h_yields], callback=callback, **kwargs)
 
 
-def plot_pf(h_pf, filename='pf.png', subtitle=None, mc_yield=None):
+def plot_pf(
+    h_pf, 
+    filename='pf.png', 
+    subtitle=None, 
+    mc_yield : tuple[float, float] = None,
+):
     '''
     Creates a graph of p(f | X,y), where f is the yield in the SR region.
 
@@ -487,7 +505,8 @@ def plot_pf(h_pf, filename='pf.png', subtitle=None, mc_yield=None):
     @param x_scale
         Multiplies all x values in [h_pf] by this value.
     @param mc_yield
-        Overlays a point with horizontal errors bars to indicate the MC yield.
+        Tuple (value, error) of the MC yield. Overlays a point with horizontal errors bars
+        to indicate the MC yield.
     @return mode, -1sigma, +1sigma
     '''
     c = ROOT.TCanvas('c1', 'c1', 1000, 800)
@@ -703,10 +722,11 @@ def plot_summary_distribution(hists,
         plot.plot_discrete_bins(hists, plotter=plot.plot, **kwargs)
 
 
-def plot_updown_fits(scanner, h_cr, 
+def plot_updown_fits(
+    scanner : ContourScanner, 
+    h_cr=None, 
     h_mc=None, 
-    h_asimov_sr=None, 
-    mc_sr_yield=None, 
+    sr_window: tuple[float, float]=None,
     filename='{stub}',
     subtitle=[],
     **plot_opts,
@@ -718,13 +738,11 @@ def plot_updown_fits(scanner, h_cr,
         * 3 individual fit plots for each hyperparameter setting
     
     @param h_cr
-        The main histogram that was fitted
+        The main histogram that was fitted.
     @param h_mc
-        Plotted as shaded error boxes that is labeld "MC Stat Error",
-    @param h_asimov_sr
-        Drawn as red points with label "Signal Region". 
-    @param mc_sr_yield
-        Used for the subtitle, see below.
+        If [h_cr] was derived from MC, pass instead this option containing the full MC 
+        histogram, which will be plotted instead, with the full closure test. This replaces
+        [h_cr], which will be unused. In this case, pass also [sr_window].
     @param subtitle
         This function will add two lines:
             1. Kernel description
@@ -733,6 +751,12 @@ def plot_updown_fits(scanner, h_cr,
     @param filename
         This string will be formatted with a field {stub} for the different plots.
     '''
+    ### MC parsing ###
+    if h_mc:
+        assert(sr_window is not None)
+        h_sr, h_cr = get_sr_cr(h_mc, sr_window)
+        mc_sr_yield = plot.integral_user(h_mc, sr_window, use_width=True, return_error=True)
+
     ### Individually ###
     gpr_graphs = []
     gpr_legend = []
@@ -753,7 +777,7 @@ def plot_updown_fits(scanner, h_cr,
             *subtitle,
             f'{scanner.fitter}',
         ]
-        if mc_sr_yield is not None:
+        if h_mc:
             intr = FitOverMCRatio(*integral, *mc_sr_yield)
             opts['subtitle'].append(
                 'SR %#Delta_{fit-mc} = ' + intr.title('fit', 'mc', True),
@@ -764,9 +788,11 @@ def plot_updown_fits(scanner, h_cr,
             )
 
         ### Graph and fit ###
-        g = plot_gpr_fit(h_cr, scanner.fitter.gpr, scanner.fitter.fit_range,
-            h_sr=h_asimov_sr,
-            h_mc=h_mc,
+        g = plot_gpr_fit(
+            h_cr=h_cr, 
+            h_sr=h_sr,
+            gpr=scanner.fitter.gpr, 
+            gpr_range=scanner.fitter.fit_range,
             gpr_color=color,
             filename=filename.format(stub = f'fit_{name}'),
             **opts,
@@ -774,11 +800,14 @@ def plot_updown_fits(scanner, h_cr,
         gpr_graphs.append(g)
 
         ### Legend for combined graph below ###
-        if mc_sr_yield is not None:
+        if h_mc:
             legend_label = f'{legend} (l={theta[1]:.0f}, {intr.legend_percent()})'
         else:
             legend_label = f'{legend} (l={theta[1]:.0f})'
         gpr_legend.append((g, legend_label, 'L'))
+
+    ### Reset to avoid side effects ###
+    scanner.fitter.refit(scanner.scikit_theta)
 
     ### Summary plot ###
     hists = [*gpr_graphs, h_cr]
@@ -793,16 +822,12 @@ def plot_updown_fits(scanner, h_cr,
         'y_range': [0, None],
     })
     if h_mc:
-        hists += [h_asimov_sr, h_mc]
-        opts['opts'] += ['E', 'E2']
-        h_asimov_sr.SetLineColor(plot.colors.red)
-        h_mc.SetFillColor(plot.colors.gray)
-        h_mc.SetFillStyle(3245)
-        h_mc.SetLineWidth(0)
+        hists += [h_sr]
+        opts['opts'] += ['E']
+        h_sr.SetLineColor(plot.colors.red)
         opts['legend'] = [
             [h_cr, 'Control Region', 'LE'],
-            [h_asimov_sr, 'Signal Region', 'LE'],
-            [h_mc, 'MC Stat Error', 'F'],
+            [h_sr, 'Signal Region', 'LE'],
             *gpr_legend,
         ]
     else:
@@ -1073,7 +1098,13 @@ class ContourScanner:
         self.optimal_marker.SetMarkerSize(2)
 
 
-def gpr_likelihood_contours(h_cr, bin : tuple, var : utils.Variable, lep : str, 
+def gpr_likelihood_contours(
+    h_cr, 
+    bin : tuple, 
+    var : utils.Variable, 
+    lep : str,
+    h_mc : ROOT.TH1F = None, 
+    sr_window: tuple[float, float]=None,
     gpr_version='rbf', 
     filebase='', 
     subtitle=[], 
@@ -1094,6 +1125,9 @@ def gpr_likelihood_contours(h_cr, bin : tuple, var : utils.Variable, lep : str,
         A [FitResults] object to save fit results to a csv file.
     @param filebase
         Base path for output plot files
+    @param h_mc
+        If [h_cr] is derived from MC, pass this histogram with the original MC errors and 
+        includes the SR region, which will be used for the closure test.
     '''
     ### Fit ###
     fitter = GPR(gpr_version)
@@ -1106,22 +1140,30 @@ def gpr_likelihood_contours(h_cr, bin : tuple, var : utils.Variable, lep : str,
     scanner.scan()
 
     ### Plot contours ###
-    contour_opts = {
+    plot_opts = {
         'filename': filebase + 'nlml_cont',
         'subtitle': subtitle + [scanner.optimal_title],
         'z_range': [scanner.min_nlml - 1, min(scanner.max_nlml, scanner.min_nlml + 100)],
     }
-    plot_nlml_contours(scanner.h_nlml, scanner.min_nlml, scanner.optimal_marker, **contour_opts)
+    plot_nlml_contours(scanner.h_nlml, scanner.min_nlml, scanner.optimal_marker, **plot_opts)
 
     ### Plot integral yields ###
-    contour_opts['filename'] = filebase + 'yields'
-    contour_opts['subtitle'].extend([
-        f'Min nlml yield: {format_error(*scanner.optimal_int)}',
-    ])
-    plot_yield_scan(scanner.h_int, scanner.optimal_marker, **contour_opts)
+    plot_opts = {
+        'filename': filebase + 'nlml_cont',
+        'subtitle': [
+            *subtitle,
+            scanner.optimal_title,
+            f'Min nlml yield: {format_error(*scanner.optimal_int)}',
+        ],
+    }
+    plot_yield_scan(scanner.h_int, scanner.optimal_marker, **plot_opts)
 
     ### Plot +-1 sigma lines ###
-    plot_updown_fits(scanner, h_cr,
+    plot_updown_fits(
+        scanner=scanner, 
+        h_cr=h_cr,
+        h_mc=h_mc,
+        sr_window=sr_window,
         filename=filebase + '{stub}',
         subtitle=subtitle,
         xtitle=f'{var:title}',
@@ -1133,6 +1175,7 @@ def gpr_likelihood_contours(h_cr, bin : tuple, var : utils.Variable, lep : str,
     pfs = plot_pf(scanner.h_pf, 
         filename=filebase + 'p_intr',
         subtitle=subtitle,
+        mc_yield=plot.integral_user(h_mc, sr_window, use_width=True, return_error=True) if h_mc else None,
     )
 
     ### CSV summary output ###
@@ -1200,6 +1243,7 @@ def main():
         'Do not pass in the other sample files; they will be ignored.')
     parser.add_argument('--sample', help='If you pass --vjets but the sample name is not "W" or "Z", '
         'you can use this argument to modify it. This should be a comma delimited string of sample names, which will be added together.')
+    parser.add_argument('--isMC', action='store_true', help='Set this flag when using the --vjets options and passing in a Monte Carlo sample. This will trigger a few effects: the CR errors will be converted to sqrt(n), and a closure test will be performed against the SR region.')
     parser.add_argument('--data', help='Path to the data CxAODReader histograms')
     parser.add_argument('--diboson', help='Path to the diboson CxAODReader histograms')
     parser.add_argument('--ttbar')
@@ -1235,7 +1279,7 @@ def main():
     ### Get histograms ###
     hist_name = f'VV{args.lepton}Lep_Merg_{var.name}__v__fatjet_m'
 
-    if hasattr(args, 'vjets'):
+    if args.vjets is not None:
         if args.sample is not None:
             samples = args.sample.split(',')
         else:
@@ -1268,6 +1312,7 @@ def main():
     
     ### Run ###
     for i in range(len(bins_y) - 1):
+        ### Common options ###
         bin = (bins_y[i], bins_y[i+1])
         binstr = f'{bin[0]},{bin[1]}'
         common_subtitle = [
@@ -1275,17 +1320,26 @@ def main():
             f'{var.title} #in {bin} [{var.unit}]'
         ]
 
+        ### Histogram manipulation ###
         h_full = plot.projectX(h_vjets, bin)
         h_full = h_full.Rebin(len(bins_x) - 1, h_full.GetName() + '_rebin', bins_x)
+        if args.vjets is not None and args.isMC:
+            h_mc = h_full.Clone()
+            h_mc.Scale(1, 'width')
+            set_sqrtn_errors(h_full)
+        else:
+            h_mc = None
         h_full.Scale(1, 'width')
         h_sr, h_cr = get_sr_cr(h_full, sr_window)
 
         gpr_likelihood_contours(
             h_cr=h_cr, 
+            h_mc=h_mc,
             bin=bin,
             var=var,
             lep=args.lepton,
             filebase=f'{args.output}/gpr_{args.lepton}lep_{var.name}_{binstr}_',
+            sr_window=sr_window,
             gpr_version=gpr_version,
             fit_results=fit_results,
             subtitle=common_subtitle,
