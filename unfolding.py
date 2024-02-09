@@ -137,8 +137,9 @@ def get_response_matrix(h):
 
 def optimize_binning(
         h, fid_range,
-        threshold_diag=0.6,
-        threshold_err=1,
+        threshold_diag=0.7,
+        threshold_err=0.2,
+        monotonic_bin_sizes=False,
 ):
     '''
     Attempts to optimize the binning for unfolding such that migration matrix is
@@ -176,7 +177,7 @@ def optimize_binning(
         merge_size = 0
         while (n_diag <= 0
                or n_diag / n_tot < threshold_diag
-               or merge_size < last_merge_size
+               or (monotonic_bin_sizes and merge_size < last_merge_size)
                or err_tot**0.5 / n_tot > threshold_err):
             
             ### Last bin incomplete ###
@@ -279,7 +280,8 @@ def plot_fid_reco(mtx, var, **kwargs):
 def get_bins(sample, lepton_channel, var: utils.Variable):
     if var.name == "vv_m":
         if lepton_channel == '0':
-            return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1450, 1590.0, 1770, 1950, 2150, 2350, 2600, 3000]
+            # optimized binning with threshold_diag=0.7, threshold_err=0.2, monotonic_bin_sizes=False
+            return [500.0, 690.0, 820.0, 960.0, 1120.0, 1290.0, 1480.0, 1690.0, 1930.0, 2210.0, 2480.0, 3000.0]
         elif lepton_channel == '1':
             return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
     raise NotImplementedError()

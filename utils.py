@@ -4,6 +4,10 @@
 @date February 7, 2024
 @brief Variable naming and other utilities 
 '''
+
+#########################################################################################
+###                                     Varaibles                                     ###
+#########################################################################################
 class Variable:
     '''
     @property name
@@ -29,8 +33,13 @@ class Variable:
         else:
             return self.name
     
-vv_m = Variable(name="vv_m", title="m(VV)", unit="GeV")
 
+vv_m = Variable(name="vv_m", title="m(VV)", unit="GeV")
+fatjet_pt = Variable(name="fatjet_pt", title="p_{T}(J)", unit="GeV")
+
+#########################################################################################
+###                                    File Access                                    ###
+#########################################################################################
 
 def get_hist(tfile, hist_name):
     h = tfile.Get(hist_name)
