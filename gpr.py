@@ -283,11 +283,16 @@ def set_sqrtn_errors(h, width_scaled=False):
         else:
             h.SetBinError(i, np.sqrt(val))
 
+
 ###############################################################################
 ###                                 RESULTS                                 ###
 ###############################################################################
 
 class FitResults:
+    '''
+    This class handles saving and retrieving fit results from a CSV. If uses a pandas 
+    dataframe as the intermediary in [self.df].
+    '''
     def __init__(self, filepath='fit_results.csv'):
         self.filepath = filepath
         try:
@@ -869,7 +874,6 @@ def plot_summary_distribution(hists,
 
 
 
-
 ###############################################################################
 ###                                  FITTER                                 ###
 ###############################################################################
@@ -1374,7 +1378,7 @@ def main():
         finalize()
         return
 
-    ### Get histograms ###
+    ### Get 2D histograms ###
     hist_name = f'VV{args.lepton}Lep_Merg_{var.name}__v__fatjet_m'
 
     if args.vjets is not None:
@@ -1408,7 +1412,7 @@ def main():
         h_vjets.Add(h_ttbar, -1 * args.ttbarMu)
         h_vjets.Add(h_stop, -1 * args.stopMu)
     
-    ### Run ###
+    ### Run for each bin ###
     for i in range(len(bins_y) - 1):
         ### Common options ###
         bin = (bins_y[i], bins_y[i+1])
@@ -1431,7 +1435,7 @@ def main():
         h_full.Scale(1, 'width')
         h_sr, h_cr = get_sr_cr(h_full, sr_window)
 
-        ### Run ###
+        ### Run fit ###
         gpr_likelihood_contours(
             h_cr=h_cr, 
             h_mc=h_mc,
