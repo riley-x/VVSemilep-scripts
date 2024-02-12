@@ -286,8 +286,8 @@ def plot_fid_reco(mtx, var, **kwargs):
 def get_bins(sample, lepton_channel, var: utils.Variable):
     if var.name == "vv_m":
         if lepton_channel == '0':
-            # optimized binning with threshold_diag=0.7, threshold_err=0.2, monotonic_bin_sizes=False
-            return [500, 690, 810, 950, 1110, 1280, 1460, 1670, 1910, 2190, 2470, 3000]
+            # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
+            return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
         elif lepton_channel == '1':
             return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
         elif lepton_channel == '2':
