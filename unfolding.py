@@ -208,6 +208,8 @@ def optimize_binning(
     print('Optimized bins:', h.GetName(), bin_edges)
     return bin_edges
 
+
+
 ##############################################################################
 ###                                PLOTTING                                ###
 ##############################################################################
@@ -254,15 +256,17 @@ def plot_eff_acc(mtx, var, **kwargs):
 def plot_fid_reco(mtx, var, **kwargs):
     fid = mtx.ProjectionX()
     reco = mtx.ProjectionY()
+    int_reco = mtx.ProjectionY('int_reco', 1, mtx.GetNbinsY())
 
     fid.Scale(1, 'width')
     reco.Scale(1, 'width')
+    int_reco.Scale(1, 'width')
 
     ratio = fid.Clone()
     ratio.Divide(reco)
 
-    plot.plot_ratio([fid, reco], [ratio],
-        legend=['Fiducial', 'Detector'],
+    plot.plot_ratio([fid, reco, int_reco], [ratio],
+        legend=['Fiducial', 'Detector', 'Both'],
         ytitle='Events / Bin Width',
         ytitle2='#frac{Fiducial}{Detector}',
         xtitle=f'{var:title}',
@@ -271,6 +275,8 @@ def plot_fid_reco(mtx, var, **kwargs):
         logy=True,
         **kwargs,
     )
+
+
 
 
 ##############################################################################
