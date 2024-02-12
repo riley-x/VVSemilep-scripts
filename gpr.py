@@ -327,14 +327,16 @@ class FitResults:
             # symmetrize the error
         return h
 
-    def get_graph(self, lep, vary, fitter, bins):
+    def get_graph(self, lep, vary, fitter, bins, width_scaled=True):
         g = ROOT.TGraphAsymmErrors(len(bins) - 1)
         for i in range(len(bins) - 1):
-            y_mid = (bins[i+1] + bins[i]) / 2
             bin = f'{bins[i]},{bins[i+1]}'
+            width = bins[i+1] - bins[i] if width_scaled else 1
+            y_mid = (bins[i+1] + bins[i]) / 2
+
             entry = self.get_entry(lep, vary, fitter, bin)
-            g.SetPoint(i, y_mid, entry['val'])
-            g.SetPointError(i, y_mid - bins[i], bins[i+1] - y_mid, entry['err_down'], entry['err_up'])
+            g.SetPoint(i, y_mid, entry['val'] * width)
+            g.SetPointError(i, y_mid - bins[i], bins[i+1] - y_mid, entry['err_down'] * width, entry['err_up'] * width)
         return g
 
 
@@ -811,9 +813,8 @@ def plot_summary_distribution(hists,
     kwargs.setdefault('textpos', 'topright')
     kwargs.setdefault('opts', 'P2+')
     kwargs.setdefault('legend_opts', 'PE')
-    kwargs.setdefault('x_range', None)
-    kwargs.setdefault('y_range', [0, None])
-    kwargs.setdefault('ytitle', 'Events / Bin Width')
+    kwargs.setdefault('ytitle', 'Events')
+    kwargs.setdefault('logy', True)
 
     ### Ratio subplot ###
     if subplot2 == 'ratios' or subplot3 == 'ratios':
