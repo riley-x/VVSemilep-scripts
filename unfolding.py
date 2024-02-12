@@ -137,8 +137,8 @@ def get_response_matrix(h):
 
 def optimize_binning(
         h, fid_range,
-        threshold_diag=0.7,
-        threshold_err=0.2,
+        threshold_diag=0.8,
+        threshold_err=0.1,
         monotonic_bin_sizes=False,
 ):
     '''
@@ -205,7 +205,7 @@ def optimize_binning(
         bin_indices.append(i)
         last_merge_size = merge_size
 
-    print('Optimized bins:', h.GetName(), bin_edges)
+    print('Optimized bins:', h.GetName(), [int(x) for x in bin_edges])
     return bin_edges
 
 
@@ -287,9 +287,12 @@ def get_bins(sample, lepton_channel, var: utils.Variable):
     if var.name == "vv_m":
         if lepton_channel == '0':
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, monotonic_bin_sizes=False
-            return [500.0, 690.0, 820.0, 960.0, 1120.0, 1290.0, 1480.0, 1690.0, 1930.0, 2210.0, 2480.0, 3000.0]
+            return [500, 690, 810, 950, 1110, 1280, 1460, 1670, 1910, 2190, 2470, 3000]
         elif lepton_channel == '1':
             return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
+        elif lepton_channel == '2':
+            # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
+            return [500, 580, 680, 780, 900, 1050, 1220, 1410, 1680, 1910, 2210, 3000]
     raise NotImplementedError()
 
 
@@ -327,7 +330,7 @@ def main():
     ### Run ###
     for var in vars:
         ### Get base histogram ###
-        mtx = f.Get(f'{args.sample}_VV{args.lepton}Lep_Merg_unfoldingMtx_{var}')
+        mtx = f.Get(f'{args.sample}_VV{args.lepton}Lep_Merg_unfoldingMtx_{var}_recoWeight')
 
         ### Rebin ###
         if args.optimizeToRange:
