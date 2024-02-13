@@ -138,8 +138,8 @@ def get_response_matrix(h):
 def optimize_binning(
         h, fid_range,
         threshold_diag=0.8,
-        threshold_err=0.1,
-        monotonic_bin_sizes=False,
+        threshold_err=0.4,
+        monotonic_bin_sizes=True,
 ):
     '''
     Attempts to optimize the binning for unfolding such that migration matrix is
@@ -289,11 +289,19 @@ def get_bins(sample, lepton_channel, var: utils.Variable):
             # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
             return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
         elif lepton_channel == '1':
+            # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
+            return [500, 740, 920, 1140, 1410, 1700, 2080, 3000]
+            # old binning
             return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
         elif lepton_channel == '2':
             # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
             return [500, 580, 680, 780, 900, 1050, 1220, 1410, 1680, 1910, 2210, 3000]
-    raise NotImplementedError()
+    elif var.name == "vhad_pt":
+        if lepton_channel == '1':
+            # optimized binning with threshold_diag=0.8, threshold_err=0.4, monotonic_bin_sizes=True
+            return [300, 360, 460, 580, 730, 940, 1200, 1460, 3000]
+
+    raise NotImplementedError(f"unfolding.py::get_bins({sample}, {lepton_channel}, {var.name})")
 
 
 def main():
@@ -314,7 +322,7 @@ def main():
         os.makedirs(args.output)
 
     ### Config ###
-    vars = [utils.vv_m]
+    vars = [utils.vhad_pt]
     common_subtitle = [
         '#sqrt{s}=13 TeV, 140 fb^{-1}',
         f'{args.lepton}-lepton channel, {args.sample}',
@@ -330,7 +338,7 @@ def main():
     ### Run ###
     for var in vars:
         ### Get base histogram ###
-        mtx = f.Get(f'{args.sample}_VV{args.lepton}Lep_Merg_unfoldingMtx_{var}_recoWeight')
+        mtx = utils.get_hist(f, f'{args.sample}_VV{args.lepton}Lep_Merg_unfoldingMtx_{var}')
 
         ### Rebin ###
         if args.optimizeToRange:

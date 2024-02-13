@@ -35,7 +35,7 @@ class Variable:
     
 
 vv_m = Variable(name="vv_m", title="m(VV)", unit="GeV")
-fatjet_pt = Variable(name="fatjet_pt", title="p_{T}(J)", unit="GeV")
+vhad_pt = Variable(name="vhad_pt", title="p_{T}(J)", unit="GeV")
 
 #########################################################################################
 ###                                    File Access                                    ###
