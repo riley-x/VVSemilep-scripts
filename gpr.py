@@ -223,6 +223,23 @@ def get_sr_cr(h, sr_def):
             h_sr.SetBinError(x, 0)
     return h_sr, h_cr
 
+def get_bin_range(h, xmin, xmax) -> tuple[int, int]:
+    i_min = None
+    i_max = None
+    for x in range(1, h.GetNbinsX() + 2):
+        low = h.GetBinLowEdge(x)
+        if low == xmax:
+            i_max = x
+            break
+        if low == xmin:
+            i_min = x
+    if not i_min:
+        raise RuntimeError(f"get_bin_range() couldn't find bin matching x={xmin}")
+    if not i_max:
+        raise RuntimeError(f"get_bin_range() couldn't find bin matching x={xmax}")
+    return (i_min, i_max)
+            
+
 class RatioWithError:
     def __init__(self, num, num_err, denom, denom_err):
         self.num = num
@@ -300,6 +317,90 @@ def set_sqrtn_errors(h, width_scaled=False):
             h.SetBinError(i, np.sqrt(val / h.GetBinWidth(i)))
         else:
             h.SetBinError(i, np.sqrt(val))
+
+def weighted_integral(h, x_min, x_max, weights, width_scaled=True):
+    start, end = get_bin_range(h, x_min, x_max)
+    assert(len(weights) == end - start)
+
+    val = 0
+    err = 0
+    for i in range(end - start):
+        if width_scaled:
+            w = h.GetBinWidth(i + start)
+            val += weights[i] * h[i + start] * w
+            err += (weights[i] * h.GetBinError(i + start) * w)**2
+        else:
+            val += weights[i] * h[i + start]
+            err += (weights[i] * h.GetBinError(i + start))**2
+    return val, err**0.5
+
+def calculate_signal_strength_weights(
+    fitter : GPR, 
+    h_diboson: ROOT.TH1F, 
+    sr_window: tuple[float, float], 
+    h_sr: ROOT.TH1F = None,
+) -> tuple[list[float], tuple[float, float], ROOT.TH1F]:
+    '''
+    This calculates the signal strength of the diboson signal with shape taken from
+    [h_diboson]. All histograms should be width scaled already.
+
+    @param h_sr
+        The data in the SR (doesn't need to be trimmed). If this is None, will assume
+        asimov data  = gpr + diboson.
+    @returns
+        tuple[0]: A list of weights. These are prescaled, so all you have to do is mu =
+        n_integral - gpr_integral.
+
+        tuple[1]: The N_i integral (val, err). Remember we split the sum into n_i * w_i/s_i
+        - b_i * w_i/s_i, so we calculate the first term here.
+
+        tuple[2]: [h_sr] if it is not None, otherwise the created asimov data histogram.
+    '''
+    bin_range = get_bin_range(h_diboson, *sr_window)
+    bin_centers = [h_diboson.GetBinCenter(i) for i in range(*bin_range)]
+    gpr_preds = fitter.predict(bin_centers, return_std=True)
+
+    ### Create asimov data = gpr (MMLE) + diboson ###
+    if not h_sr:
+        h_sr = h_diboson.Clone()
+        for i in range(*bin_range):
+            v = h_diboson.GetBinContent(i) + gpr_preds[0][i - bin_range[0]]
+            h_sr.SetBinContent(i, v)
+            h_sr.SetBinError(i, (v / h_diboson.GetBinWidth(i)) ** 0.5)
+            # Estimate error as just sqrt(n) (but remember it's width scaled)
+            # Real data will be larger but minus ttbar background
+    
+    ### Get the weights ###
+    # Remember we split the sum into n_i * w_i/s_i - b_i * w_i/s_i. The first term is
+    # calculated below. Also, remember everything is normalized by 1/sum(w_i)
+    weights = []
+    weight_sum = 0
+    n_integral = 0
+    n_integral_err = 0
+    for i in range(*bin_range):
+        w = h_diboson.GetBinWidth(i)
+        s = h_diboson.GetBinContent(i) * w
+        se = h_diboson.GetBinError(i) * w
+        n = h_sr.GetBinContent(i) * w
+        ne = h_sr.GetBinError(i) * w
+        b = gpr_preds[0][i - bin_range[0]] * w
+        be = gpr_preds[1][i - bin_range[0]] * w
+
+        mu = (n - b) / s
+        var_num = (ne**2 + be**2) / (n - b)**2
+        var_denom = se**2 / s**2
+        var = mu**2 * (var_num + var_denom)
+
+        weight = 1 / var
+        weights.append(weight / s)
+        weight_sum += weight
+
+        ratio = n * weight / s
+        n_integral += ratio
+        n_integral_err += ratio**2 * (ne**2 / n**2 + se**2 / s**2)
+
+    weights = np.array(weights) / weight_sum
+    return weights, (n_integral / weight_sum, n_integral_err**0.5 / weight_sum), h_sr
 
 
 ###############################################################################
@@ -543,8 +644,9 @@ def plot_yield_scan(h_yields, marker, **kwargs):
 def plot_pf(
     h_pf, 
     filename='pf.png', 
-    subtitle=None, 
+    subtitle=[], 
     mc_yield : tuple[float, float] = None,
+    **plot_opts,
 ):
     '''
     Creates a graph of p(f | X,y), where f is the yield in the SR region.
@@ -591,15 +693,20 @@ def plot_pf(
         boxes.append(b)
 
     ### Set frame, with y_range ###
-    subtitle += [f'f = {x_mid:.0f} ^{{+{x_upper - x_mid:.0f}}}_{{#minus{x_mid - x_lower:.0f}}}']
-    plotter = plot.Plotter(c,
+    digits = 0 if x_mid > 100 else 1
+    opts = dict(
         text_pos='topleft',
-        subtitle=subtitle,
+        subtitle=[
+            *subtitle,
+            f'f = {x_mid:.{digits}f} ^{{+{x_upper - x_mid:.{digits}f}}}_{{#minus{x_mid - x_lower:.{digits}f}}}',
+        ],
         ytitle='p(f | X,y)',
         xtitle='f #equiv SR Yield',
         ydivs=506,
         y_range=[0, None],
     )
+    opts.update(plot_opts)
+    plotter = plot.Plotter(c, **opts)
 
     ### Boxes ###
     plotter.add_primitives(boxes)
@@ -999,14 +1106,37 @@ class GPR:
         total = np.sum(mean) * width / test_points
         err = np.sqrt(np.sum(cov)) * width / test_points
         return total, err
+    
+    def weighted_integral(self, sr_range, weights, sample_points=3):
+        '''
+        As above, but apply a set of weights to each test point. The integral will be
+        conducted using len(weights) * [sample_points] evenly spaced test points.
+        '''
+        width = sr_range[1] - sr_range[0]
+        weights = np.repeat(weights, sample_points)
+        n = len(weights)
 
-    def predict(self, x, return_std=False):
+        X = linspace_bin_centered(*sr_range, n).reshape((-1, 1))
+        mean, cov = self.gpr.predict(X, return_cov=True) 
+        
+        total = mean.dot(weights) * width / n
+        err = weights.dot(cov).dot(weights)
+        err = np.sqrt(err) * width / n
+        return total, err
+
+    def _predict_single(self, x, return_std):
         X = [[x]]
         val, std = self.gpr.predict(X, return_std=True)
         if return_std:
             return val[0], std[0]
         else:
             return val[0]
+
+    def predict(self, x, return_std=False):
+        if isinstance(x, (float, int)):
+            return self._predict_single(x, return_std)
+        X = np.reshape(x, (-1, 1))
+        return self.gpr.predict(X, return_std=True)
         
     def _calculate_chi2(self):
         self.ndof = len(self.y_train) - self.gpr.kernel_.n_dims # is this right?
@@ -1018,7 +1148,7 @@ class GPR:
 
 
 class ContourScanner:
-    def __init__(self, fitter, sr_def, constant_factor, length_scale):
+    def __init__(self, fitter, sr_def, constant_factor, length_scale, integral_weights=None):
         '''
         @param fitter
             A [GPR] object defined above.
@@ -1028,10 +1158,11 @@ class ContourScanner:
             The log-spaced list of values for the gamma variance factor and the length
             scale hyperparameters. These should be values as-is (not pre-logged).
         '''
-        self.fitter = fitter # Make sure to pass in [fitter] after fitting already!
+        self.fitter : GPR = fitter # Make sure to pass in [fitter] after fitting already!
         self.sr_def = sr_def
         self.constant_factor = constant_factor
         self.length_scale = length_scale
+        self.integral_weights = integral_weights
 
         ### Scikit optimized theta ###
         self.scikit_theta = np.exp(fitter.gpr.kernel_.theta)
@@ -1069,6 +1200,9 @@ class ContourScanner:
         # These are centered on the x axis around self.scikit_int. 
         self.h_pf = ROOT.TH1D('h_pf', '', 200, 0.8 * self.scikit_int[0], 1.2 * self.scikit_int[0]) # probability of each f value
         self.h_pf_1s = self.h_pf.Clone() # only scan 1 sigma range
+        if self.integral_weights is not None:
+            int_weighted, int_weighted_err = self.fitter.weighted_integral(self.sr_def, self.integral_weights)
+            self.h_pf_weighted = ROOT.TH1D('h_pf_weighted', '', 200, 0.8 * int_weighted, 1.2 * int_weighted)
 
         # Get probability integrals for use in converting p(y|theta) to p(theta|y)
         # Assume constant prior p(theta) in log theta space
@@ -1108,6 +1242,12 @@ class ContourScanner:
                         self.h_pf.SetBinContent(i, self.h_pf.GetBinContent(i) + pf_given_theta * ml) # divide by p(y|X) and width at end
                         if nlml < self.max_nlml_1sigma:
                             self.h_pf_1s.SetBinContent(i, self.h_pf_1s.GetBinContent(i) + pf_given_theta * ml) # divide by p(y|X) and width at end
+                    
+                    ### Accumulate the weighted p(f | y,X) integral ###
+                    if self.integral_weights is not None:
+                        int_weighted, int_weighted_err = self.fitter.weighted_integral(self.sr_def, self.integral_weights)
+                        for i in range(1, self.h_pf_weighted.GetNbinsX() + 1):
+                            self.h_pf_weighted[i] += ml * stats.norm.pdf(self.h_pf_weighted.GetBinCenter(i), loc=int_weighted, scale=int_weighted_err)
 
                     if nlml < self.max_nlml_1sigma:
                         self.h_int_1s.SetBinContent(x+1, y+1, int_fit)
@@ -1139,7 +1279,7 @@ class ContourScanner:
         print('2sigma CI fraction of grid', sum_ml_2s / sum_ml) # should be approx 95%
         self.h_pf.Scale(self.h_pf.GetBinWidth(1) / sum_ml_yields) # this makes h_pf integrate to about 1
         self.h_pf_1s.Scale(self.h_pf_1s.GetBinWidth(1) / sum_ml_1s) # this makes h_pf_1s integrate to about 1
-
+        self.h_pf_weighted.Scale(self.h_pf_weighted.GetBinWidth(1) / sum_ml_yields) # this makes it integrate to about 1
     
     def _set_optimal_members(self, name):
         self.optimal_theta = getattr(self, name + '_theta')
@@ -1192,15 +1332,9 @@ def gpr_likelihood_contours(
         The SR data, which is used to obtain the predicted signal strength. Needs 
         [h_diboson] to be passed too.
     @param h_diboson
-        The diboson MC sample. This is used to determine the diboson signal strength.
+        The diboson MC sample. This is used to determine the diboson signal strength. If 
+        [h_data_sr] is None, will use asimov data = diboson + gpr MMLE. 
     '''
-    ### Argument checking ###
-    if h_data_sr:
-        assert(not h_mc and h_diboson)
-        raise NotImplementedError("h_data_sr")
-    if h_diboson:
-        raise NotImplementedError("h_diboson")
-
     ### MC ###
     if h_mc:
         mc_sr_yield = plot.integral_user(h_mc, sr_window, use_width=True, return_error=True)
@@ -1210,11 +1344,22 @@ def gpr_likelihood_contours(
     ### Fit ###
     fitter = GPR(gpr_version)
     fitter.fit(h_cr, fit_range)
+
+    ### Diboson signal strength precalcs ###
+    if h_diboson:
+        weights, n_integral, h_sr = calculate_signal_strength_weights(
+            fitter=fitter,
+            h_sr=h_data_sr, 
+            h_diboson=h_diboson, 
+            sr_window=sr_window,
+        )
+    else:
+        weights = None
     
     ### Scan theta ###
     constant_factor = np.logspace(-1, 3, num=50)
     length_scale = np.logspace(1, 3, num=50)
-    scanner = ContourScanner(fitter, sr_window, constant_factor, length_scale)
+    scanner = ContourScanner(fitter, sr_window, constant_factor, length_scale, integral_weights=weights)
     scanner.scan()
 
     ### Plot contours ###
@@ -1256,6 +1401,15 @@ def gpr_likelihood_contours(
         mc_yield=mc_sr_yield,
     )
 
+    ### Weighted integral p(f|X,y) distribution ###
+    if h_diboson:
+        pfs_weighted = plot_pf(scanner.h_pf_weighted, 
+            filename=filebase + 'pf_weighted',
+            subtitle=subtitle,
+            xtitle='f #equiv Weighted SR Integral',
+            mc_yield=weighted_integral(h_mc, *sr_window, weights) if h_mc else None,
+        )
+
     ### CSV summary output ###
     if fit_results:
         w = vary_bin[1] - vary_bin[0]
@@ -1282,7 +1436,6 @@ def gpr_likelihood_contours(
         pf_val = pfs[0]
         pf_err_down = pf_val - pfs[1]
         pf_err_up = pfs[2] - pf_val
-
         fit_results.set_entry(
             lep=lep, vary=var.name, fitter=gpr_version + '_pf_scan2sig', bin=binstr, 
             val=pf_val / w, 
@@ -1290,6 +1443,35 @@ def gpr_likelihood_contours(
             err_down=pf_err_down / w,
         )
         
+        ### Diboson signal strength ###
+        if h_diboson:
+            ### Weighted average ###
+            val = n_integral[0] - pfs_weighted[0]
+            err_down = n_integral[1]**2 + (pfs_weighted[0] - pfs_weighted[1])**2
+            err_up = n_integral[1]**2 + (pfs_weighted[2] - pfs_weighted[0])**2
+            fit_results.set_entry(
+                lep=lep, vary=var.name, fitter=gpr_version + '_mu_weighted_average', bin=binstr, 
+                val=val, 
+                err_up=err_down**0.5, 
+                err_down=err_up**0.5,
+            )
+
+            ### Integral - integral ###
+            data_int = plot.integral_user(h_sr, sr_window, use_width=True, return_error=True)
+            diboson_int = plot.integral_user(h_diboson, sr_window, use_width=True, return_error=True)
+            
+            num = data_int[0] - pf_val
+            val = num / diboson_int[0]
+            err_down = val * ((data_int[1]**2 + pf_err_down**2) / num**2 + diboson_int[1]**2 / diboson_int[0]**2)**0.5
+            err_up = val * ((data_int[1]**2 + pf_err_up**2) / num**2 + diboson_int[1]**2 / diboson_int[0]**2)**0.5
+
+            fit_results.set_entry(
+                lep=lep, vary=var.name, fitter=gpr_version + '_mu_integral', bin=binstr, 
+                val=val, 
+                err_up=err_down, 
+                err_down=err_up,
+            )
+            
 
 ###############################################################################
 ###                                  CONFIG                                 ###
