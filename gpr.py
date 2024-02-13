@@ -16,40 +16,33 @@ SETUP
 Note that this can't be setup at the same time with AnalysisBase or else you get a lot of
 conflicts :(
 
------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------
 CONFIG
------------------------------------------------------------------------------------------
-Check the hardcoded binnings in the CONFIG block near the bottom.
+------------------------------------------------------------------------------------------
+Check the hardcoded binnings and other options in the CONFIG block near the bottom.
 
 
------------------------------------------------------------------------------------------
-Run
------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------
+RUN
+------------------------------------------------------------------------------------------
 
-    gpr.py --lepton 1 --var vv_m \
-        --data path/to/CxAODReader/outputs/hist-data.root \
-        --ttbar path/to/CxAODReader/outputs/hist-ttbar.root \
-        --stop path/to/CxAODReader/outputs/hist-stop.root \
-        --diboson path/to/CxAODReader/outputs/hist-diboson.root \
+    gpr.py --lepton 1 --var vv_m [INPUT FILES, SEE BELOW]
         
-This runs the GPR fit to a single variable in one channel. It uses as inputs the
-{var}__v__fatjet_m histograms in the reader, which are filled with the inclusive SR+MCR.
-For each sample, will run a fit for each bin specified in [get_bins_y]. When you pass in
-the files as above, the fit will be run using the event subtraction scheme,
+This runs the GPR fit to a single variable in one channel. There are a variety of run
+modes, listed below. But they all use as inputs the `{var}__v__fatjet_m` histograms in the
+reader, which are filled with the inclusive SR+MCR. The script will run a fit for each bin
+specified in `get_bins_y`, which includes the full contour scan to obtain the marginalized
+posterior. In general, see the CONFIG section for some hardcodes.
 
-    vjets = data - ttbar - stop - diboson
+Results are saved into a file `gpr_fit_results.csv` containing both a 2sigma contour scan
+and the simple MMLE fit, and a ROOT histogram in `gpr_{lep}_{var}_vjets_yield.root` which
+can be input into ResonanceFinder. Note that the histogram file can be created from the
+CSV directly without rerunning the fits using the `--fromCsvOnly` option, if you need to
+edit or rerun a specific bin.
 
-Set the signal strength parameters --ttbarMu and --stopMu if you want to scale the
-respective samples. 
-
-
-The fit runs the full contour scan to obtain the marginalized posterior. Results are saved
-into a file gpr_fit_results.csv containing both a 2sigma contour scan and the simple MMLE
-fit, and a ROOT histogram in gpr_{lep}_{var}_vjets_yield.root which can be input into
-ResonanceFinder. Note that the histogram file can be created from the CSV directly without
-rerunning the fits, it you need to edit or rerun a specific bin.
-
-For each bin fit, will also generate the following plots:
+The script will generate a plot named `gpr_{lep}_{var}_summary` in both png and pdf
+formats containing a summary distribution of the fits. For each bin fit, will also
+generate the following plots:
     - nlml_cont: contour lines of the NLML space as a function of the two hyperparameters.
     - yields: fitted SR yields in the same space.
     - fit_opt: posterior prediction using the MMLE fit
@@ -57,6 +50,31 @@ For each bin fit, will also generate the following plots:
       fits
     - fit_pm1s: the above 3 posterior means superimposed onto the same plot
     - p_intr: the marginalized posterior distribution
+
+
+------------------------------------------------------------------------------------------
+Run: Data
+
+    gpr.py --lepton 1 --var vv_m \
+        --data path/to/CxAODReader/outputs/hist-data.root \
+        --ttbar path/to/CxAODReader/outputs/hist-ttbar.root \
+        --stop path/to/CxAODReader/outputs/hist-stop.root \
+        --diboson path/to/CxAODReader/outputs/hist-diboson.root \
+
+When you pass in the files as above, the fit will be run using the event subtraction
+scheme, `vjets = data - ttbar - stop - diboson`. Set the signal strength parameters
+--stopMu and --ttbarMu if you want to scale the respective samples. 
+
+------------------------------------------------------------------------------------------
+Run: V+jets MC
+
+    gpr.py --lepton 1 --var vv_m \
+        --vjets path/to/CxAODReader/outputs/hist-Wjets.root \
+        --isMC
+
+This fits the GPR to a single v+jets file. This can either be a pre-subtracted data file
+or the Monte Carlo sample. In the latter case, you want to specify --isMC to enable the
+closure test among other nice things.
 '''
 
 from __future__ import annotations
@@ -1134,21 +1152,23 @@ class ContourScanner:
 
 
 def gpr_likelihood_contours(
-    h_cr, 
+    h_cr : ROOT.TH1F, 
     var : utils.Variable, 
     lep : str,
     sr_window: tuple[float, float],
     fit_range: tuple[float, float],
+    h_data_sr: ROOT.TH1F = None,
     h_mc : ROOT.TH1F = None, 
-    gpr_version='rbf', 
-    filebase='', 
-    subtitle=[], 
+    h_diboson : ROOT.TH1F = None, 
+    gpr_version : str = 'rbf', 
+    filebase : str = '', 
+    subtitle : list[str] = [], 
     fit_results : FitResults = None,
     vary_bin : tuple[float, float] = None, 
 ):
     '''
-    Fits a single gpr to the CR, scanning a grid of hyperparameters. Makes the 
-    following plots:
+    Fits a single gpr to the CR, scanning a grid of hyperparameters. Makes the following
+    plots:
         1. likelihood contours
         2. SR integral error colz in the +1 sigma region
         3. event plot with means of best and +-1 sigma hyperparameters
@@ -1157,18 +1177,30 @@ def gpr_likelihood_contours(
     Assumes the GPR has two hyperparameters: length scale and overall variance (constant
     kernel).
 
-    
     @param fit_results
         A [FitResults] object to save fit results to a csv file.
     @param vary_bin
         A tuple (min, max) of the cross variable [var] that we're currently fitting. This
         used only with [fit_results].  
     @param filebase
-        Base path for output plot files
+        Base path and name for output plot files. Generated plots will postpend their
+        names to this.
     @param h_mc
-        If [h_cr] is derived from MC, pass this histogram with the original MC errors and 
+        If [h_cr] is derived from MC, pass this histogram with the original MC errors and
         includes the SR region, which will be used for the closure test.
+    @param h_data_sr
+        The SR data, which is used to obtain the predicted signal strength. Needs 
+        [h_diboson] to be passed too.
+    @param h_diboson
+        The diboson MC sample. This is used to determine the diboson signal strength.
     '''
+    ### Argument checking ###
+    if h_data_sr:
+        assert(not h_mc and h_diboson)
+        raise NotImplementedError("h_data_sr")
+    if h_diboson:
+        raise NotImplementedError("h_diboson")
+
     ### MC ###
     if h_mc:
         mc_sr_yield = plot.integral_user(h_mc, sr_window, use_width=True, return_error=True)
@@ -1387,30 +1419,34 @@ def main():
     hist_name = f'VV{args.lepton}Lep_Merg_{var.name}__v__fatjet_m'
 
     if args.vjets is not None:
+        ### Single file input mode ###
         if args.sample is not None:
             samples = args.sample.split(',')
         else:
             sample = "W" if args.lepton == "1" else "Z"
-            # samples = [sample + x for x in ['HH', 'HL', 'LL']]
-            samples = [sample + x for x in ['LL']]
-        f = ROOT.TFile(args.vjets)
-        h_vjets = utils.get_hist(f, f'{samples[0]}_{hist_name}')
-        for sample in samples[1:]:
-            h = utils.get_hist(f, f'{sample}_{hist_name}')
-            h_vjets.Add(h)
+            samples = [sample + x for x in ['HH', 'HL', 'LL']]
+            # Actually, the HH/HL/LL split is done in the VVAnalysis, so I think only LL is ever set
+            # for the unfolding histograms. So ignore the warnings about the other two.
+        
+        f_vjets = ROOT.TFile(args.vjets)
+        h_vjets = utils.get_hists_sum(f_vjets, [f'{x}_{hist_name}' for x in samples])
+
+        if args.diboson is not None:
+            f_diboson = ROOT.TFile(args.diboson)
+            h_diboson = utils.get_hist(f_diboson, f'SMVV_{hist_name}')
+        else:
+            h_diboson = None
     else: 
+        ### Event subtraction input mode ###
         f_data = ROOT.TFile(args.data)
         f_diboson = ROOT.TFile(args.diboson)
         f_ttbar = ROOT.TFile(args.ttbar)
         f_stop = ROOT.TFile(args.stop)
 
-        h_data = f_data.Get(f'data_{hist_name}')
-        h_diboson = f_diboson.Get(f'SMVV_{hist_name}')
-        h_ttbar = f_ttbar.Get(f'ttbar_{hist_name}')
-
-        h_stop = f_stop.Get(f'stops_{hist_name}')
-        h_stop.Add(f_stop.Get(f'stopt_{hist_name}'))
-        h_stop.Add(f_stop.Get(f'stopWt_{hist_name}'))
+        h_data = utils.get_hist(f_data, f'data_{hist_name}')
+        h_diboson = utils.get_hist(f_diboson, f'SMVV_{hist_name}')
+        h_ttbar = utils.get_hist(f_ttbar, f'ttbar_{hist_name}')
+        h_stop = utils.get_hists_sum(f_stop, [f'{x}_{hist_name}' for x in ['stops', 'stopt', 'stopWt']])
 
         h_vjets = h_data.Clone()
         h_vjets.Add(h_diboson, -1)
@@ -1429,21 +1465,27 @@ def main():
         fit_range = get_fit_range(args.lepton, args.var, bin)
 
         ### Histogram manipulation ###
-        h_full = plot.projectX(h_vjets, bin)
-        h_full = h_full.Rebin(len(bins_x) - 1, h_full.GetName() + '_rebin', bins_x)
+        def prepare_bin(h):
+            h = plot.projectX(h, bin)
+            h = h.Rebin(len(bins_x) - 1, h.GetName() + '_rebin', bins_x)
+            h.Scale(1, 'width')
+            return h
+        
+        h_vjets_bin = prepare_bin(h_vjets)
+        h_diboson_bin = prepare_bin(h_diboson) if h_diboson else None
+        
         if args.vjets is not None and args.isMC:
-            h_mc = h_full.Clone()
-            h_mc.Scale(1, 'width')
-            set_sqrtn_errors(h_full)
+            h_mc = h_vjets_bin.Clone()
+            set_sqrtn_errors(h_vjets_bin, width_scaled=True)
         else:
             h_mc = None
-        h_full.Scale(1, 'width')
-        h_sr, h_cr = get_sr_cr(h_full, sr_window)
+        h_sr, h_cr = get_sr_cr(h_vjets_bin, sr_window)
 
         ### Run fit ###
         gpr_likelihood_contours(
             h_cr=h_cr, 
             h_mc=h_mc,
+            h_diboson=h_diboson_bin,
             vary_bin=bin,
             var=var,
             lep=args.lepton,

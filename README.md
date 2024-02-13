@@ -43,7 +43,7 @@ These should be treated as signal samples, and are normalized such that the sign
 
 ## GPR
 
-To run the data-driven background estimate, use [gpr.py](gpr.py).
+To run the data-driven background estimate, use [gpr.py](gpr.py). Please see the docstring of that file for more details.
 
 ```sh
 gpr.py --lepton 1 --var vv_m \
