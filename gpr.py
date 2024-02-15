@@ -377,6 +377,7 @@ def calculate_signal_strength_weights(
     weight_sum = 0
     n_integral = 0
     n_integral_err = 0
+    s_over_sqrtn = []
     for i in range(*bin_range):
         w = h_diboson.GetBinWidth(i)
         s = h_diboson.GetBinContent(i) * w
@@ -398,6 +399,8 @@ def calculate_signal_strength_weights(
         ratio = n * weight / s
         n_integral += ratio
         n_integral_err += ratio**2 * (ne**2 / n**2 + se**2 / s**2)
+
+    print(weights)
 
     weights = np.array(weights) / weight_sum
     return weights, (n_integral / weight_sum, n_integral_err**0.5 / weight_sum), h_sr
