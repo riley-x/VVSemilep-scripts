@@ -34,8 +34,11 @@ RUN
 This will fetch files using the naming convention supplied in the arguments. These
 arguments can include python formatters (using curly braces) for 'lep', which will be
 replaced with the lepton channel number, and 'sample', which uses
-[utils.Sample.file_stubs]. For example, the argument could be
-`hists/{lep}lep/{sample}.root`.
+[utils.Sample.file_stubs]. For example,
+
+    hists/{lep}lep/{sample}.root
+    
+See [utils.FileManager] for details.
 '''
 
 from plotting import plot
@@ -59,6 +62,56 @@ def run(f):
 ##########################################################################################
 
 
+@run
+def plot_samples_per_region(file_manager : utils.FileManager, output_dir : str):
+    '''
+    Plots each sample in 'PE' mode, unstacked, to compare their relative distributions 
+    and sizes.
+
+    Repeats for each inclusive HP region and variable.
+    '''
+    vars : list[utils.Variable] = [
+        utils.Variable.vvJ_m,
+        utils.Variable.lvJ_m,
+        utils.Variable.llJ_m,
+    ]
+
+    for lep in [0, 1, 2]:
+        for region in [f'MergHP_Inclusive_{x}' for x in ['SR', 'TCR', 'MCR']]:
+            for var in vars:
+                ### Get hists ###
+                hists = []
+                legend = []
+                for sample in file_manager.samples.values():
+                    if 'data' in sample.name: continue
+                    h = file_manager.get_hist(lep, sample.name, f'{{sample}}_VV{lep}Lep_{region}_{var}')
+                    if h is None: continue
+                    h = plot.rebin(h, var.rebin)
+                    hists.append(h)
+                    legend.append(sample.title)
+                if not hists: continue
+
+                ### Plot ###
+                plot.plot(
+                    filename=f'{output_dir}/sample_compare.{lep}lep.{region}.{var}',
+                    **var.x_plot_opts(),
+
+                    ### Titles ###
+                    subtitle=[
+                        '#sqrt{s}=13 TeV, 140 fb^{-1}',
+                        f'{lep}Lep {region.replace("_", " ")}',
+                    ],
+                    legend=legend,
+                    ytitle='Events',
+
+                    ### Objs ###
+                    objs=hists,
+                    linecolor=plot.colors.tableu,
+                    markersize=0,
+                    opts='PE',
+                )
+
+
 
 
 
@@ -72,6 +125,7 @@ def parse_args():
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument('filepaths', nargs='+')
+    parser.add_argument('-o', '--output', default='./output')
     return parser.parse_args()
 
 
@@ -87,15 +141,18 @@ def get_files(filepaths):
         ],
         file_path_formats=filepaths,
     )
-    print(file_manager.files)
+    return file_manager
     
 
 def main():
     args = parse_args()
     file_manager = get_files(args.filepaths)
 
+    plot.save_transparent_png = False
+    plot.file_formats = ['png', 'pdf']
+
     for k,v in RUN_FUNCS.items():
-        v()
+        v(file_manager, args.output)
 
 
 if __name__ == "__main__":

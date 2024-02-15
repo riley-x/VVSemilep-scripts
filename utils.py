@@ -23,11 +23,24 @@ class Variable:
     @property unit
         The name of the unit of the variable. Again this should match the histogram 
         outputs.
+    @property rebin
+        A default rebinning option, see [plot.rebin].
     '''
-    def __init__(self, name, title, unit):
+    def __init__(self, name, title, unit, rebin=None, **plot_opts):
+        '''
+        @param plot_opts
+            Any additional default opts to use during plotting, assuming an event
+            distribution is being plotted against this variable on the x axis. These can
+            be retrieved with [x_plot_opts].
+        '''
         self.name = name
         self.title = title
         self.unit = unit
+        self.rebin = rebin
+        self._plot_opts = plot_opts
+
+    def __repr__(self) -> str:
+        return f'Variable({self.name})'
     
     def __format__(self, __format_spec: str) -> str:
         if __format_spec:
@@ -38,9 +51,19 @@ class Variable:
         else:
             return self.name
     
+    def x_plot_opts(self):
+        return {
+            'xtitle': f'{self.title} [{self.unit}]',
+            **self._plot_opts
+        }
+    
 
 Variable.vv_m = Variable(name="vv_m", title="m(VV)", unit="GeV")
 Variable.vhad_pt = Variable(name="vhad_pt", title="p_{T}(J)", unit="GeV")
+
+Variable.llJ_m = Variable(name="llJ_m", title="m(#ell#ellJ)", unit="GeV", rebin=100, logy=True)
+Variable.lvJ_m = Variable(name="lvJ_m", title="m(#ell#nuJ)", unit="GeV", rebin=100, logy=True)
+Variable.vvJ_m = Variable(name="vvJ_m", title="m(#nu#nuJ)", unit="GeV", rebin=100, logy=True)
 
 
 #########################################################################################
@@ -59,7 +82,8 @@ class Sample:
     @property hist_keys
         A list of the naming stubs used in the histogram names for this sample. 
     '''
-    ### Static members, initialized below ###
+    ### Static members ###
+    # List here for linting, initialized later below
     wjets = None
     zjets = None
     ttbar = None
@@ -83,7 +107,7 @@ class Sample:
 Sample.wjets = Sample('wjets', 'W+jets', ['Wjets_Sherpa2211'], ['WLL', 'WHL', 'WHH'])
 Sample.zjets = Sample('zjets', 'Z+jets', ['Zjets_Sherpa2211'], ['ZLL', 'ZHL', 'ZHH'])
 Sample.ttbar = Sample('ttbar', 't#bar{t}', ['ttbar'], ['ttbar'])
-Sample.stop = Sample('stop', 'single top', ['stop'], ['stops', 'stopt', 'stopWt'])
+Sample.stop = Sample('stop', 'single top', ['stop'], ['stop'])
 Sample.diboson = Sample('diboson', 'diboson', ['diboson_Sherpa2211', 'Diboson_Sh2211'], ['SMVV'])
 Sample.data = Sample('data', 'data', ['data', 'data15', 'data16', 'data17', 'data18'], ['data'])
 
@@ -111,13 +135,13 @@ def get_hists_sum(tfile, hist_names):
     for name in hist_names:
         h2 = tfile.Get(name)
         if not h2 or h2.ClassName() == 'TObject':
-            plot.warning(f"Couldn't retrieve histogram {name} from {tfile}")
+            plot.warning(f"Couldn't retrieve histogram {name} from {tfile}.")
         elif h_sum is None:
             h_sum = h2
         else:
             h_sum.Add(h2)
     if h_sum is None:
-        raise RuntimeError(f"get_hists_sum() unable to retrieve histograms from {tfile}")
+        raise RuntimeError(f"get_hists_sum() unable to retrieve histograms from {tfile}.")
     return h_sum
     
 # If you just pass a python 0 to the ROOT char*, I think it gets interpreted as '0' or something.
@@ -139,7 +163,7 @@ class FileManager:
         Tries to open every file given a set of samples and path formats. 
 
         @param file_path_formats
-            Pass any number file paths that can optionally contain formatters "{lep}"
+            Pass any number file paths that can optionally contain fields "{lep}"
             which will be replaced with [0, 1, 2] and "{sample}" which will be replaced
             with [Sample.file_stubs] for each sample.
         '''
@@ -162,7 +186,9 @@ class FileManager:
                 except OSError as e:
                     pass
                 ROOT.gSystem.RedirectOutput(_null_char_p, _null_char_p)
-                
+        
+        if not files:
+            plot.warning('FileManager() unable to find files for {sample} in the {lep}-lep channel.')
         return files
     
 

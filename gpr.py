@@ -1631,7 +1631,7 @@ def main():
         h_data = utils.get_hist(f_data, f'data_{hist_name}')
         h_diboson = utils.get_hist(f_diboson, f'SMVV_{hist_name}')
         h_ttbar = utils.get_hist(f_ttbar, f'ttbar_{hist_name}')
-        h_stop = utils.get_hists_sum(f_stop, [f'{x}_{hist_name}' for x in ['stops', 'stopt', 'stopWt']])
+        h_stop = utils.get_hist(f_stop, f'stop_{hist_name}')
 
         h_vjets = h_data.Clone()
         h_vjets.Add(h_diboson, -1)
