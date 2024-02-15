@@ -63,10 +63,10 @@ def run(f):
 
 
 @run
-def plot_samples_per_region(file_manager : utils.FileManager, output_dir : str):
+def plot_MC_backgrounds_per_region(file_manager : utils.FileManager, output_dir : str):
     '''
     Plots each sample in 'PE' mode, unstacked, to compare their relative distributions 
-    and sizes.
+    and sizes. A ratio subplot shows their relative contribution.
 
     Repeats for each inclusive HP region and variable.
     '''
@@ -91,9 +91,28 @@ def plot_samples_per_region(file_manager : utils.FileManager, output_dir : str):
                     legend.append(sample.title)
                 if not hists: continue
 
+                ### Clean negative bins ###
+                for h in hists:
+                    for i in range(len(h)):
+                        if h[i] < 0:
+                            h[i] = 0
+                            h.SetBinError(i, 0)
+
+                ### Create ratio ###
+                h_total = hists[0].Clone()
+                for h in hists[1:]:
+                    h_total.Add(h)
+                
+                ratios = []
+                for h in hists:
+                    r = h.Clone()
+                    r.Divide(h_total)
+                    r.Scale(100)
+                    ratios.append(r)
+
                 ### Plot ###
-                plot.plot(
-                    filename=f'{output_dir}/sample_compare.{lep}lep.{region}.{var}',
+                plot.plot_ratio(
+                    filename=f'{output_dir}/mc_bkg.{lep}lep.{region}.{var}',
                     **var.x_plot_opts(),
 
                     ### Titles ###
@@ -102,13 +121,23 @@ def plot_samples_per_region(file_manager : utils.FileManager, output_dir : str):
                         f'{lep}Lep {region.replace("_", " ")}',
                     ],
                     legend=legend,
-                    ytitle='Events',
 
-                    ### Objs ###
-                    objs=hists,
+                    ### Main plot ###
+                    ytitle='Events',
+                    objs1=hists,
                     linecolor=plot.colors.tableu,
                     markersize=0,
                     opts='PE',
+
+                    ### Ratio ###
+                    height1=0.6,
+                    ytitle2='% of total',
+                    objs2=ratios,
+                    opts2='HIST',
+                    stack2=True,
+                    fillcolor2=plot.colors.tableu_40,
+                    y_range2=[0, 100],
+                    outlier_arrows=False,
                 )
 
 

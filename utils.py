@@ -61,8 +61,8 @@ class Variable:
 Variable.vv_m = Variable(name="vv_m", title="m(VV)", unit="GeV")
 Variable.vhad_pt = Variable(name="vhad_pt", title="p_{T}(J)", unit="GeV")
 
-Variable.llJ_m = Variable(name="llJ_m", title="m(#ell#ellJ)", unit="GeV", rebin=100, logy=True)
-Variable.lvJ_m = Variable(name="lvJ_m", title="m(#ell#nuJ)", unit="GeV", rebin=100, logy=True)
+Variable.llJ_m = Variable(name="llJ_m", title="m(llJ)", unit="GeV", rebin=100, logy=True)
+Variable.lvJ_m = Variable(name="lvJ_m", title="m(l#nuJ)", unit="GeV", rebin=100, logy=True)
 Variable.vvJ_m = Variable(name="vvJ_m", title="m(#nu#nuJ)", unit="GeV", rebin=100, logy=True)
 
 
