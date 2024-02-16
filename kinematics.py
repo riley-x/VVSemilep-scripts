@@ -62,7 +62,55 @@ def run(f):
 ##########################################################################################
 
 
-@run
+def _plot_hists_and_percentage(hists, **plot_opts):
+    '''
+    Plots each hist in 'PE' mode, unstacked, to compare their relative distributions 
+    and sizes. A ratio subplot shows their relative contribution.
+    '''
+    ### Clean negative bins ###
+    hists = [h.Clone() for h in hists]
+    for h in hists:
+        for i in range(len(h)):
+            if h[i] < 0:
+                h[i] = 0
+                h.SetBinError(i, 0)
+
+    ### Create ratio ###
+    h_total = hists[0].Clone()
+    for h in hists[1:]:
+        h_total.Add(h)
+    
+    ratios = []
+    for h in hists:
+        r = h.Clone()
+        r.Divide(h_total)
+        r.Scale(100)
+        ratios.append(r)
+
+    ### Plot ###
+    return plot.plot_ratio(
+        **plot_opts,
+
+        ### Main plot ###
+        ytitle='Events',
+        objs1=hists,
+        linecolor=plot.colors.tableu,
+        markersize=0,
+        opts='PE',
+
+        ### Ratio ###
+        height1=0.6,
+        ytitle2='% of total',
+        objs2=ratios,
+        opts2='HIST',
+        stack2=True,
+        fillcolor2=plot.colors.tableu_40,
+        linewidth2=1,
+        y_range2=[0, 100],
+        outlier_arrows=False,
+    )
+
+
 def plot_MC_backgrounds_per_region(file_manager : utils.FileManager, output_dir : str):
     '''
     Plots each sample in 'PE' mode, unstacked, to compare their relative distributions 
@@ -79,7 +127,6 @@ def plot_MC_backgrounds_per_region(file_manager : utils.FileManager, output_dir 
     for lep in [0, 1, 2]:
         for region in [f'MergHP_Inclusive_{x}' for x in ['SR', 'TCR', 'MCR']]:
             for var in vars:
-                ### Get hists ###
                 hists = []
                 legend = []
                 for sample in file_manager.samples.values():
@@ -91,54 +138,62 @@ def plot_MC_backgrounds_per_region(file_manager : utils.FileManager, output_dir 
                     legend.append(sample.title)
                 if not hists: continue
 
-                ### Clean negative bins ###
-                for h in hists:
-                    for i in range(len(h)):
-                        if h[i] < 0:
-                            h[i] = 0
-                            h.SetBinError(i, 0)
-
-                ### Create ratio ###
-                h_total = hists[0].Clone()
-                for h in hists[1:]:
-                    h_total.Add(h)
-                
-                ratios = []
-                for h in hists:
-                    r = h.Clone()
-                    r.Divide(h_total)
-                    r.Scale(100)
-                    ratios.append(r)
-
-                ### Plot ###
-                plot.plot_ratio(
+                _plot_hists_and_percentage(
+                    hists=hists, 
                     filename=f'{output_dir}/mc_bkg.{lep}lep.{region}.{var}',
-                    **var.x_plot_opts(),
-
-                    ### Titles ###
                     subtitle=[
                         '#sqrt{s}=13 TeV, 140 fb^{-1}',
                         f'{lep}Lep {region.replace("_", " ")}',
                     ],
                     legend=legend,
-
-                    ### Main plot ###
-                    ytitle='Events',
-                    objs1=hists,
-                    linecolor=plot.colors.tableu,
-                    markersize=0,
-                    opts='PE',
-
-                    ### Ratio ###
-                    height1=0.6,
-                    ytitle2='% of total',
-                    objs2=ratios,
-                    opts2='HIST',
-                    stack2=True,
-                    fillcolor2=plot.colors.tableu_40,
-                    y_range2=[0, 100],
-                    outlier_arrows=False,
+                    **var.x_plot_opts(),
                 )
+
+
+@run
+def plot_MC_backgrounds_for_fatjet_m(file_manager : utils.FileManager, output_dir : str):
+    '''
+    Plots each sample in 'PE' mode, unstacked, to compare their relative distributions 
+    and sizes. A ratio subplot shows their relative contribution.
+
+    Specialized for m(J) to plot both the SR and MCR, with the SR window outlined.
+    '''
+    var = utils.Variable.fatjet_m
+    sr_window = (72, 102)
+
+    def callback(plotter1, plotter2):
+        '''Add the SR window'''
+        plotter1.draw_vline(x=sr_window[0])
+        plotter1.draw_vline(x=sr_window[1])
+        plotter2.draw_vline(x=sr_window[0])
+        plotter2.draw_vline(x=sr_window[1])
+
+    for lep in [0, 1, 2]:
+        hists = []
+        legend = []
+        for sample in file_manager.samples.values():
+            if 'data' in sample.name: continue
+            h_sr = file_manager.get_hist(lep, sample.name, f'{{sample}}_VV{lep}Lep_MergHP_Inclusive_SR_{var}')
+            h_cr = file_manager.get_hist(lep, sample.name, f'{{sample}}_VV{lep}Lep_MergHP_Inclusive_MCR_{var}')
+            if h_sr is None or h_cr is None: continue
+            h_sr.Add(h_cr)
+            h = plot.rebin(h_sr, var.rebin)
+            hists.append(h)
+            legend.append(sample.title)
+        if not hists: continue
+
+        _plot_hists_and_percentage(
+            hists=hists, 
+            filename=f'{output_dir}/mc_bkg_fatjet_m.{lep}lep',
+            subtitle=[
+                '#sqrt{s}=13 TeV, 140 fb^{-1}',
+                f'{lep}Lep MergHP Inclusive SR/MCR',
+            ],
+            legend=legend,
+            **var.x_plot_opts(),
+            callback=callback,
+        )
+
 
 
 
