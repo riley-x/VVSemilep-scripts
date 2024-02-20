@@ -5,21 +5,36 @@
 @date April 27, 2023
 @brief Unfolding postscripts for creating response matrices and ResonanceFinder histograms
 
-To setup,
-    setupATLAS
-    lsetup "root recommended"
+------------------------------------------------------------------------------------------
+SETUP
+------------------------------------------------------------------------------------------
+
+    setupATLAS 
+    lsetup "root recommended" 
     lsetup "python centos7-3.9"
+
 Note that this can't be setup at the same time with AnalysisBase or else you get a lot of
 conflicts :(
 
-To run
-    unfolding.py path/to/reader/output.root SMVV 1
-Also check the hardcoded variables and binning in [main]. This creates the following plots:
-    migration_matrix.png/pdf 
-    eff_acc.png/pdf
-    fid_reco.png/pdf
+------------------------------------------------------------------------------------------
+CONFIG
+------------------------------------------------------------------------------------------
+
+Check [utils.Sample] to make sure the hardcoded naming stuctures are correct. Also check
+the hardcoded variables and binning in [get_bins].
+
+------------------------------------------------------------------------------------------
+RUN
+------------------------------------------------------------------------------------------
+
+    unfolding.py path/to/reader/hists/diboson.root diboson 1
+
+This creates the following plots:
+    - migration_matrix.png/pdf 
+    - eff_acc.png/pdf
+    - fid_reco.png/pdf
 and the following output file for RF input:
-    rf_histograms.root
+    - rf_histograms.root
 '''
 
 from plotting import plot
@@ -304,47 +319,48 @@ def get_bins(sample, lepton_channel, var: utils.Variable):
     raise NotImplementedError(f"unfolding.py::get_bins({sample}, {lepton_channel}, {var.name})")
 
 
-def main():
-    ### Args ###
-    parser = ArgumentParser(
-        description="Plots the migration matrix, efficiency and fiducial accuracy. Saves the response matrix as histograms for use in ResonanceFinder.", 
-        formatter_class=ArgumentDefaultsHelpFormatter
-    )
-    parser.add_argument('filepath', help='Path to the CxAODReader output histograms')
-    parser.add_argument('sample', help='Sample name used in CxAODReader, such as "SMVV"')
-    parser.add_argument("lepton", choices=['0', '1', '2'])
-    parser.add_argument('-o', '--output', default='./output')
-    parser.add_argument('--optimizeToRange', help='Automatically optimize the binning. Pass in a "min,max" range of values that the binning should cover.')
-    args = parser.parse_args()
+_default_vars = [
+    utils.Variable.vv_m,
+]
 
+def main(
+        file_manager : utils.FileManager,
+        sample : utils.Sample, 
+        lepton_channel : int, 
+        output : str = './output', 
+        vars : list[utils.Variable] = _default_vars,
+        optimization_range : tuple[float, float] = None,
+    ):
     ### Output dir ###
-    if not os.path.exists(args.output):
-        os.makedirs(args.output)
+    if not os.path.exists(output):
+        os.makedirs(output)
 
     ### Config ###
-    vars = [utils.vhad_pt]
     common_subtitle = [
         '#sqrt{s}=13 TeV, 140 fb^{-1}',
-        f'{args.lepton}-lepton channel, {args.sample}',
+        f'{lepton_channel}-lepton channel, {sample}',
     ]
-    output_basename = f'{args.output}/{args.sample}_{args.lepton}lep'
+    output_basename = f'{output}/{sample}_{lepton_channel}lep'
     plot.file_formats = ['png', 'pdf']
 
     ### Files ###    
-    f = ROOT.TFile(args.filepath)
     rf_output_path = f'{output_basename}_rf_histograms.root'
     rf_output_file = ROOT.TFile(rf_output_path, 'RECREATE')
 
     ### Run ###
     for var in vars:
         ### Get base histogram ###
-        mtx = utils.get_hist(f, f'{args.sample}_VV{args.lepton}Lep_Merg_unfoldingMtx_{var}')
+        mtx = file_manager.get_hist(
+            lep=lepton_channel, 
+            sample=sample.name, 
+            hist_name_format='{sample}_VV{lep}Lep_Merg_unfoldingMtx_' + f'{var}'
+        )
 
         ### Rebin ###
-        if args.optimizeToRange:
-            bins = optimize_binning(mtx, [float(x) for x in args.optimizeToRange.split(',')])
+        if optimization_range:
+            bins = optimize_binning(mtx, optimization_range)
         else:
-            bins = get_bins(args.sample, args.lepton, var)
+            bins = get_bins(sample, lepton_channel, var)
         mtx = plot.rebin2d(mtx, bins, bins)
     
         ### Plot ###
@@ -375,4 +391,31 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    ### Args ###
+    parser = ArgumentParser(
+        description="Plots the migration matrix, efficiency and fiducial accuracy. Saves the response matrix as histograms for use in ResonanceFinder.", 
+        formatter_class=ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument('filepath', help='Path to the CxAODReader output histograms')
+    parser.add_argument('sample', help='Sample name used in CxAODReader, such as "SMVV"')
+    parser.add_argument("lepton", choices=['0', '1', '2'])
+    parser.add_argument('-o', '--output', default='./output')
+    parser.add_argument('--optimizeToRange', help='Automatically optimize the binning. Pass in a "min,max" range of values that the binning should cover.')
+    args = parser.parse_args()
+
+    ### Files ###
+    sample = utils.Sample.parse(args.sample)
+    file_manager = utils.FileManager(
+        samples=[sample],
+        file_path_formats=[args.filepath],
+        lepton_channels=[args.lepton],
+    )
+
+    ### Run ###
+    main(
+        file_manager=file_manager,
+        sample=sample, 
+        lepton_channel=args.lepton,
+        output=args.output,
+        optimization_range=None if args.optimizeToRange is None else [float(x) for x in args.optimizeToRange.split(',')]
+    )

@@ -4,6 +4,7 @@
 @date February 7, 2024
 @brief Variable naming and other utilities 
 '''
+from __future__ import annotations
 from typing import Union
 import ctypes
 
@@ -105,6 +106,18 @@ class Sample:
             return f'{self.title}'
         else:
             return self.name
+    
+    @staticmethod
+    def list_predefined():
+        return [Sample.wjets, Sample.zjets, Sample.ttbar, Sample.stop, Sample.diboson, Sample.data]
+
+    @staticmethod
+    def parse(name) -> Sample:
+        samples = Sample.list_predefined()
+        for x in samples:
+            if x.name == name:
+                return x
+        raise RuntimeError(f"Sample.parse() couldn't parse {name}")
 
 
 Sample.wjets = Sample('wjets', 'W+jets', ['Wjets_Sherpa2211'], ['WLL', 'WHL', 'WHH'])
@@ -161,19 +174,19 @@ class FileManager:
     data!
     '''
 
-    def __init__(self, samples : list[Sample], file_path_formats : list[str]) -> None:
+    def __init__(self, samples : list[Sample], file_path_formats : list[str], lepton_channels = [0, 1, 2]) -> None:
         '''
         Tries to open every file given a set of samples and path formats. 
 
         @param file_path_formats
-            Pass any number file paths that can optionally contain fields "{lep}"
-            which will be replaced with [0, 1, 2] and "{sample}" which will be replaced
-            with [Sample.file_stubs] for each sample.
+            Pass any number file paths that can optionally contain fields "{lep}" which
+            will be replaced with each channel in [lepton_channels] and "{sample}" which
+            will be replaced with [Sample.file_stubs] for each sample.
         '''
         self.samples = { sample.name : sample for sample in samples }
         self.files = { 
             (lep, sample.name) : self._get_sample_files(lep, sample, file_path_formats) 
-            for lep in [0, 1, 2] 
+            for lep in lepton_channels
             for sample in samples 
         }
 
