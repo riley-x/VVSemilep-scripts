@@ -49,6 +49,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from plotting import plot
 import utils
 import unfolding
+import gpr
 
 ##########################################################################################
 ###                                        MAIN                                        ###
@@ -56,11 +57,12 @@ import unfolding
 
 def parse_args():
     parser = ArgumentParser(
-        description="Plots various kinematic comparisons between the MC backgrounds and data for the VVSemileptonic analysis.", 
+        description="Master run script for doing the unfolded analysis for VVsemilep.", 
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument('filepaths', nargs='+')
     parser.add_argument('-o', '--output', default='./output')
+    parser.add_argument('--from-csv-only', action='store_true', help="Don't do the GPR fit, just use the fit results in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     return parser.parse_args()
 
 
@@ -81,20 +83,32 @@ def get_files(filepaths):
 
 def run_channel(args, file_manager : utils.FileManager, lepton_channel : int):
     log_base = f'master.py::run_channel({lepton_channel}lep)'
+    vars = [utils.Variable.vv_m]
 
     ### Generate response matricies ###
     plot.notice(f'{log_base} creating response matrix')
-    response_matrix_dir = f'{args.output}/response_matrix'
     response_matrix_filepath = unfolding.main(
         file_manager=file_manager,
         sample=utils.Sample.diboson,
         lepton_channel=lepton_channel,
-        output=response_matrix_dir,
-        vars=[utils.Variable.vv_m],
+        output=f'{args.output}/response_matrix',
+        vars=vars,
     )
+
+    ### ttbar/stop fit ###
     
     ### Run GPR fit ###
-
+    for var in vars:
+        plot.notice(f'{log_base} running GPR fits for {var}')
+        gpr.run(
+            file_manager=file_manager,
+            lepton_channel=args.lepton,
+            var=var,
+            output_dir=f'{args.output}/gpr',
+            from_csv_only=args.from_csv_only,
+            mu_ttbar=1, # TODO
+            mu_stop=1, # TODO
+        )
 
     ### Likelihood fit ###
 
