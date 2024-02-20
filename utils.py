@@ -204,7 +204,7 @@ class FileManager:
                 ROOT.gSystem.RedirectOutput(_null_char_p, _null_char_p)
         
         if not files:
-            plot.warning('FileManager() unable to find files for {sample} in the {lep}-lep channel.')
+            plot.warning(f'FileManager() unable to find files for {sample} in the {lep}-lep channel.')
         return files
     
 

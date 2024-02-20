@@ -5,6 +5,35 @@
 @date February 1, 2024
 @brief Postscripts for running the GPR V+jets fit
 
+
+This runs the GPR fit to a single variable in one channel. It uses as inputs the
+`{var}__v__fatjet_m` histograms in the reader, which are filled with the inclusive SR+MCR.
+The script will run a fit for each bin specified in [get_bins_y], which includes the full
+contour scan to obtain the marginalized posterior. In general, see the CONFIG section for
+some hardcodes.
+
+By default, the fit will be run using the event subtraction scheme, `vjets = data - ttbar
+- stop - diboson`. Set the signal strength parameters --mu-stop and --mu-ttbar if you want
+to scale the respective samples. If you supply the `--closure-test` flag, will fit the GPR
+to just the MC V+jets sample instead.
+
+Results are saved into a file `gpr_fit_results.csv` containing both a 2sigma contour scan
+and the simple MMLE fit, and a ROOT histogram in `gpr_{lep}_{var}_vjets_yield.root` which
+can be input into ResonanceFinder. Note that the histogram file can be created from the
+CSV directly without rerunning the fits using the `--from-csv-only` option, if you need to
+edit or rerun a specific bin.
+
+The script will generate a plot named `gpr_{lep}_{var}_summary` in both png and pdf
+formats containing a summary distribution of the fits. For each bin fit, will also
+generate the following plots:
+    - nlml_cont: contour lines of the NLML space as a function of the two hyperparameters.
+    - yields: fitted SR yields in the same space.
+    - fit_opt: posterior prediction using the MMLE fit
+    - fit_m1s/fit_p1s: posterior predictions using +-1 sigma in the hyperparameter space
+      fits
+    - fit_pm1s: the above 3 posterior means superimposed onto the same plot
+    - p_intr: the marginalized posterior distribution
+
 -----------------------------------------------------------------------------------------
 SETUP
 -----------------------------------------------------------------------------------------
@@ -21,60 +50,27 @@ CONFIG
 ------------------------------------------------------------------------------------------
 Check the hardcoded binnings and other options in the CONFIG block near the bottom.
 
+Check [utils.Sample] and [utils.Variable] to make sure the hardcoded naming stuctures are
+correct.
 
 ------------------------------------------------------------------------------------------
 RUN
 ------------------------------------------------------------------------------------------
 
-    gpr.py --lepton 1 --var vv_m [INPUT FILES, SEE BELOW]
-        
-This runs the GPR fit to a single variable in one channel. There are a variety of run
-modes, listed below. But they all use as inputs the `{var}__v__fatjet_m` histograms in the
-reader, which are filled with the inclusive SR+MCR. The script will run a fit for each bin
-specified in `get_bins_y`, which includes the full contour scan to obtain the marginalized
-posterior. In general, see the CONFIG section for some hardcodes.
+    gpr.py filepath/formatter_1.root [...] \
+        --lepton 1 \
+        --var vv_m \
+        [OPTIONAL FLAGS]
 
-Results are saved into a file `gpr_fit_results.csv` containing both a 2sigma contour scan
-and the simple MMLE fit, and a ROOT histogram in `gpr_{lep}_{var}_vjets_yield.root` which
-can be input into ResonanceFinder. Note that the histogram file can be created from the
-CSV directly without rerunning the fits using the `--fromCsvOnly` option, if you need to
-edit or rerun a specific bin.
+This will fetch histogram files using the naming convention supplied in the arguments.
+These arguments can include python formatters (using curly braces) for 'lep', which will
+be replaced with the lepton channel number, and 'sample', which uses
+[utils.Sample.file_stubs]. For example,
 
-The script will generate a plot named `gpr_{lep}_{var}_summary` in both png and pdf
-formats containing a summary distribution of the fits. For each bin fit, will also
-generate the following plots:
-    - nlml_cont: contour lines of the NLML space as a function of the two hyperparameters.
-    - yields: fitted SR yields in the same space.
-    - fit_opt: posterior prediction using the MMLE fit
-    - fit_m1s/fit_p1s: posterior predictions using +-1 sigma in the hyperparameter space
-      fits
-    - fit_pm1s: the above 3 posterior means superimposed onto the same plot
-    - p_intr: the marginalized posterior distribution
+    hists/{lep}lep/{sample}.root
+    
+See [utils.FileManager] for details.
 
-
-------------------------------------------------------------------------------------------
-Run: Data
-
-    gpr.py --lepton 1 --var vv_m \
-        --data path/to/CxAODReader/outputs/hist-data.root \
-        --ttbar path/to/CxAODReader/outputs/hist-ttbar.root \
-        --stop path/to/CxAODReader/outputs/hist-stop.root \
-        --diboson path/to/CxAODReader/outputs/hist-diboson.root \
-
-When you pass in the files as above, the fit will be run using the event subtraction
-scheme, `vjets = data - ttbar - stop - diboson`. Set the signal strength parameters
---stopMu and --ttbarMu if you want to scale the respective samples. 
-
-------------------------------------------------------------------------------------------
-Run: V+jets MC
-
-    gpr.py --lepton 1 --var vv_m \
-        --vjets path/to/CxAODReader/outputs/hist-Wjets.root \
-        --isMC
-
-This fits the GPR to a single v+jets file. This can either be a pre-subtracted data file
-or the Monte Carlo sample. In the latter case, you want to specify --isMC to enable the
-closure test among other nice things.
 '''
 
 from __future__ import annotations
@@ -335,11 +331,11 @@ def weighted_integral(h, x_min, x_max, weights, width_scaled=True):
     return val, err**0.5
 
 def calculate_signal_strength_weights(
-    fitter : GPR, 
-    h_diboson: ROOT.TH1F, 
-    sr_window: tuple[float, float], 
-    h_sr: ROOT.TH1F = None,
-) -> tuple[list[float], tuple[float, float], ROOT.TH1F]:
+        fitter : GPR, 
+        h_diboson: ROOT.TH1F, 
+        sr_window: tuple[float, float], 
+        h_sr: ROOT.TH1F = None,
+    ) -> tuple[list[float], tuple[float, float], ROOT.TH1F]:
     '''
     This calculates the signal strength of the diboson signal with shape taken from
     [h_diboson]. All histograms should be width scaled already.
@@ -1295,20 +1291,20 @@ class ContourScanner:
 
 
 def gpr_likelihood_contours(
-    h_cr : ROOT.TH1F, 
-    var : utils.Variable, 
-    lep : str,
-    sr_window: tuple[float, float],
-    fit_range: tuple[float, float],
-    h_data_sr: ROOT.TH1F = None,
-    h_mc : ROOT.TH1F = None, 
-    h_diboson : ROOT.TH1F = None, 
-    gpr_version : str = 'rbf', 
-    filebase : str = '', 
-    subtitle : list[str] = [], 
-    fit_results : FitResults = None,
-    vary_bin : tuple[float, float] = None, 
-):
+        h_cr : ROOT.TH1F, 
+        var : utils.Variable, 
+        lep : str,
+        sr_window: tuple[float, float],
+        fit_range: tuple[float, float],
+        h_data_sr: ROOT.TH1F = None,
+        h_mc : ROOT.TH1F = None, 
+        h_diboson : ROOT.TH1F = None, 
+        gpr_version : str = 'rbf', 
+        filebase : str = '', 
+        subtitle : list[str] = [], 
+        fit_results : FitResults = None,
+        vary_bin : tuple[float, float] = None, 
+    ):
     '''
     Fits a single gpr to the CR, scanning a grid of hyperparameters. Makes the following
     plots:
@@ -1502,142 +1498,117 @@ def get_fit_range(lepton_channel, var, bin):
 sr_window = (72, 102)
 gpr_version = 'rbf'
 
-##############################################################################
-###                                  MAIN                                  ###
-##############################################################################
+##########################################################################################
+###                                       RUNNER                                       ###
+##########################################################################################
 
-def parse_args():
-    parser = ArgumentParser(
-        description="Plots the migration matrix, efficiency and fiducial accuracy. Saves the response matrix as histograms for use in ResonanceFinder.", 
-        formatter_class=ArgumentDefaultsHelpFormatter
+
+def summary_actions_from_csv(
+        fit_results : FitResults,
+        lepton_channel : int,
+        var : utils.Variable,
+        bins_y : list[int],
+        is_mc : bool,
+        output_dir : str,
+    ):
+    '''
+    Some final actions after running the full fit for a single variable. This reads
+    data from the CSV file, so it can be run without doing the fits all over again
+    using the --fromCsvOnly option.
+    '''
+    csv_base_spec = {
+        'lep': lepton_channel, 
+        'vary': var.name, 
+        'bins': bins_y,
+    }
+
+    ### Plot summary distribution ###
+    fitters = [
+        'vjets_mc',
+        f'{gpr_version}_nlml',
+        f'{gpr_version}_pf_scan2sig',
+    ]
+    legend = [
+        'MC',
+        'GPR MMLE Fit',
+        'GPR Marg Post',
+    ]
+    if not is_mc:
+        fitters = fitters[1:]
+        legend = legend[1:]
+    graphs = [fit_results.get_graph(**csv_base_spec, fitter=x) for x in fitters]
+    plot_summary_distribution(
+        graphs,
+        filename=f'{output_dir}/gpr_{lepton_channel}lep_{var.name}_summary',
+        subtitle=[
+            '#sqrt{s}=13 TeV, 140 fb^{-1}',
+            f'{lepton_channel}-lepton channel',
+        ],
+        legend=legend,
+        xtitle=f'{var:title}',
+        edge_labels=[str(x) for x in bins_y],
     )
-    parser.add_argument('-o', '--output', default='./output')
-    parser.add_argument("--lepton", required=True, choices=['0', '1', '2'])
-    parser.add_argument("--var", required=True, help='Variable to fit against; this must be present in a histogram {var}__v__fatjet_m and in the variable.py module.')
-    parser.add_argument('--vjets', help='Path to the V+jets CxAODReader histograms. '
-        'If you pass this, will fit to just this file (i.e. V+jets MC or preproduced event subtraction histograms). '
-        'Do not pass in the other sample files; they will be ignored.')
-    parser.add_argument('--sample', help='If you pass --vjets but the sample name is not "W" or "Z", '
-        'you can use this argument to modify it. This should be a comma delimited string of sample names, which will be added together.')
-    parser.add_argument('--isMC', action='store_true', help='Set this flag when using the --vjets options and passing in a Monte Carlo sample. This will trigger a few effects: the CR errors will be converted to sqrt(n), and a closure test will be performed against the SR region.')
-    parser.add_argument('--data', help='Path to the data CxAODReader histograms')
-    parser.add_argument('--diboson', help='Path to the diboson CxAODReader histograms')
-    parser.add_argument('--ttbar')
-    parser.add_argument('--stop')
-    parser.add_argument('--ttbarMu', default=1, help='Scale factor for the ttbar sample. Default = 1.')
-    parser.add_argument('--stopMu', default=1, help='Scale factor for the stop sample. Default = 1.')
-    parser.add_argument('--fromCsvOnly', action='store_true', help="Don't do the fit, just save the fit results in the CSV to a ROOT histogram.")
-    return parser.parse_args()
+
+    ### Save output histogram ###
+    f_output = ROOT.TFile(f'{output_dir}/gpr_{lepton_channel}lep_{var.name}_vjets_yield.root', 'RECREATE')
+    
+    h = fit_results.get_histogram(**csv_base_spec, fitter=gpr_version + '_pf_scan2sig',  histname=f'Vjets_SR_{var}')
+    h.Write()
 
 
-def main():
-    '''
-    See file header.
-    '''
-    ### Args ###
-    args = parse_args()
-
+def run(
+        file_manager : utils.FileManager,
+        lepton_channel : int,
+        var : utils.Variable,
+        use_vjets_mc : bool = False,
+        output_dir : str = './output',
+        from_csv_only : bool = False,
+        mu_ttbar : float = 1,
+        mu_stop : float = 1,
+    ):
     ### Output dir ###
-    if not os.path.exists(args.output):
-        os.makedirs(args.output)
-
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
     ### Get config ###
-    var : utils.Variable = getattr(utils, args.var)
     bins_x = get_bins_x()
-    bins_y = get_bins_y(args.var, args.lepton)
+    bins_y = get_bins_y(var, lepton_channel)
 
     ### Output ###
-    fit_results = FitResults(f'{args.output}/gpr_fit_results.csv')
-    plot.save_transparent_png = False
-    plot.file_formats = ['png', 'pdf']
-
+    fit_results = FitResults(f'{output_dir}/gpr_fit_results.csv')
     def finalize():
-        '''
-        Some final actions after running the full fit for a single variable. This reads
-        data from the CSV file, so it can be run without doing the fits all over again
-        using the --fromCsvOnly option.
-        '''
-        csv_base_spec = {
-            'lep': args.lepton, 
-            'vary': var.name, 
-            'bins': bins_y,
-        }
-
-        ### Plot summary distribution ###
-        fitters = [
-            'vjets_mc',
-            f'{gpr_version}_nlml',
-            f'{gpr_version}_pf_scan2sig',
-        ]
-        legend = [
-            'MC',
-            'GPR MMLE Fit',
-            'GPR Marg Post',
-        ]
-        if not args.isMC:
-            fitters = fitters[1:]
-            legend = legend[1:]
-        graphs = [fit_results.get_graph(**csv_base_spec, fitter=x) for x in fitters]
-        plot_summary_distribution(
-            graphs,
-            filename=f'{args.output}/gpr_{args.lepton}lep_{var.name}_summary',
-            subtitle=[
-                '#sqrt{s}=13 TeV, 140 fb^{-1}',
-                f'{args.lepton}-lepton channel',
-            ],
-            legend=legend,
-            xtitle=f'{var:title}',
-            edge_labels=[str(x) for x in bins_y],
+        summary_actions_from_csv(
+            fit_results=fit_results,
+            lepton_channel=lepton_channel,
+            var=var,
+            bins_y=bins_y,
+            is_mc=use_vjets_mc,
+            output_dir=output_dir,
         )
-
-        ### Save output histogram ###
-        f_output = ROOT.TFile(f'{args.output}/gpr_{args.lepton}lep_{var.name}_vjets_yield.root', 'RECREATE')
-        
-        h = fit_results.get_histogram(**csv_base_spec, fitter=gpr_version + '_pf_scan2sig',  histname=f'Vjets_SR_{var}')
-        h.Write()
     
-    if args.fromCsvOnly:
+    if from_csv_only:
         finalize()
         return
+    
+    ### Retrieve histograms ###
+    hist_name = f'{{sample}}_VV{{lep}}Lep_Merg_{var}__v__fatjet_m'
+    h_diboson = file_manager.get_hist(lepton_channel, utils.Sample.diboson, hist_name)
+    if use_vjets_mc:
+        h_wjets = file_manager.get_hist(lepton_channel, utils.Sample.wjets, hist_name)
+        h_zjets = file_manager.get_hist(lepton_channel, utils.Sample.zjets, hist_name)
 
-    ### Get 2D histograms ###
-    hist_name = f'VV{args.lepton}Lep_Merg_{var.name}__v__fatjet_m'
-
-    if args.vjets is not None:
-        ### Single file input mode ###
-        if args.sample is not None:
-            samples = args.sample.split(',')
-        else:
-            sample = "W" if args.lepton == "1" else "Z"
-            samples = [sample + x for x in ['HH', 'HL', 'LL']]
-            # Actually, the HH/HL/LL split is done in the VVAnalysis, so I think only LL is ever set
-            # for the unfolding histograms. So ignore the warnings about the other two.
+        h_vjets = h_wjets.Clone()
+        h_vjets.Add(h_zjets)
+    else:
+        h_data  = file_manager.get_hist(lepton_channel, utils.Sample.data,  hist_name)
+        h_ttbar = file_manager.get_hist(lepton_channel, utils.Sample.ttbar, hist_name)
+        h_stop  = file_manager.get_hist(lepton_channel, utils.Sample.stop,  hist_name)
         
-        f_vjets = ROOT.TFile(args.vjets)
-        h_vjets = utils.get_hists_sum(f_vjets, [f'{x}_{hist_name}' for x in samples])
-
-        if args.diboson is not None:
-            f_diboson = ROOT.TFile(args.diboson)
-            h_diboson = utils.get_hist(f_diboson, f'SMVV_{hist_name}')
-        else:
-            h_diboson = None
-    else: 
-        ### Event subtraction input mode ###
-        f_data = ROOT.TFile(args.data)
-        f_diboson = ROOT.TFile(args.diboson)
-        f_ttbar = ROOT.TFile(args.ttbar)
-        f_stop = ROOT.TFile(args.stop)
-
-        h_data = utils.get_hist(f_data, f'data_{hist_name}')
-        h_diboson = utils.get_hist(f_diboson, f'SMVV_{hist_name}')
-        h_ttbar = utils.get_hist(f_ttbar, f'ttbar_{hist_name}')
-        h_stop = utils.get_hist(f_stop, f'stop_{hist_name}')
-
         h_vjets = h_data.Clone()
         h_vjets.Add(h_diboson, -1)
-        h_vjets.Add(h_ttbar, -1 * args.ttbarMu)
-        h_vjets.Add(h_stop, -1 * args.stopMu)
-    
+        h_vjets.Add(h_ttbar, -1 * mu_ttbar)
+        h_vjets.Add(h_stop, -1 * mu_stop)
+
     ### Run for each bin ###
     for i in range(len(bins_y) - 1):
         ### Common options ###
@@ -1647,7 +1618,7 @@ def main():
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
             f'{var.title} #in {bin} [{var.unit}]'
         ]
-        fit_range = get_fit_range(args.lepton, args.var, bin)
+        fit_range = get_fit_range(lepton_channel, var, bin)
 
         ### Histogram manipulation ###
         def prepare_bin(h):
@@ -1659,7 +1630,7 @@ def main():
         h_vjets_bin = prepare_bin(h_vjets)
         h_diboson_bin = prepare_bin(h_diboson) if h_diboson else None
         
-        if args.vjets is not None and args.isMC:
+        if use_vjets_mc:
             h_mc = h_vjets_bin.Clone()
             set_sqrtn_errors(h_vjets_bin, width_scaled=True)
         else:
@@ -1673,8 +1644,8 @@ def main():
             h_diboson=h_diboson_bin,
             vary_bin=bin,
             var=var,
-            lep=args.lepton,
-            filebase=f'{args.output}/gpr_{args.lepton}lep_{var.name}_{binstr}_',
+            lep=lepton_channel,
+            filebase=f'{output_dir}/gpr_{lepton_channel}lep_{var.name}_{binstr}_',
             sr_window=sr_window,
             gpr_version=gpr_version,
             fit_results=fit_results,
@@ -1683,8 +1654,67 @@ def main():
         )
 
     finalize()
+
+
+##########################################################################################
+###                                        MAIN                                        ###
+##########################################################################################
+
+
+def parse_args():
+    parser = ArgumentParser(
+        description="Plots the migration matrix, efficiency and fiducial accuracy. Saves the response matrix as histograms for use in ResonanceFinder.", 
+        formatter_class=ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument('filepaths', nargs='+')
+    parser.add_argument("--lepton", required=True, type=int, choices=[0, 1, 2])
+    parser.add_argument("--var", required=True, help='Variable to fit against; this must be present in a histogram {var}__v__fatjet_m and in the variable.py module.')
     
+    parser.add_argument('-o', '--output', default='./output')
+    parser.add_argument('--closure-test', action='store_true', help='Set this flag to fit and do a closure test against the V+jets MC.')
+    parser.add_argument('--mu-ttbar', default=1, help='Scale factor for the ttbar sample. Default = 1.')
+    parser.add_argument('--mu-stop', default=1, help='Scale factor for the stop sample. Default = 1.')
+    parser.add_argument('--from-csv-only', action='store_true', help="Don't do the fit, just save the fit results in the CSV to a ROOT histogram.")
+    return parser.parse_args()
 
 
+def get_files(filepaths):
+    file_manager = utils.FileManager(
+        samples=[
+            utils.Sample.wjets,
+            utils.Sample.zjets,
+            utils.Sample.ttbar,
+            utils.Sample.stop,
+            utils.Sample.diboson,
+            utils.Sample.data,
+        ],
+        file_path_formats=filepaths,
+    )
+    return file_manager
+
+
+def main():
+    '''
+    See file header.
+    '''
+    args = parse_args()
+    file_manager = get_files(args.filepaths)
+    var = getattr(utils.Variable, args.var)
+
+    plot.save_transparent_png = False
+    plot.file_formats = ['png', 'pdf']
+
+    run(
+        file_manager=file_manager,
+        lepton_channel=args.lepton,
+        var=var,
+        use_vjets_mc=args.closure_test,
+        output_dir=args.output,
+        from_csv_only=args.from_csv_only,
+        mu_ttbar=args.mu_ttbar,
+        mu_stop=args.mu_stop,
+    )
+
+    
 if __name__ == '__main__':
     main()

@@ -5,6 +5,17 @@
 @date April 27, 2023
 @brief Unfolding postscripts for creating response matrices and ResonanceFinder histograms
 
+This creates the following plots:
+
+    - migration_matrix.png/pdf 
+    - eff_acc.png/pdf
+    - fid_reco.png/pdf
+
+and the following output file for RF input:
+
+    - rf_histograms.root
+
+
 ------------------------------------------------------------------------------------------
 SETUP
 ------------------------------------------------------------------------------------------
@@ -29,12 +40,6 @@ RUN
 
     unfolding.py path/to/reader/hists/diboson.root diboson 1
 
-This creates the following plots:
-    - migration_matrix.png/pdf 
-    - eff_acc.png/pdf
-    - fid_reco.png/pdf
-and the following output file for RF input:
-    - rf_histograms.root
 '''
 
 from plotting import plot
@@ -294,25 +299,25 @@ def plot_fid_reco(mtx, var, **kwargs):
 
 
 
-##############################################################################
-###                                  MAIN                                  ###
-##############################################################################
+##########################################################################################
+###                                       CONFIG                                       ###
+##########################################################################################
 
-def get_bins(sample, lepton_channel, var: utils.Variable):
+def get_bins(sample, lepton_channel : int, var: utils.Variable):
     if var.name == "vv_m":
-        if lepton_channel == '0':
+        if lepton_channel == 0:
             # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
             return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
-        elif lepton_channel == '1':
+        elif lepton_channel == 1:
             # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
             return [500, 740, 920, 1140, 1410, 1700, 2080, 3000]
             # old binning
             return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
-        elif lepton_channel == '2':
+        elif lepton_channel == 2:
             # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
             return [500, 580, 680, 780, 900, 1050, 1220, 1410, 1680, 1910, 2210, 3000]
     elif var.name == "vhad_pt":
-        if lepton_channel == '1':
+        if lepton_channel == 1:
             # optimized binning with threshold_diag=0.8, threshold_err=0.4, monotonic_bin_sizes=True
             return [300, 360, 460, 580, 730, 940, 1200, 1460, 3000]
 
@@ -323,6 +328,10 @@ _default_vars = [
     utils.Variable.vv_m,
 ]
 
+##########################################################################################
+###                                        MAIN                                        ###
+##########################################################################################
+
 def main(
         file_manager : utils.FileManager,
         sample : utils.Sample, 
@@ -331,6 +340,16 @@ def main(
         vars : list[utils.Variable] = _default_vars,
         optimization_range : tuple[float, float] = None,
     ):
+    '''
+    Runs the full script for a single [sample] and [lepton_channel] but possible many [vars]. 
+    See file docstring for more details.
+
+    @param output
+        Base directory that all outputs are added in.
+    @param optimization_range
+        Auto optimize the binning within the specified range. You probably want to limit [vars]
+        to a single variable.
+    '''
     ### Output dir ###
     if not os.path.exists(output):
         os.makedirs(output)
@@ -341,7 +360,6 @@ def main(
         f'{lepton_channel}-lepton channel, {sample}',
     ]
     output_basename = f'{output}/{sample}_{lepton_channel}lep'
-    plot.file_formats = ['png', 'pdf']
 
     ### Files ###    
     rf_output_path = f'{output_basename}_rf_histograms.root'
@@ -387,6 +405,7 @@ def main(
             p.Write(f'ResponseMatrix_{var}_fid' + str(x).rjust(2, '0'))
     
     plot.success(f'Saved response matrix histograms to {rf_output_path}')
+    return rf_output_path
 
 
 
@@ -398,7 +417,7 @@ if __name__ == "__main__":
     )
     parser.add_argument('filepath', help='Path to the CxAODReader output histograms')
     parser.add_argument('sample', help='Sample name used in CxAODReader, such as "SMVV"')
-    parser.add_argument("lepton", choices=['0', '1', '2'])
+    parser.add_argument("lepton", type=int, choices=[0, 1, 2])
     parser.add_argument('-o', '--output', default='./output')
     parser.add_argument('--optimizeToRange', help='Automatically optimize the binning. Pass in a "min,max" range of values that the binning should cover.')
     args = parser.parse_args()
@@ -412,6 +431,7 @@ if __name__ == "__main__":
     )
 
     ### Run ###
+    plot.file_formats = ['png', 'pdf']
     main(
         file_manager=file_manager,
         sample=sample, 
