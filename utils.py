@@ -208,7 +208,7 @@ class FileManager:
         return files
     
 
-    def get_hist(self, lep : int, sample : str, hist_name_format : str) -> Union[ROOT.TH1F, None]:
+    def get_hist(self, lep : int, sample : Union[str, Sample], hist_name_format : str) -> Union[ROOT.TH1F, None]:
         '''
         Retrieves a single histogram given a sample and name format. Histograms from every
         sample file in [self.files] using every key in [sample.hist_keys] will be fetched
@@ -219,11 +219,12 @@ class FileManager:
             which will be replaced with [lep] and "{sample}" which will be replaced with
             [sample.hist_keys].
         '''
-        files = self.files[(lep, sample)]
-        sample_obj = self.samples[sample]
+        if isinstance(sample, str):
+            sample = self.samples[sample]
+        files = self.files[(lep, sample.name)]
 
         h_out = None
-        for key in sample_obj.hist_keys:
+        for key in sample.hist_keys:
             name = hist_name_format.format(lep=lep, sample=key)
             for file in files:
                 h = file.Get(name)

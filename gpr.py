@@ -396,8 +396,6 @@ def calculate_signal_strength_weights(
         n_integral += ratio
         n_integral_err += ratio**2 * (ne**2 / n**2 + se**2 / s**2)
 
-    print(weights)
-
     weights = np.array(weights) / weight_sum
     return weights, (n_integral / weight_sum, n_integral_err**0.5 / weight_sum), h_sr
 
@@ -1480,17 +1478,17 @@ def get_bins_x():
     out = np.concatenate(([50, 53, 56, 59], np.arange(62, 250, 5)))
     return np.array(out, dtype=float)
 
-def get_bins_y(var, lepton):
+def get_bins_y(var, lepton_channel):
     if var == "vv_m":
-        if lepton == '0':
+        if lepton_channel == 0:
             return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
-        elif lepton == '1':
+        elif lepton_channel == 1:
             return [500, 740, 920, 1140, 1410, 1700, 2080, 3000]
-        elif lepton == '2':
+        elif lepton_channel == 2:
             return [500, 580, 680, 780, 900, 1050, 1220, 1410, 1680, 1910, 2210, 3000]
     elif var == "fatjet_pt":
         return [300, 330, 370, 410, 450, 500, 3000]
-    raise NotImplementedError()
+    raise NotImplementedError(f'{var} {lepton_channel}')
 
 def get_fit_range(lepton_channel, var, bin):
     return (50, 180)
@@ -1572,7 +1570,7 @@ def run(
     
     ### Get config ###
     bins_x = get_bins_x()
-    bins_y = get_bins_y(var, lepton_channel)
+    bins_y = get_bins_y(var.name, lepton_channel)
 
     ### Output ###
     fit_results = FitResults(f'{output_dir}/gpr_fit_results.csv')
