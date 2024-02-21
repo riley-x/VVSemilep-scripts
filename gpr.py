@@ -1361,7 +1361,7 @@ def gpr_likelihood_contours(
     
     ### Scan theta ###
     constant_factor = np.logspace(-1, 3, num=50)
-    length_scale = np.logspace(1, 4, num=50)
+    length_scale = np.logspace(1, 3, num=50)
     scanner = ContourScanner(fitter, config.sr_window, constant_factor, length_scale, integral_weights=weights)
     scanner.scan()
 
@@ -1416,7 +1416,6 @@ def gpr_likelihood_contours(
     ### CSV summary output ###
     if config.fit_results:
         w = vary_bin[1] - vary_bin[0]
-
         csv_base_args = {
             'lep': str(config.lepton_channel),
             'vary': config.var.name,
@@ -1524,6 +1523,12 @@ class FitConfig:
         self.bins_x = self.get_bins_x()
         self.bins_y = self.get_bins_y()
 
+        ### Signal contamination ###
+        if variation.startswith('mu-diboson'):
+            self.mu_diboson = 1 + float(variation.removeprefix('mu-diboson'))
+        else:
+            self.mu_diboson = 1
+
     def get_bins_x(self):
         out = np.concatenate(([50, 53, 56, 59], np.arange(62, 250, 5)))
         return np.array(out, dtype=float)
@@ -1605,20 +1610,17 @@ def run(
         config : FitConfig,
         from_csv_only : bool = False,
     ):
-
+    '''
+    This runs all the bin fits using the full contour scan (marginal posterior) for a
+    single [config] (i.e. channel, variable, and variation).
+    '''
     ### Short circuit ###
     if from_csv_only:
         summary_actions_from_csv(config)
         return
     
-    ### Handle variations ###
-    hist_name = f'{{sample}}_VV{{lep}}Lep_Merg_{config.var}__v__fatjet_m' # TODO Variation name
-    if config.variation.startswith('mu-diboson'):
-        mu_diboson = 1 + float(config.variation.removeprefix('mu-diboson'))
-    else:
-        mu_diboson = 1
-
     ### Retrieve histograms ###
+    hist_name = f'{{sample}}_VV{{lep}}Lep_Merg_{config.var}__v__fatjet_m' # TODO Variation name
     h_diboson = file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name)
     if config.use_vjets_mc:
         h_wjets = file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name)
@@ -1626,19 +1628,19 @@ def run(
 
         h_vjets = h_wjets.Clone()
         h_vjets.Add(h_zjets)
-        if mu_diboson != 1:
+        if config.mu_diboson != 1:
             # In the closure test, induce signal contamination assuming we only subtract
             # out mu = 1.
-            h_vjets.Add(h_diboson, mu_diboson - 1) 
+            h_vjets.Add(h_diboson, config.mu_diboson - 1) 
     else:
         h_data  = file_manager.get_hist(config.lepton_channel, utils.Sample.data,  hist_name)
         h_ttbar = file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
         h_stop  = file_manager.get_hist(config.lepton_channel, utils.Sample.stop,  hist_name)
         
         h_vjets = h_data.Clone()
-        h_vjets.Add(h_diboson, -mu_diboson)
-        h_vjets.Add(h_ttbar, -1 * config.mu_ttbar)
-        h_vjets.Add(h_stop, -1 * config.mu_stop)
+        h_vjets.Add(h_diboson, -config.mu_diboson)
+        h_vjets.Add(h_ttbar, -config.mu_ttbar)
+        h_vjets.Add(h_stop, -config.mu_stop)
 
     ### Run for each bin ###
     for i in range(len(config.bins_y) - 1):
