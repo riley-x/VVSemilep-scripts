@@ -74,6 +74,7 @@ See [utils.FileManager] for details.
 '''
 
 from __future__ import annotations
+from typing import Union
 
 # WARNING! The sklearn imports seem to cause segfaults with ROOT, even when they're not
 # used. However they don't always happen, so you can just rerun until it works.
@@ -409,21 +410,23 @@ class FitResults:
     This class handles saving and retrieving fit results from a CSV. If uses a pandas 
     dataframe as the intermediary in [self.df].
     '''
+    index_cols = ['lep', 'vary', 'variation', 'fitter', 'bin']
+
     def __init__(self, filepath='fit_results.csv'):
         self.filepath = filepath
         try:
-            self.df = pd.read_csv(filepath, index_col=['lep', 'vary', 'fitter', 'bin'], keep_default_na=False, dtype={'lep': str})
+            self.df = pd.read_csv(filepath, index_col=self.index_cols, keep_default_na=False, dtype={'lep': str})
         except:
-            self.df = pd.DataFrame(index=pd.MultiIndex.from_tuples([], names=['lep', 'vary', 'fitter', 'bin']), columns=['val', 'err_up', 'err_down'])
+            self.df = pd.DataFrame(index=pd.MultiIndex.from_tuples([], names=self.index_cols), columns=['val', 'err_up', 'err_down'])
 
-    def filter(self, lep=slice(None), vary=slice(None), fitter=slice(None), bin=slice(None), **_):
-        return self.df.loc[(lep, vary, fitter, bin), :]
+    def filter(self, lep=slice(None), vary=slice(None), variation=slice(None), fitter=slice(None), bin=slice(None), **_):
+        return self.df.loc[(lep, vary, variation, fitter, bin), :]
 
-    def get_entry(self, lep, vary, fitter, bin, **_):
-        return self.df.loc[(lep, vary, fitter, bin)]
+    def get_entry(self, lep, vary, variation, fitter, bin, **_):
+        return self.df.loc[(lep, vary, variation, fitter, bin)]
 
-    def set_entry(self, lep, vary, fitter, bin, val, err_up, err_down, **_):
-        self.df.loc[(lep, vary, fitter, bin)] = [val, err_up, err_down]
+    def set_entry(self, lep, vary, variation, fitter, bin, val, err_up, err_down, **_):
+        self.df.loc[(lep, vary, variation, fitter, bin)] = [val, err_up, err_down]
         self.save()
 
     def save(self, filepath=None):
@@ -431,26 +434,26 @@ class FitResults:
         self.df.sort_index(inplace=True)
         self.df.to_csv(filepath, float_format='%e')
 
-    def get_histogram(self, lep, vary, fitter, bins, histname):
+    def get_histogram(self, lep, vary, variation, fitter, bins, histname):
         bins_float = np.array(bins, dtype=float)
         h = ROOT.TH1F(histname, histname, len(bins_float) - 1, bins_float)
         for i in range(len(bins) - 1):
             bin = f'{bins[i]},{bins[i+1]}'
-            entry = self.get_entry(lep, vary, fitter, bin)
+            entry = self.get_entry(lep, vary, variation, fitter, bin)
             h.SetBinContent(i + 1, entry['val'])
             h.SetBinError(i + 1, (entry['err_up'] + entry['err_down']) / 2)
             # I don't think ResonanceFinder can handle a TGraphAsymmErrors so we have to
             # symmetrize the error
         return h
 
-    def get_graph(self, lep, vary, fitter, bins, width_scaled=True):
+    def get_graph(self, lep, vary, variation, fitter, bins, width_scaled=True):
         g = ROOT.TGraphAsymmErrors(len(bins) - 1)
         for i in range(len(bins) - 1):
             bin = f'{bins[i]},{bins[i+1]}'
             width = bins[i+1] - bins[i] if width_scaled else 1
             y_mid = (bins[i+1] + bins[i]) / 2
 
-            entry = self.get_entry(lep, vary, fitter, bin)
+            entry = self.get_entry(lep, vary, variation, fitter, bin)
             g.SetPoint(i, y_mid, entry['val'] * width)
             g.SetPointError(i, y_mid - bins[i], bins[i+1] - y_mid, entry['err_down'] * width, entry['err_up'] * width)
         return g
@@ -1145,6 +1148,12 @@ class GPR:
 
 
 class ContourScanner:
+    '''
+    This class does the full marginal likelihood contour scan to arrive at the marginal
+    posterior. Simply initialize then call [scan].
+
+    Results of the scan are stored as a myriad of member variables, listed in [__init__].
+    '''
     def __init__(self, fitter, sr_def, constant_factor, length_scale, integral_weights=None):
         '''
         @param fitter
@@ -1191,6 +1200,7 @@ class ContourScanner:
         ### p(f) histograms ###
         self.h_pf = None
         self.h_pf_1s = None
+        self.h_pf_weighted = None
         
 
     def scan(self):
@@ -1289,23 +1299,20 @@ class ContourScanner:
 
 
 def gpr_likelihood_contours(
+        config : FitConfig,
         h_cr : ROOT.TH1F, 
-        var : utils.Variable, 
-        lep : str,
-        sr_window: tuple[float, float],
-        fit_range: tuple[float, float],
         h_data_sr: ROOT.TH1F = None,
         h_mc : ROOT.TH1F = None, 
         h_diboson : ROOT.TH1F = None, 
-        gpr_version : str = 'rbf', 
         filebase : str = '', 
         subtitle : list[str] = [], 
-        fit_results : FitResults = None,
         vary_bin : tuple[float, float] = None, 
     ):
     '''
-    Fits a single gpr to the CR, scanning a grid of hyperparameters. Makes the following
-    plots:
+    Run function for the contour scan. This class does the scan and also handles plots and
+    saving the results.
+
+    Makes the following plots:
         1. likelihood contours
         2. SR integral error colz in the +1 sigma region
         3. event plot with means of best and +-1 sigma hyperparameters
@@ -1314,8 +1321,6 @@ def gpr_likelihood_contours(
     Assumes the GPR has two hyperparameters: length scale and overall variance (constant
     kernel).
 
-    @param fit_results
-        A [FitResults] object to save fit results to a csv file.
     @param vary_bin
         A tuple (min, max) of the cross variable [var] that we're currently fitting. This
         used only with [fit_results].  
@@ -1334,12 +1339,13 @@ def gpr_likelihood_contours(
     '''
     ### MC ###
     if h_mc:
-        mc_sr_yield = plot.integral_user(h_mc, sr_window, use_width=True, return_error=True)
+        mc_sr_yield = plot.integral_user(h_mc, config.sr_window, use_width=True, return_error=True)
     else:
         mc_sr_yield = None
 
     ### Fit ###
-    fitter = GPR(gpr_version)
+    fit_range = config.get_fit_range(bin)
+    fitter = GPR(config.gpr_version)
     fitter.fit(h_cr, fit_range)
 
     ### Diboson signal strength precalcs ###
@@ -1348,15 +1354,15 @@ def gpr_likelihood_contours(
             fitter=fitter,
             h_sr=h_data_sr, 
             h_diboson=h_diboson, 
-            sr_window=sr_window,
+            sr_window=config.sr_window,
         )
     else:
         weights = None
     
     ### Scan theta ###
     constant_factor = np.logspace(-1, 3, num=50)
-    length_scale = np.logspace(1, 3, num=50)
-    scanner = ContourScanner(fitter, sr_window, constant_factor, length_scale, integral_weights=weights)
+    length_scale = np.logspace(1, 4, num=50)
+    scanner = ContourScanner(fitter, config.sr_window, constant_factor, length_scale, integral_weights=weights)
     scanner.scan()
 
     ### Plot contours ###
@@ -1383,10 +1389,10 @@ def gpr_likelihood_contours(
         scanner=scanner, 
         h_cr=h_cr,
         h_mc=h_mc,
-        sr_window=sr_window,
+        sr_window=config.sr_window,
         filename=filebase + '{stub}',
         subtitle=subtitle,
-        xtitle=f'{var:title}',
+        xtitle=f'{config.var:title}',
         ytitle='Events / Bin Width',
         x_range=[50, 250],
     )
@@ -1404,26 +1410,34 @@ def gpr_likelihood_contours(
             filename=filebase + 'pf_weighted',
             subtitle=subtitle,
             xtitle='f #equiv Weighted SR Integral',
-            mc_yield=weighted_integral(h_mc, *sr_window, weights) if h_mc else None,
+            mc_yield=weighted_integral(h_mc, *config.sr_window, weights) if h_mc else None,
         )
 
     ### CSV summary output ###
-    if fit_results:
+    if config.fit_results:
         w = vary_bin[1] - vary_bin[0]
-        binstr = f'{vary_bin[0]},{vary_bin[1]}'
+
+        csv_base_args = {
+            'lep': str(config.lepton_channel),
+            'vary': config.var.name,
+            'bin': f'{vary_bin[0]},{vary_bin[1]}',
+            'variation': config.variation,
+        }
 
         ### MC yield ###
         if h_mc:
-            fit_results.set_entry(
-                lep=lep, vary=var.name, fitter='vjets_mc', bin=binstr, 
+            config.fit_results.set_entry(
+                **csv_base_args,
+                fitter='vjets_mc',
                 val=mc_sr_yield[0] / w, 
                 err_up=mc_sr_yield[1] / w, 
                 err_down=mc_sr_yield[1] / w,
             )
         
         ### NLML fit ###
-        fit_results.set_entry(
-            lep=lep, vary=var.name, fitter=gpr_version + '_nlml', bin=binstr, 
+        config.fit_results.set_entry(
+            **csv_base_args,
+            fitter=config.gpr_version + '_nlml',
             val=scanner.optimal_int[0] / w, 
             err_up=scanner.optimal_int[1] / w, 
             err_down=scanner.optimal_int[1] / w,
@@ -1433,8 +1447,9 @@ def gpr_likelihood_contours(
         pf_val = pfs[0]
         pf_err_down = pf_val - pfs[1]
         pf_err_up = pfs[2] - pf_val
-        fit_results.set_entry(
-            lep=lep, vary=var.name, fitter=gpr_version + '_pf_scan2sig', bin=binstr, 
+        config.fit_results.set_entry(
+            **csv_base_args,
+            fitter=config.gpr_version + '_pf_scan2sig',
             val=pf_val / w, 
             err_up=pf_err_up / w, 
             err_down=pf_err_down / w,
@@ -1446,194 +1461,211 @@ def gpr_likelihood_contours(
             val = n_integral[0] - pfs_weighted[0]
             err_down = n_integral[1]**2 + (pfs_weighted[0] - pfs_weighted[1])**2
             err_up = n_integral[1]**2 + (pfs_weighted[2] - pfs_weighted[0])**2
-            fit_results.set_entry(
-                lep=lep, vary=var.name, fitter=gpr_version + '_mu_weighted_average', bin=binstr, 
+            config.fit_results.set_entry(
+                **csv_base_args,
+                fitter=config.gpr_version + '_mu_weighted_average',
                 val=val, 
                 err_up=err_down**0.5, 
                 err_down=err_up**0.5,
             )
 
             ### Integral - integral ###
-            data_int = plot.integral_user(h_sr, sr_window, use_width=True, return_error=True)
-            diboson_int = plot.integral_user(h_diboson, sr_window, use_width=True, return_error=True)
+            data_int = plot.integral_user(h_sr, config.sr_window, use_width=True, return_error=True)
+            diboson_int = plot.integral_user(h_diboson, config.sr_window, use_width=True, return_error=True)
             
             num = data_int[0] - pf_val
             val = num / diboson_int[0]
             err_down = val * ((data_int[1]**2 + pf_err_down**2) / num**2 + diboson_int[1]**2 / diboson_int[0]**2)**0.5
             err_up = val * ((data_int[1]**2 + pf_err_up**2) / num**2 + diboson_int[1]**2 / diboson_int[0]**2)**0.5
 
-            fit_results.set_entry(
-                lep=lep, vary=var.name, fitter=gpr_version + '_mu_integral', bin=binstr, 
+            config.fit_results.set_entry(
+                **csv_base_args,
+                fitter=config.gpr_version + '_mu_integral',
                 val=val, 
                 err_up=err_down, 
                 err_down=err_up,
             )
             
 
-###############################################################################
-###                                  CONFIG                                 ###
-###############################################################################
+##########################################################################################
+###                                       CONFIG                                       ###
+##########################################################################################
 
-def get_bins_x():
-    out = np.concatenate(([50, 53, 56, 59], np.arange(62, 250, 5)))
-    return np.array(out, dtype=float)
+class FitConfig:
 
-def get_bins_y(var, lepton_channel):
-    if var == "vv_m":
-        if lepton_channel == 0:
-            return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
-        elif lepton_channel == 1:
-            return [500, 740, 920, 1140, 1410, 1700, 2080, 3000]
-        elif lepton_channel == 2:
-            return [500, 580, 680, 780, 900, 1050, 1220, 1410, 1680, 1910, 2210, 3000]
-    elif var == "fatjet_pt":
-        return [300, 330, 370, 410, 450, 500, 3000]
-    raise NotImplementedError(f'{var} {lepton_channel}')
+    def __init__(
+            self, 
+            lepton_channel : int,
+            var : utils.Variable,
+            variation : str = 'nominal',
+            use_vjets_mc : bool = False,
+            output_dir : str = './output',
+            gpr_version : str = 'rbf',
+            sr_window : tuple[float, float] = (72, 102),
+            mu_stop : float = 1,
+            mu_ttbar : float = 1,
+        ):
+        self.lepton_channel = lepton_channel
+        self.var = var
+        self.variation = variation
+        self.use_vjets_mc = use_vjets_mc
+        self.output_dir = output_dir
+        self.gpr_version = gpr_version
+        self.sr_window = sr_window
+        self.mu_stop = mu_stop
+        self.mu_ttbar = mu_ttbar
 
-def get_fit_range(lepton_channel, var, bin):
-    return (50, 180)
+        ### Outputs ###
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        self.fit_results = FitResults(f'{output_dir}/gpr_fit_results.csv')
+        
+        ### Binning ###
+        self.bins_x = self.get_bins_x()
+        self.bins_y = self.get_bins_y()
 
-sr_window = (72, 102)
-gpr_version = 'rbf'
+    def get_bins_x(self):
+        out = np.concatenate(([50, 53, 56, 59], np.arange(62, 250, 5)))
+        return np.array(out, dtype=float)
+
+    def get_bins_y(self):
+        if self.var.name == "vv_m":
+            if self.lepton_channel == 0:
+                return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
+            elif self.lepton_channel == 1:
+                return [500, 740, 920, 1140, 1410, 1700, 2080, 3000]
+            elif self.lepton_channel == 2:
+                return [500, 580, 680, 780, 900, 1050, 1220, 1410, 1680, 1910, 2210, 3000]
+        elif self.var.name == "fatjet_pt":
+            return [300, 330, 370, 410, 450, 500, 3000]
+        raise NotImplementedError(f'get_bins_y() {self.var} {self.lepton_channel}')
+
+    def get_fit_range(self, bin):
+        return (50, 180)
+
 
 ##########################################################################################
 ###                                       RUNNER                                       ###
 ##########################################################################################
 
-
-def summary_actions_from_csv(
-        fit_results : FitResults,
-        lepton_channel : int,
-        var : utils.Variable,
-        bins_y : list[int],
-        is_mc : bool,
-        output_dir : str,
-    ):
+def summary_actions_from_csv(config : FitConfig):
     '''
     Some final actions after running the full fit for a single variable. This reads
     data from the CSV file, so it can be run without doing the fits all over again
     using the --fromCsvOnly option.
     '''
     csv_base_spec = {
-        'lep': lepton_channel, 
-        'vary': var.name, 
-        'bins': bins_y,
+        'lep': config.lepton_channel, 
+        'variation': config.variation,
+        'vary': config.var.name, 
+        'bins': config.bins_y,
     }
 
     ### Plot summary distribution ###
     fitters = [
         'vjets_mc',
-        f'{gpr_version}_nlml',
-        f'{gpr_version}_pf_scan2sig',
+        f'{config.gpr_version}_nlml',
+        f'{config.gpr_version}_pf_scan2sig',
     ]
     legend = [
         'MC',
         'GPR MMLE Fit',
         'GPR Marg Post',
     ]
-    if not is_mc:
+    if not config.use_vjets_mc:
         fitters = fitters[1:]
         legend = legend[1:]
-    graphs = [fit_results.get_graph(**csv_base_spec, fitter=x) for x in fitters]
+
+    graphs = [config.fit_results.get_graph(**csv_base_spec, fitter=x) for x in fitters]
     plot_summary_distribution(
         graphs,
-        filename=f'{output_dir}/gpr_{lepton_channel}lep_{var.name}_summary',
+        filename=f'{config.output_dir}/gpr_{config.lepton_channel}lep_{config.var}_summary',
         subtitle=[
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{lepton_channel}-lepton channel',
+            f'{config.lepton_channel}-lepton channel',
         ],
         legend=legend,
-        xtitle=f'{var:title}',
-        edge_labels=[str(x) for x in bins_y],
+        xtitle=f'{config.var:title}',
+        edge_labels=[str(x) for x in config.bins_y],
     )
 
     ### Save output histogram ###
-    f_output = ROOT.TFile(f'{output_dir}/gpr_{lepton_channel}lep_{var.name}_vjets_yield.root', 'RECREATE')
+    f_output = ROOT.TFile(f'{config.output_dir}/gpr_{config.lepton_channel}lep_vjets_yield.root', 'UPDATE')
     
-    h = fit_results.get_histogram(**csv_base_spec, fitter=gpr_version + '_pf_scan2sig',  histname=f'Vjets_SR_{var}')
+    h = config.fit_results.get_histogram(
+        **csv_base_spec, 
+        fitter=config.gpr_version + '_pf_scan2sig', 
+        histname=f'Vjets_SR_{config.var}_{config.variation}',
+    )
     h.Write()
 
 
 def run(
         file_manager : utils.FileManager,
-        lepton_channel : int,
-        var : utils.Variable,
-        use_vjets_mc : bool = False,
-        output_dir : str = './output',
+        config : FitConfig,
         from_csv_only : bool = False,
-        mu_ttbar : float = 1,
-        mu_stop : float = 1,
     ):
-    ### Output dir ###
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    
-    ### Get config ###
-    bins_x = get_bins_x()
-    bins_y = get_bins_y(var.name, lepton_channel)
 
-    ### Output ###
-    fit_results = FitResults(f'{output_dir}/gpr_fit_results.csv')
-    def finalize():
-        summary_actions_from_csv(
-            fit_results=fit_results,
-            lepton_channel=lepton_channel,
-            var=var,
-            bins_y=bins_y,
-            is_mc=use_vjets_mc,
-            output_dir=output_dir,
-        )
-    
+    ### Short circuit ###
     if from_csv_only:
-        finalize()
+        summary_actions_from_csv(config)
         return
     
+    ### Handle variations ###
+    hist_name = f'{{sample}}_VV{{lep}}Lep_Merg_{config.var}__v__fatjet_m' # TODO Variation name
+    if config.variation.startswith('mu-diboson'):
+        mu_diboson = 1 + float(config.variation.removeprefix('mu-diboson'))
+    else:
+        mu_diboson = 1
+
     ### Retrieve histograms ###
-    hist_name = f'{{sample}}_VV{{lep}}Lep_Merg_{var}__v__fatjet_m'
-    h_diboson = file_manager.get_hist(lepton_channel, utils.Sample.diboson, hist_name)
-    if use_vjets_mc:
-        h_wjets = file_manager.get_hist(lepton_channel, utils.Sample.wjets, hist_name)
-        h_zjets = file_manager.get_hist(lepton_channel, utils.Sample.zjets, hist_name)
+    h_diboson = file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name)
+    if config.use_vjets_mc:
+        h_wjets = file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name)
+        h_zjets = file_manager.get_hist(config.lepton_channel, utils.Sample.zjets, hist_name)
 
         h_vjets = h_wjets.Clone()
         h_vjets.Add(h_zjets)
+        if mu_diboson != 1:
+            # In the closure test, induce signal contamination assuming we only subtract
+            # out mu = 1.
+            h_vjets.Add(h_diboson, mu_diboson - 1) 
     else:
-        h_data  = file_manager.get_hist(lepton_channel, utils.Sample.data,  hist_name)
-        h_ttbar = file_manager.get_hist(lepton_channel, utils.Sample.ttbar, hist_name)
-        h_stop  = file_manager.get_hist(lepton_channel, utils.Sample.stop,  hist_name)
+        h_data  = file_manager.get_hist(config.lepton_channel, utils.Sample.data,  hist_name)
+        h_ttbar = file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
+        h_stop  = file_manager.get_hist(config.lepton_channel, utils.Sample.stop,  hist_name)
         
         h_vjets = h_data.Clone()
-        h_vjets.Add(h_diboson, -1)
-        h_vjets.Add(h_ttbar, -1 * mu_ttbar)
-        h_vjets.Add(h_stop, -1 * mu_stop)
+        h_vjets.Add(h_diboson, -mu_diboson)
+        h_vjets.Add(h_ttbar, -1 * config.mu_ttbar)
+        h_vjets.Add(h_stop, -1 * config.mu_stop)
 
     ### Run for each bin ###
-    for i in range(len(bins_y) - 1):
+    for i in range(len(config.bins_y) - 1):
         ### Common options ###
-        bin = (bins_y[i], bins_y[i+1])
+        bin = (config.bins_y[i], config.bins_y[i+1])
         binstr = f'{bin[0]},{bin[1]}'
         common_subtitle = [
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{var.title} #in {bin} [{var.unit}]'
+            f'{config.var.title} #in {bin} [{config.var.unit}]'
         ]
-        fit_range = get_fit_range(lepton_channel, var, bin)
 
         ### Histogram manipulation ###
         def prepare_bin(h):
             h = plot.projectX(h, bin)
-            h = h.Rebin(len(bins_x) - 1, h.GetName() + '_rebin', bins_x)
+            h = h.Rebin(len(config.bins_x) - 1, h.GetName() + '_rebin', config.bins_x)
             h.Scale(1, 'width')
             return h
         
         h_vjets_bin = prepare_bin(h_vjets)
         h_diboson_bin = prepare_bin(h_diboson) if h_diboson else None
         
-        if use_vjets_mc:
+        if config.use_vjets_mc:
             h_mc = h_vjets_bin.Clone()
             set_sqrtn_errors(h_vjets_bin, width_scaled=True)
         else:
             h_mc = None
-        h_sr, h_cr = get_sr_cr(h_vjets_bin, sr_window)
+        h_sr, h_cr = get_sr_cr(h_vjets_bin, config.sr_window)
 
         ### Run fit ###
         gpr_likelihood_contours(
@@ -1641,17 +1673,12 @@ def run(
             h_mc=h_mc,
             h_diboson=h_diboson_bin,
             vary_bin=bin,
-            var=var,
-            lep=lepton_channel,
-            filebase=f'{output_dir}/gpr_{lepton_channel}lep_{var.name}_{binstr}_',
-            sr_window=sr_window,
-            gpr_version=gpr_version,
-            fit_results=fit_results,
-            fit_range=fit_range,
+            filebase=f'{config.output_dir}/gpr_{config.lepton_channel}lep_{config.var}_{binstr}_',
+            config=config,
             subtitle=common_subtitle,
         )
 
-    finalize()
+    summary_actions_from_csv(config)
 
 
 ##########################################################################################
@@ -1673,6 +1700,7 @@ def parse_args():
     parser.add_argument('--mu-ttbar', default=1, help='Scale factor for the ttbar sample. Default = 1.')
     parser.add_argument('--mu-stop', default=1, help='Scale factor for the stop sample. Default = 1.')
     parser.add_argument('--from-csv-only', action='store_true', help="Don't do the fit, just save the fit results in the CSV to a ROOT histogram.")
+    parser.add_argument('--variation', default='nominal')
     return parser.parse_args()
 
 
@@ -1695,23 +1723,21 @@ def main():
     '''
     See file header.
     '''
-    args = parse_args()
-    file_manager = get_files(args.filepaths)
-    var = getattr(utils.Variable, args.var)
-
     plot.save_transparent_png = False
     plot.file_formats = ['png', 'pdf']
 
-    run(
-        file_manager=file_manager,
+    args = parse_args()
+    file_manager = get_files(args.filepaths)
+    config = FitConfig(
         lepton_channel=args.lepton,
-        var=var,
+        var=getattr(utils.Variable, args.var),
+        variation=args.variation,
         use_vjets_mc=args.closure_test,
         output_dir=args.output,
-        from_csv_only=args.from_csv_only,
-        mu_ttbar=args.mu_ttbar,
         mu_stop=args.mu_stop,
+        mu_ttbar=args.mu_ttbar,
     )
+    run(file_manager, config, args.from_csv_only)
 
     
 if __name__ == '__main__':
