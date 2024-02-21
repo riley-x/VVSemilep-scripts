@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 '''
-@file master.py 
+@file ttbar_fit.py 
 @author Riley Xu - riley.xu@gmail.com, riley.xu@cern.ch 
-@date February 20, 2024 
-@brief Master run script for doing the unfolded analysis for VVsemilep
+@date February 21, 2024 
+@brief Script for fitting the ttbar/stop backgrounds using the 1lep channel.
 
 ------------------------------------------------------------------------------------------
 SETUP
@@ -23,14 +23,11 @@ CONFIG
 Check [utils.Sample] and [utils.Variable] to make sure the hardcoded naming stuctures are
 correct.
 
-Check [unfolding.get_bins] and [gpr.FitConfig.get_bins_y] to ensure the desired binnings
-are set.
-
 ------------------------------------------------------------------------------------------
 RUN
 ------------------------------------------------------------------------------------------
 
-    main.py filepath/formatter_1.root [...]
+    ttbar_fit.py filepath/formatter_1.root [...]
 
 This will fetch histogram files using the naming convention supplied in the arguments.
 These arguments can include python formatters (using curly braces) for 'lep', which will
@@ -49,8 +46,68 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from plotting import plot
 import utils
-import unfolding
-import gpr
+
+
+
+##########################################################################################
+###                                         RUN                                        ###
+##########################################################################################
+
+
+# def run_fit(
+#         file_manager : utils.FileManager,
+#     ):
+
+#     x = ROOT.RooRealVar("x", "x", 0, 1)
+    
+#     n_stop_nom = 100
+#     mu_stop_mean = ROOT.RooRealVar('mu_stop_mean', 'mu_stop_mean', 1 * n_stop_nom)
+#     mu_stop_sigma = ROOT.RooRealVar('mu_stop_sigma', 'mu_stop_sigma', 0.2 * n_stop_nom)
+#     mu_stop_alpha = ROOT.RooRealVar('mu_stop_alpha', 'mu_stop_alpha', n_stop_nom, 0, 2 * n_stop_nom)
+#     mu_stop = ROOT.RooGaussian('mu_stop', 'mu_stop', mu_stop_alpha, mu_stop_mean, mu_stop_sigma)
+
+#     n_ttbar_nom = 100
+#     mu_ttbar = ROOT.RooRealVar('mu_ttbar', 'mu_ttbar', 100, 0, 200)
+    
+#     n_ttbar = ROOT.RooUniform('n_ttbar', 'n_ttbar', x)
+#     n_stop = ROOT.RooUniform('n_stop', 'n_stop', x)
+    
+#     sig = ROOT.RooAddPdf("sig", "Signal", [n_ttbar, n_stop], [mu_stop, mu_ttbar])
+    
+    
+#     data = ROOT.RooDataSet('data', 'data', [x])
+#     data.add([x])
+#     sig.createNLL(data)
+
+
+def run_fit(
+        file_manager : utils.FileManager,
+    ):
+    from scipy import optimize, stats
+
+
+    y = 100
+    n = 100
+
+    def nll(params):
+        mu = params[0]
+        pred = mu * n
+        return -stats.poisson.logpmf(y, pred) \
+            - stats.norm.logpdf(mu, loc=1, scale=0.1) 
+        
+        # return -stats.norm.logpdf(y, loc=pred, scale=pred**0.5) \
+        #     + pred
+            # - stats.norm.logpdf(mu, loc=1, scale=0.1) \
+    
+
+    res = optimize.minimize(nll, [1.8], bounds=[(1e-2, 2)], method='L-BFGS-B')#, options={'ftol': 1e-15, 'gtol': 1e-15})
+    print(res)
+
+
+
+
+    
+
 
 ##########################################################################################
 ###                                        MAIN                                        ###
@@ -63,7 +120,6 @@ def parse_args():
     )
     parser.add_argument('filepaths', nargs='+')
     parser.add_argument('-o', '--output', default='./output')
-    parser.add_argument('--from-csv-only', action='store_true', help="Don't do the GPR fit, just use the fit results in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     return parser.parse_args()
 
 
@@ -82,69 +138,14 @@ def get_files(filepaths):
     return file_manager
     
 
-def run_channel(
-        args, 
-        file_manager : utils.FileManager, 
-        lepton_channel : int,
-        mu_stop : tuple[float, float],
-        mu_ttbar : tuple[float, float],
-    ):
-    log_base = f'master.py::run_channel({lepton_channel}lep)'
-    vars = [utils.Variable.vv_m]
-
-    ### Generate response matricies ###
-    plot.notice(f'{log_base} creating response matrix')
-    response_matrix_filepath = unfolding.main(
-        file_manager=file_manager,
-        sample=utils.Sample.diboson,
-        lepton_channel=lepton_channel,
-        output=f'{args.output}/response_matrix',
-        vars=vars,
-    )
-
-    ### Run GPR fit ###
-    for var in vars:
-        plot.notice(f'{log_base} running GPR fits for {var}')
-        
-        # TODO loop variations, diboson contam, etc.
-        config = gpr.FitConfig(
-            lepton_channel=args.lepton,
-            var=var,
-            variation='nominal', # TODO
-            mu_stop=mu_stop[0], # TODO
-            mu_ttbar=mu_ttbar[0], # TODO
-            output_dir=f'{args.output}/gpr',
-        )
-        gpr.run(file_manager, config, args.from_csv_only)
-
-    ### Profile likelihood unfolding fit ###
-
-
-    ### Likelihood fit (diboson signal strength) ###
-        
-
-
 def main():
-    args = parse_args()
-    file_manager = get_files(args.filepaths)
+    # args = parse_args()
+    # file_manager = get_files(args.filepaths)
 
-    plot.save_transparent_png = False
-    plot.file_formats = ['png', 'pdf']
+    # plot.save_transparent_png = False
+    # plot.file_formats = ['png', 'pdf']
 
-    ### ttbar/stop fit (using 1-lep TCR) ###
-    # TODO
-    pass
-
-    ### Loop over all channels ###
-    for lepton_channel in [0, 1, 2]:
-        run_channel(
-            args=args,
-            file_manager=file_manager,
-            lepton_channel=lepton_channel,
-            mu_stop=1, # TODO
-            mu_ttbar=1, # TODO
-        )
-    
+    run_fit(None)
 
 
 if __name__ == "__main__":

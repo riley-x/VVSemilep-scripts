@@ -1534,6 +1534,8 @@ class FitConfig:
         return np.array(out, dtype=float)
 
     def get_bins_y(self):
+        # TODO these should probably be the same as the unfolding bins; maybe just call
+        # that function directly?
         if self.var.name == "vv_m":
             if self.lepton_channel == 0:
                 return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
