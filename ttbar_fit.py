@@ -50,7 +50,7 @@ import utils
 
 
 ##########################################################################################
-###                                         RUN                                        ###
+###                                         FIT                                        ###
 ##########################################################################################
 
 def hessian(f, x, delta):
@@ -92,11 +92,20 @@ def hessian(f, x, delta):
     return out
 
 
-def run_fit(file_manager : utils.FileManager):
+def run_fit(
+        file_manager : utils.FileManager, 
+        mu_stop_0=(1, 0.2),
+        variation='nominal',
+    ):
+    '''
+    @param mu_stop_0
+        The stop signal strength constraint (mean, error). Set the error to like 1e-5 to
+        treat the stop as fixed.
+    '''
     from scipy import optimize, stats
 
     ### Get hists ###
-    hist_name = '{sample}_VV1Lep_MergHP_Inclusive_TCR_lvJ_m'
+    hist_name = utils.hist_name_variation('{sample}_VV1Lep_MergHP_Inclusive_TCR_lvJ_m', variation)
     hists = file_manager.get_hist_all_samples(1, hist_name)
 
     n_data = plot.integral_user(hists['data'], return_error=True)
@@ -119,12 +128,12 @@ def run_fit(file_manager : utils.FileManager):
 
         pred = mu_ttbar * n_ttbar[0] + mu_stop * n_stop[0] + n_else[0] + gamma_mc * mc_error
         out = -stats.poisson.logpmf(n_data[0], pred) \
-            - stats.norm.logpdf(mu_stop, loc=1, scale=0.2) \
+            - stats.norm.logpdf(mu_stop, loc=mu_stop_0[0], scale=mu_stop_0[1]) \
             - stats.norm.logpdf(gamma_mc)
         return out
         
     ### Minimize ###
-    res = optimize.minimize(nll, [1, 1, 0], bounds=[(1e-2, 2), (1e-2, 2), (-5, 5)], method='L-BFGS-B')#, options={'ftol': 1e-15, 'gtol': 1e-15})
+    res = optimize.minimize(nll, [1, mu_stop_0[0], 0], bounds=[(1e-2, 2), (1e-2, 2), (-5, 5)], method='L-BFGS-B')#, options={'ftol': 1e-15, 'gtol': 1e-15})
     if not res.success:
         plot.error(f'ttbar_fit.py::run_fit() did not succeed:\n{res}')
         raise RuntimeError()
@@ -145,7 +154,7 @@ def run_fit(file_manager : utils.FileManager):
     }
     
     ### Printout ###
-    notice_msg = 'ttbar_fit.py::run_fit() fit results:'
+    notice_msg = f'ttbar_fit.py::run_fit({variation}) fit results:'
     for k,v in out.items():
         if 'cov' in k: continue
         notice_msg += f'\n    {k:10}: {v[0]:7.4f} +- {v[1]:.4f}'
@@ -158,6 +167,38 @@ def run_fit(file_manager : utils.FileManager):
     
     return out
 
+
+##########################################################################################
+###                                     Aggregator                                     ###
+##########################################################################################
+
+class TtbarSysFitter:
+    '''
+    Do ttbar fit with systematics. But don't correlate mu_stop_0 or any other systematics
+    at this point.
+    '''
+    def __init__(self, file_manager: utils.FileManager, mu_stop_0=(1, 0.2)):
+        self.file_manager = file_manager
+        self.vars = {}
+
+        results_nom = run_fit(file_manager, mu_stop_0=(mu_stop_0[0], 1e-5))
+        results_stop_up = run_fit(file_manager, mu_stop_0=(mu_stop_0[0] + mu_stop_0[1], 1e-5), variation='mu-stop_up')
+        results_stop_down = run_fit(file_manager, mu_stop_0=(mu_stop_0[0] - mu_stop_0[1], 1e-5), variation='mu-stop_down')
+
+        self._mu_stop_nom = (mu_stop_0[0], 1e-5)
+        self.mu_ttbar_nom = results_nom['mu_ttbar']
+        self.vars['nominal'] = self.mu_ttbar_nom[0]
+        self.vars['mu-ttbar_up'] = self.mu_ttbar_nom[0] + self.mu_ttbar_nom[1]
+        self.vars['mu-ttbar_down'] = self.mu_ttbar_nom[0] - self.mu_ttbar_nom[1]
+        self.vars['mu-stop_up'] = results_stop_up['mu_ttbar'][0]
+        self.vars['mu-stop_down'] = results_stop_down['mu_ttbar'][0]
+
+    def get_var(self, variation):
+        out = self.vars.get(variation)
+        if out is not None: return out
+        res = run_fit(self.file_manager, mu_stop_0=self._mu_stop_nom, variation=variation)
+        self.vars[variation] = res['mu_ttbar'][0]
+        return self.vars[variation]
 
 
 ##########################################################################################

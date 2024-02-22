@@ -415,7 +415,7 @@ class FitResults:
     def __init__(self, filepath='fit_results.csv'):
         self.filepath = filepath
         try:
-            self.df = pd.read_csv(filepath, index_col=self.index_cols, keep_default_na=False, dtype={'lep': str})
+            self.df = pd.read_csv(filepath, index_col=self.index_cols, keep_default_na=False) #, dtype={'lep': str}
         except:
             self.df = pd.DataFrame(index=pd.MultiIndex.from_tuples([], names=self.index_cols), columns=['val', 'err_up', 'err_down'])
 
@@ -776,6 +776,9 @@ def plot_updown_fits(
         assert(sr_window is not None)
         h_sr, h_cr = get_sr_cr(h_mc, sr_window)
         mc_sr_yield = plot.integral_user(h_mc, sr_window, use_width=True, return_error=True)
+    else:
+        h_sr = None
+        mc_sr_yield = None
 
     ### Individually ###
     gpr_graphs = []
@@ -1180,7 +1183,7 @@ class ContourScanner:
         # Computing the integral is slow, so only do it for the 1 or 2 sigma CI
         self.max_nlml_1sigma = self.scikit_nlml + get_chi2_quantile(1, 2) / 2
         self.max_nlml_2sigma = self.scikit_nlml + get_chi2_quantile(2, 2) / 2
-        self.max_nlml_for_yields = self.max_nlml_2sigma
+        self.max_nlml_for_yields = self.max_nlml_1sigma
 
         # Used for setting the z axis scale nicely
         self.min_nlml = None 
@@ -1360,8 +1363,8 @@ def gpr_likelihood_contours(
         weights = None
     
     ### Scan theta ###
-    constant_factor = np.logspace(-1, 3, num=50)
-    length_scale = np.logspace(1, 3, num=50)
+    constant_factor = np.logspace(-1, 3, num=25)
+    length_scale = np.logspace(1, 3, num=25)
     scanner = ContourScanner(fitter, config.sr_window, constant_factor, length_scale, integral_weights=weights)
     scanner.scan()
 
@@ -1417,7 +1420,7 @@ def gpr_likelihood_contours(
     if config.fit_results:
         w = vary_bin[1] - vary_bin[0]
         csv_base_args = {
-            'lep': str(config.lepton_channel),
+            'lep': config.lepton_channel,
             'vary': config.var.name,
             'bin': f'{vary_bin[0]},{vary_bin[1]}',
             'variation': config.variation,
@@ -1552,9 +1555,10 @@ class FitConfig:
         self.mu_ttbar = mu_ttbar
 
         ### Outputs ###
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        self.fit_results = FitResults(f'{output_dir}/gpr_fit_results.csv')
+        self.output_dir += f'/{lepton_channel}lep/{var}/{variation}'
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+        self.fit_results = FitResults(f'{output_dir}/gpr_fit_results.csv') # original output_dir
         
         ### Binning ###
         self.bins_x = self.get_bins_x()
@@ -1631,6 +1635,8 @@ def summary_actions_from_csv(config : FitConfig):
         legend=legend,
         xtitle=f'{config.var:title}',
         edge_labels=[str(x) for x in config.bins_y],
+        subplot2='ratios' if config.use_vjets_mc else 'errors',
+        subplot3='errors' if config.use_vjets_mc else None,
     )
 
     ### Save output histogram ###
@@ -1712,7 +1718,7 @@ def run(
             h_mc=h_mc,
             h_diboson=h_diboson_bin,
             vary_bin=bin,
-            filebase=f'{config.output_dir}/gpr_{config.lepton_channel}lep_{config.var}_{binstr}_',
+            filebase=f'{config.output_dir}/gpr_{config.lepton_channel}lep_{config.var}_{config.variation}_{binstr}_',
             config=config,
             subtitle=common_subtitle,
         )

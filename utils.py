@@ -12,7 +12,7 @@ from plotting import plot
 import ROOT
 
 #########################################################################################
-###                                     Varaibles                                     ###
+###                                     Variables                                     ###
 #########################################################################################
 class Variable:
     '''
@@ -126,6 +126,31 @@ Sample.ttbar = Sample('ttbar', 't#bar{t}', ['ttbar'], ['ttbar'])
 Sample.stop = Sample('stop', 'single top', ['stop'], ['stop'])
 Sample.diboson = Sample('diboson', 'diboson', ['diboson_Sherpa2211', 'Diboson_Sh2211'], ['SMVV'])
 Sample.data = Sample('data', 'data', ['data', 'data15', 'data16', 'data17', 'data18'], ['data'])
+
+
+#########################################################################################
+###                                    Variations                                     ###
+#########################################################################################
+
+variation_nom = 'nominal'
+variations_custom = [
+    'mu-ttbar',
+    'mu-stop',
+]
+
+def is_histo_syst(x):
+    if x == variation_nom: return False
+    if 'mu-diboson' in x: return False
+    for var in variations_custom:
+        if var in x: return False
+    return True
+
+def hist_name_variation(hist_name, variation):
+    if not is_histo_syst(variation):
+        return hist_name
+    raise NotImplementedError('hist_name_variation')
+    return f'{hist_name}__'
+
 
 
 #########################################################################################
