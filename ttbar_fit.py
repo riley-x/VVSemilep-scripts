@@ -53,36 +53,11 @@ import utils
 ###                                         RUN                                        ###
 ##########################################################################################
 
-
-# def run_fit(
-#         file_manager : utils.FileManager,
-#     ):
-
-#     x = ROOT.RooRealVar("x", "x", 0, 1)
-    
-#     n_stop_nom = 100
-#     mu_stop_mean = ROOT.RooRealVar('mu_stop_mean', 'mu_stop_mean', 1 * n_stop_nom)
-#     mu_stop_sigma = ROOT.RooRealVar('mu_stop_sigma', 'mu_stop_sigma', 0.2 * n_stop_nom)
-#     mu_stop_alpha = ROOT.RooRealVar('mu_stop_alpha', 'mu_stop_alpha', n_stop_nom, 0, 2 * n_stop_nom)
-#     mu_stop = ROOT.RooGaussian('mu_stop', 'mu_stop', mu_stop_alpha, mu_stop_mean, mu_stop_sigma)
-
-#     n_ttbar_nom = 100
-#     mu_ttbar = ROOT.RooRealVar('mu_ttbar', 'mu_ttbar', 100, 0, 200)
-    
-#     n_ttbar = ROOT.RooUniform('n_ttbar', 'n_ttbar', x)
-#     n_stop = ROOT.RooUniform('n_stop', 'n_stop', x)
-    
-#     sig = ROOT.RooAddPdf("sig", "Signal", [n_ttbar, n_stop], [mu_stop, mu_ttbar])
-    
-    
-#     data = ROOT.RooDataSet('data', 'data', [x])
-#     data.add([x])
-#     sig.createNLL(data)
-
-
 def hessian(f, x, delta):
+    '''
+    Calculates the Hessian of [f] at [x] using finite differences of step size [delta].
+    '''
     f0 = f(x)
-
     out = np.zeros((len(x), len(x)))
     for i in range(len(x)):
         for j in range(len(x)):
@@ -148,19 +123,19 @@ def run_fit(file_manager : utils.FileManager):
             - stats.norm.logpdf(gamma_mc)
         return out
         
+    ### Minimize ###
     res = optimize.minimize(nll, [1, 1, 0], bounds=[(1e-2, 2), (1e-2, 2), (-5, 5)], method='L-BFGS-B')#, options={'ftol': 1e-15, 'gtol': 1e-15})
     if not res.success:
         plot.error(f'ttbar_fit.py::run_fit() did not succeed:\n{res}')
         raise RuntimeError()
 
-    # Scipy covariance is not too accurate
+    ### Covariances ###
+    # Note we don't use the Scipy covariance which is not too accurate
     # cov = res.hess_inv.todense()
-
     hess = hessian(nll, res.x, [0.001, 0.001, 0.001])
     cov = np.linalg.inv(hess)
     errs = np.diag(cov) ** 0.5
     cov_norm = cov / errs / errs[:, None]
-
     out = {
         'mu_ttbar': (res.x[0], errs[0]),
         'mu_stop': (res.x[1], errs[1]),
@@ -169,7 +144,8 @@ def run_fit(file_manager : utils.FileManager):
         'cov_norm': cov_norm,
     }
     
-    notice_msg = 'ttbar_fit.py::run_fit()'
+    ### Printout ###
+    notice_msg = 'ttbar_fit.py::run_fit() fit results:'
     for k,v in out.items():
         if 'cov' in k: continue
         notice_msg += f'\n    {k:10}: {v[0]:7.4f} +- {v[1]:.4f}'
@@ -180,11 +156,8 @@ def run_fit(file_manager : utils.FileManager):
             notice_msg += f'{cov_norm[i][j]:7.4f}  '
     plot.notice(notice_msg)
     
+    return out
 
-
-
-
-    
 
 
 ##########################################################################################
