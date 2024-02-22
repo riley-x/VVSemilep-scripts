@@ -235,3 +235,12 @@ class FileManager:
                 else:
                     h_out.Add(h)
         return h_out
+    
+    def get_hist_all_samples(self, lep : int, hist_name_format : str) -> dict[str, ROOT.TH1F]:
+        '''
+        Like [get_hist] but returns a dict of all the histograms for each sample.
+        '''
+        out = {}
+        for _,sample in self.samples.items():
+            out[sample.name] = self.get_hist(lep, sample, hist_name_format)
+        return out

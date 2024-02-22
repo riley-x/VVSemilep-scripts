@@ -80,28 +80,91 @@ import utils
 #     sig.createNLL(data)
 
 
-def run_fit(
-        file_manager : utils.FileManager,
-    ):
+def hessian(f, x, delta):
+    f0 = f(x)
+
+    out = np.zeros((len(x), len(x)))
+    for i in range(len(x)):
+        for j in range(len(x)):
+            xp = np.array(x)
+            if i == j:
+                xp[i] = x[i] + delta[i]
+                val_up = f(xp)
+                xp[i] = x[i] - delta[i]
+                val_down = f(xp)
+                val = val_up + val_down - 2 * f0
+                val /= delta[i] * delta[i]
+            else:
+                # https://onlinelibrary.wiley.com/doi/pdf/10.1002/9780470824566.app1 A.7
+                xp[i] = x[i] + delta[i]
+                xp[j] = x[j] + delta[j]
+                val = f(xp)
+
+                xp[i] = x[i] - delta[i]
+                val -= f(xp)
+
+                xp[j] = x[j] - delta[j]
+                val += f(xp)
+
+                xp[i] = x[i] + delta[i]
+                val -= f(xp)
+
+                val /= 4 * delta[i] * delta[j]
+
+            out[i, j] = val
+            out[j, i] = val
+
+    return out
+
+
+def run_fit(file_manager : utils.FileManager):
     from scipy import optimize, stats
 
+    ### Get hists ###
+    hist_name = '{sample}_VV1Lep_MergHP_Inclusive_TCR_lvJ_m'
+    hists = file_manager.get_hist_all_samples(1, hist_name)
 
-    y = 100
-    n = 100
+    n_data = plot.integral_user(hists['data'], return_error=True)
+    n_ttbar = plot.integral_user(hists['ttbar'], return_error=True)
+    n_stop = plot.integral_user(hists['stop'], return_error=True)
 
+    h_else = hists['wjets'].Clone()
+    h_else.Add(hists['zjets'])
+    h_else.Add(hists['diboson'])
+    n_else = plot.integral_user(h_else, return_error=True)
+
+    # n_data = round(n_ttbar[0] + n_stop[0] + n_else[0]),
+
+    ### Define NLL form ###
     def nll(params):
-        mu = params[0]
-        pred = mu * n
-        return -stats.poisson.logpmf(y, pred) \
-            - stats.norm.logpdf(mu, loc=1, scale=0.1) 
-        
-        # return -stats.norm.logpdf(y, loc=pred, scale=pred**0.5) \
-        #     + pred
-            # - stats.norm.logpdf(mu, loc=1, scale=0.1) \
-    
+        mu_ttbar = params[0]
+        mu_stop = params[1]
+        gamma_mc = params[2]
 
-    res = optimize.minimize(nll, [1.8], bounds=[(1e-2, 2)], method='L-BFGS-B')#, options={'ftol': 1e-15, 'gtol': 1e-15})
+        mc_error = (mu_ttbar * n_ttbar[1])**2 + (mu_stop * n_stop[1])**2 + n_else[1]**2
+        mc_error = mc_error**0.5
+
+        pred = mu_ttbar * n_ttbar[0] + mu_stop * n_stop[0] + n_else[0] + gamma_mc * mc_error
+        out = -stats.poisson.logpmf(n_data[0], pred) \
+            - stats.norm.logpdf(mu_stop, loc=1, scale=0.2) \
+            - stats.norm.logpdf(gamma_mc)
+        return out
+        
+    res = optimize.minimize(nll, [1, 1, 0], bounds=[(1e-2, 2), (1e-2, 2), (-5, 5)], method='L-BFGS-B')#, options={'ftol': 1e-15, 'gtol': 1e-15})
+    
+    
     print(res)
+    cov = res.hess_inv.todense()
+    errs = np.diag(cov) ** 0.5
+    print(res.x)
+    print(errs)
+    print(cov / errs / errs[:,None])
+
+    hess = hessian(nll, res.x, [0.001, 0.001, 0.001])
+    cov2 = np.linalg.inv(hess)
+    errs2 = np.diag(cov2) ** 0.5
+    print(errs2)
+    print(cov2 / errs2 / errs2[:,None])
 
 
 
@@ -139,13 +202,13 @@ def get_files(filepaths):
     
 
 def main():
-    # args = parse_args()
-    # file_manager = get_files(args.filepaths)
+    args = parse_args()
+    file_manager = get_files(args.filepaths)
 
-    # plot.save_transparent_png = False
-    # plot.file_formats = ['png', 'pdf']
+    plot.save_transparent_png = False
+    plot.file_formats = ['png', 'pdf']
 
-    run_fit(None)
+    run_fit(file_manager)
 
 
 if __name__ == "__main__":
