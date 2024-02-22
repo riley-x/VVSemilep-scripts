@@ -51,6 +51,7 @@ from plotting import plot
 import utils
 import unfolding
 import gpr
+import ttbar_fit
 
 ##########################################################################################
 ###                                        MAIN                                        ###
@@ -132,8 +133,7 @@ def main():
     plot.file_formats = ['png', 'pdf']
 
     ### ttbar/stop fit (using 1-lep TCR) ###
-    # TODO
-    pass
+    ttbar_results = ttbar_fit.run_fit(file_manager)
 
     ### Loop over all channels ###
     for lepton_channel in [0, 1, 2]:
@@ -141,8 +141,8 @@ def main():
             args=args,
             file_manager=file_manager,
             lepton_channel=lepton_channel,
-            mu_stop=1, # TODO
-            mu_ttbar=1, # TODO
+            mu_stop=ttbar_results['mu_stop'], 
+            mu_ttbar=ttbar_results['mu_ttbar'],
         )
     
 

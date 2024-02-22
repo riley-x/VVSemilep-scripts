@@ -1491,6 +1491,43 @@ def gpr_likelihood_contours(
 ##########################################################################################
 
 class FitConfig:
+    '''
+    Main configuration class for a GPR fit against a single discriminating variable, like
+    m(VV). One [FitConfig] instance represents a series of fits for each bin in the
+    variable.
+
+    @property var
+        The cross variable being binned against. I.e. m(VV) or pT(J).
+    @property variation
+        The current variation being run. Normally this is the stub for the histogram name,
+        with a few special cases:
+            - 'nominal'
+            - 'mu-dibosonX': Sets the diboson signal strength to X, where X is a float
+              string. When [use_vjets_mc] is True, this means a contamination of (1 - X) *
+              h_diboson is added to h_vjets. When it is False, this corresponds to the
+              signal strength used to subtract h_diboson from h_cr. 
+            - 'mu-ttbar*': Assumes [mu_ttbar] has been set using an up/down variation, but
+              otherwise uses the same histograms.
+            - 'mu-stop*': Assumes [mu_stop] has been set using an up/down variation, but
+              otherwise uses the same histograms.
+    @property use_vjets_mc
+        Does the closure test using the V+jets MC as the data, setting errors as sqrt(N).
+    @property mu_stop, mu_ttbar, mu_diboson
+        Relevant signal strengths used in the data subtraction scheme. For mu_diboson, 
+        also the amount of signal contamination (see [variation]).
+    @property fit_results
+        A common [FitResults] object that can be referenced.
+    @property bins_x, bins_y
+        The bin edges used for the fit. [bins_x] is for m(J), while [bins_y] is for [var].
+        Note the number of bins given by [bins_y] corresponds to the number of fits
+        actually done.
+    @property output_dir
+        Directory that output plots and files are saved to.
+    @property gpr_version
+        Kernel specification for [GPR].
+    @property sr_window
+        The signal region min,max definition in m(J). These should align with [bins_x].
+    '''
 
     def __init__(
             self, 
@@ -1631,9 +1668,7 @@ def run(
         h_vjets = h_wjets.Clone()
         h_vjets.Add(h_zjets)
         if config.mu_diboson != 1:
-            # In the closure test, induce signal contamination assuming we only subtract
-            # out mu = 1.
-            h_vjets.Add(h_diboson, config.mu_diboson - 1) 
+            h_vjets.Add(h_diboson, 1 - config.mu_diboson) 
     else:
         h_data  = file_manager.get_hist(config.lepton_channel, utils.Sample.data,  hist_name)
         h_ttbar = file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
