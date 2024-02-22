@@ -12,8 +12,21 @@ lsetup "python centos7-3.9"
 ```
 Note that this can't be setup at the same time with AnalysisBase because it is stuck on python2 still. If you're running locally, you'll need to `pip install` any dependencies. 
 
+## Master Run Script
 
-## Unfolding
+A master run script [master.py](master.py) runs the full workflow. See the docstring of that file for more information. It takes care of the following tasks, which can all be called individually too (see below).
+
+1. Fitting the ttbar signal strength to 1lep TCR.
+2. Fitting the GPR to the event-subtracted MCR.
+3. Repeating the above for every systematic variation.
+4. Performing the likelihood fit to extract the diboson yield.
+5. Creating response matrices.
+
+The script relies on systematic histogram naming. See the docstring of the file and [utils.py](utils.py) for more info.
+
+
+
+### Unfolding
 
 You can run [unfolding.py](unfolding.py) to generate plots of the migration matrix, efficiency, acceptance, and fiducial/reco distributions easily from the reader output histograms. These generally should be done on the diboson samples, but works for all samples.
 
@@ -41,27 +54,17 @@ This script also creates a file with the response matrix broken down by bin, for
 The histograms have names `ResponseMatrix_{var}_fid{bin}`, for each variable and fiducial bin. 
 These should be treated as signal samples, and are normalized such that the signal strength is exactly the unfolded fiducial event count for the respective bin. 
 
-## GPR
+### GPR
 
 To run the data-driven background estimate, use [gpr.py](gpr.py). Please see the docstring of that file for more details.
 
 ```sh
-gpr.py --lepton 1 --var vv_m \
-    --data path/to/CxAODReader/outputs/hist-data.root \
-    --ttbar path/to/CxAODReader/outputs/hist-ttbar.root \
-    --stop path/to/CxAODReader/outputs/hist-stop.root \
-    --diboson path/to/CxAODReader/outputs/hist-diboson.root \
+gpr.py --lepton 1 --var vv_m [FILESPEC]
 ```
         
 This runs the GPR fit to a single variable in one channel. It uses as inputs the `{var}__v__fatjet_m`
 histograms in the reader, which are filled with the inclusive SR+MCR. 
-For each sample, it will run a fit for each bin specified in `get_bins_y`. In general, see the CONFIG
-section for some hardcodes.
-
-When you pass in the files as
-above, the fit will be run using the event subtraction scheme, `data - ttbar - stop - diboson`.
-Set the signal strength parameters if you want to scale the respective samples. 
-Alternatively, you can pass in a single `--vjets` file. This can either be a pre-subtracted data file or the Monte Carlo sample. In the latter case, you want to specify `--isMC` to enable the closure test among other nice things.
+For each sample, it will run a fit for each bin specified in `get_bins_y`. In general, see the `FitConfig` class for some hardcodes.
 
 The fit runs the full contour scan to obtain the marginalized posterior. Results are saved into a file
 `gpr_fit_results.csv` containing both a 2sigma contour scan and the simple MMLE fit, and a ROOT histogram in
@@ -77,8 +80,11 @@ The script will generate a plot named `gpr_{lep}_{var}_summary` in both png and 
 - `fit_pm1s`: the above 3 posterior means superimposed onto the same plot
 - `p_intr`: the marginalized posterior yield distribution
 
+### ttbar fit
 
-### ResonanceFinder
+Use [ttbar_fit.py](ttbar_fit.py) to run the ttbar fit to the one-lep TCR. This constrains the ttbar signal strength. See the docstring for more info.
+
+## ResonanceFinder
 
 Use the scripts above to generate the response matrix histograms and the V+jets background estimate for use in ResonanceFinder. 
 

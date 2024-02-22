@@ -80,6 +80,7 @@ from typing import Union
 # used. However they don't always happen, so you can just rerun until it works.
 import ROOT
 ROOT.gROOT.SetBatch(ROOT.kTRUE)
+ROOT.TH1.SetDefaultSumw2(ROOT.kTRUE)
 
 import os
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -981,6 +982,8 @@ def plot_summary_distribution(hists,
         kwargs.setdefault('legend' + postfix, None)
     elif callable(subplot2):
         hists2 = subplot2(hists, **kwargs)
+    else:
+        hists2 = subplot2
     
     ### Fractional uncertainty ###
     if subplot2 == 'errors' or subplot3 == 'errors':
@@ -997,6 +1000,8 @@ def plot_summary_distribution(hists,
         kwargs.setdefault('ignore_outliers_y' + postfix, 0)
     elif callable(subplot3):
         hists3 = subplot3(hists, **kwargs)
+    else:
+        hists3 = subplot3
 
     ### Plot ###
     if subplot3 is not None:
@@ -1702,6 +1707,7 @@ def run(
         h_data.Add(h_zjets)
         h_data.Add(h_diboson)
         # TODO is this right?
+        h_data = None
     else:
         h_data  = file_manager.get_hist(config.lepton_channel, utils.Sample.data,  hist_name)
         h_ttbar = file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
@@ -1711,6 +1717,11 @@ def run(
         h_vjets.Add(h_diboson, -config.mu_diboson)
         h_vjets.Add(h_ttbar, -config.mu_ttbar)
         h_vjets.Add(h_stop, -config.mu_stop)
+
+        h_data_orig = h_data
+        h_data = h_data.Clone()
+        h_data.Add(h_ttbar, -config.mu_ttbar)
+        h_data.Add(h_stop, -config.mu_stop)
 
     ### Run for each bin ###
     for i in range(len(config.bins_y) - 1):
@@ -1744,7 +1755,7 @@ def run(
         ### Run fit ###
         gpr_likelihood_contours(
             h_cr=h_cr, 
-            # h_data_sr=h_data_bin, # TODO do we really want to do this here? Need to subtract ttbar, etc... Just get the integral...
+            # h_data_sr=h_data_bin, 
             h_mc=h_mc,
             h_diboson=h_diboson_bin,
             vary_bin=bin,
