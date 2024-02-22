@@ -133,8 +133,6 @@ def run_fit(file_manager : utils.FileManager):
     h_else.Add(hists['diboson'])
     n_else = plot.integral_user(h_else, return_error=True)
 
-    # n_data = round(n_ttbar[0] + n_stop[0] + n_else[0]),
-
     ### Define NLL form ###
     def nll(params):
         mu_ttbar = params[0]
@@ -151,20 +149,37 @@ def run_fit(file_manager : utils.FileManager):
         return out
         
     res = optimize.minimize(nll, [1, 1, 0], bounds=[(1e-2, 2), (1e-2, 2), (-5, 5)], method='L-BFGS-B')#, options={'ftol': 1e-15, 'gtol': 1e-15})
-    
-    
-    print(res)
-    cov = res.hess_inv.todense()
-    errs = np.diag(cov) ** 0.5
-    print(res.x)
-    print(errs)
-    print(cov / errs / errs[:,None])
+    if not res.success:
+        plot.error(f'ttbar_fit.py::run_fit() did not succeed:\n{res}')
+        raise RuntimeError()
+
+    # Scipy covariance is not too accurate
+    # cov = res.hess_inv.todense()
 
     hess = hessian(nll, res.x, [0.001, 0.001, 0.001])
-    cov2 = np.linalg.inv(hess)
-    errs2 = np.diag(cov2) ** 0.5
-    print(errs2)
-    print(cov2 / errs2 / errs2[:,None])
+    cov = np.linalg.inv(hess)
+    errs = np.diag(cov) ** 0.5
+    cov_norm = cov / errs / errs[:, None]
+
+    out = {
+        'mu_ttbar': (res.x[0], errs[0]),
+        'mu_stop': (res.x[1], errs[1]),
+        'gamma_mc': (res.x[2], errs[2]),
+        'cov': cov,
+        'cov_norm': cov_norm,
+    }
+    
+    notice_msg = 'ttbar_fit.py::run_fit()'
+    for k,v in out.items():
+        if 'cov' in k: continue
+        notice_msg += f'\n    {k:10}: {v[0]:7.4f} +- {v[1]:.4f}'
+    notice_msg += f'\n    cov:'
+    for i in range(len(errs)):
+        notice_msg += f'\n        '
+        for j in range(len(errs)):
+            notice_msg += f'{cov_norm[i][j]:7.4f}  '
+    plot.notice(notice_msg)
+    
 
 
 
