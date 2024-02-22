@@ -69,6 +69,14 @@ Variable.vvJ_m = Variable(name="vvJ_m", title="m(#nu#nuJ)", unit="GeV", rebin=10
 Variable.fatjet_m = Variable(name="fatjet_m", title="m(J)", unit="GeV")
 
 
+def generic_var_to_lep(var, lep):
+    if var.name == 'vv_m':
+        if lep == 0: return Variable.vvJ_m
+        if lep == 1: return Variable.lvJ_m
+        if lep == 2: return Variable.llJ_m
+    return var
+
+
 
 #########################################################################################
 ###                                      Samples                                      ###

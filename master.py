@@ -52,6 +52,7 @@ import utils
 import unfolding
 import gpr
 import ttbar_fit
+import diboson_fit
 
 ##########################################################################################
 ###                                        PLOTS                                       ###
@@ -168,7 +169,7 @@ def run_gpr(
         mu_stop : tuple[float, float],
         ttbar_fitter: ttbar_fit.TtbarSysFitter,
         from_csv_only : bool,
-    ):
+    ) -> gpr.FitConfig:
     ### Config ###
     config_base = {
         'lepton_channel': lepton_channel,
@@ -229,6 +230,8 @@ def run_gpr(
     plot_gpr_ttbar_and_stop_correlations(config, f'{output_dir}/{config.lepton_channel}lep/{config.var}/gpr_ttbar_stop_mu_scan')
 
     # TODO syst variations
+
+    return config
     
 
 def run_channel(
@@ -255,7 +258,7 @@ def run_channel(
     ### Run GPR fit ###
     for var in vars:
         plot.notice(f'{log_base} running GPR fits for {var}')
-        run_gpr(
+        gpr_config = run_gpr(
             file_manager=file_manager,
             lepton_channel=lepton_channel,
             var=var,
@@ -265,7 +268,19 @@ def run_channel(
             from_csv_only=from_csv_only,
         )
 
-        ### Diboson distribution ###
+        ### Diboson yield ###
+        bins = gpr_config.bins_y
+        for i in range(len(bins) - 1):
+            diboson_fit.run_fit(
+                file_manager=file_manager,
+                gpr_results=gpr_config.fit_results,
+                ttbar_fitter=ttbar_fitter,
+                lepton_channel=lepton_channel,
+                var=var,
+                bin=(bins[i], bins[i+1]),
+                mu_stop=mu_stop,
+            )
+            break
 
 
         ### Profile likelihood unfolding fit ###

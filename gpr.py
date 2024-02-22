@@ -423,7 +423,9 @@ class FitResults:
     def filter(self, lep=slice(None), vary=slice(None), variation=slice(None), fitter=slice(None), bin=slice(None), **_):
         return self.df.loc[(lep, vary, variation, fitter, bin), :]
 
-    def get_entry(self, lep, vary, variation, fitter, bin, **_):
+    def get_entry(self, lep, vary, variation, fitter, bin, **_) -> tuple[float, float, float]:
+        if not isinstance(bin, str):
+            bin = f'{bin[0]},{bin[1]}'
         return self.df.loc[(lep, vary, variation, fitter, bin)]
 
     def set_entry(self, lep, vary, variation, fitter, bin, val, err_up, err_down, **_):
