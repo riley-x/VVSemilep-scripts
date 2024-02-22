@@ -563,6 +563,7 @@ def plot_gpr_fit(
     kwargs.setdefault('text_pos', 'topright')
     kwargs.setdefault('legend', legend)
     kwargs.setdefault('ytitle2', ('MC' if h_sr else 'Data') + ' / GPR')
+    kwargs.setdefault('xtitle', 'm(J) [GeV]')
     kwargs.setdefault('opts', plot_opts)
     kwargs.setdefault('opts2', ratio_opts)
     kwargs.setdefault('y_range', [0, None])
@@ -1150,6 +1151,10 @@ class GPR:
         
     def _calculate_chi2(self):
         self.ndof = len(self.y_train) - self.gpr.kernel_.n_dims # is this right?
+        if self.ndof <= 0:
+            self.chi2 = 0
+            return
+        
         vals, std = self.gpr.predict(self.X_train, return_std=True)
         accum = 0
         for y1,y2,e1 in zip(self.y_train, vals, self.e_train):
@@ -1292,8 +1297,8 @@ class ContourScanner:
             print('')
         
         ### Finalize h_pf histograms ###
-        print('1sigma CI fraction of grid', sum_ml_1s / sum_ml) # should be approx 68%
-        print('2sigma CI fraction of grid', sum_ml_2s / sum_ml) # should be approx 95%
+        # print('1sigma CI fraction of grid', sum_ml_1s / sum_ml) # should be approx 68%
+        # print('2sigma CI fraction of grid', sum_ml_2s / sum_ml) # should be approx 95%
         self.h_pf.Scale(self.h_pf.GetBinWidth(1) / sum_ml_yields) # this makes h_pf integrate to about 1
         self.h_pf_1s.Scale(self.h_pf_1s.GetBinWidth(1) / sum_ml_1s) # this makes h_pf_1s integrate to about 1
         self.h_pf_weighted.Scale(self.h_pf_weighted.GetBinWidth(1) / sum_ml_yields) # this makes it integrate to about 1
@@ -1356,7 +1361,7 @@ def gpr_likelihood_contours(
         mc_sr_yield = None
 
     ### Fit ###
-    fit_range = config.get_fit_range(bin)
+    fit_range = config.get_fit_range(vary_bin)
     fitter = GPR(config.gpr_version)
     fitter.fit(h_cr, fit_range)
 
@@ -1404,7 +1409,7 @@ def gpr_likelihood_contours(
         sr_window=config.sr_window,
         filename=filebase + '{stub}',
         subtitle=subtitle,
-        xtitle=f'{config.var:title}',
+        xtitle=f'm(J) [GeV]',
         ytitle='Events / Bin Width',
         x_range=[50, 250],
     )
@@ -1570,7 +1575,6 @@ class FitConfig:
         self.fit_results = FitResults(f'{output_dir}/gpr_fit_results.csv') # original output_dir
         
         ### Binning ###
-        self.bins_x = self.get_bins_x()
         self.bins_y = self.get_bins_y()
 
         ### Signal contamination ###
@@ -1579,8 +1583,15 @@ class FitConfig:
         else:
             self.mu_diboson = 1
 
-    def get_bins_x(self):
-        out = np.concatenate(([50, 53, 56, 59], np.arange(62, 250, 5)))
+    def get_bins_x(self, bin_y):
+        out = None
+        if self.var.name == "vv_m":
+            if bin_y[0] > 2000:
+                out = [50, 72, 102, 150, 250]
+            elif bin_y[0] > 1400:
+                out = np.concatenate(([50, 60, 72, 82, 92, 102], np.arange(120, 250, 20)))
+        if out is None:
+            out = np.concatenate(([50, 53, 56, 59], np.arange(62, 250, 5)))
         return np.array(out, dtype=float)
 
     def get_bins_y(self):
@@ -1597,7 +1608,9 @@ class FitConfig:
             return [300, 330, 370, 410, 450, 500, 3000]
         raise NotImplementedError(f'get_bins_y() {self.var} {self.lepton_channel}')
 
-    def get_fit_range(self, bin):
+    def get_fit_range(self, bin_y):
+        if self.var.name == "vv_m" and bin_y[0] > 2000:
+            return (50, 250)
         return (50, 180)
 
 
@@ -1706,13 +1719,14 @@ def run(
         binstr = f'{bin[0]},{bin[1]}'
         common_subtitle = [
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{config.var.title} #in {bin} [{config.var.unit}]'
+            f'{config.var.title} #in {bin} {config.var.unit}',
         ]
 
         ### Histogram manipulation ###
+        bins_x = config.get_bins_x(bin)
         def prepare_bin(h):
             h = plot.projectX(h, bin)
-            h = h.Rebin(len(config.bins_x) - 1, h.GetName() + '_rebin', config.bins_x)
+            h = plot.rebin(h, bins_x)
             h.Scale(1, 'width')
             return h
         

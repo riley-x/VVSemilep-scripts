@@ -221,12 +221,11 @@ def run_channel(
             from_csv_only=from_csv_only,
         )
 
+        ### Diboson distribution ###
 
-    ### Profile likelihood unfolding fit ###
 
+        ### Profile likelihood unfolding fit ###
 
-    ### Likelihood fit (diboson signal strength) ###
-        
 
 
 ##########################################################################################
