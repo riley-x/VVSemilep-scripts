@@ -479,12 +479,12 @@ def create_gpr_graph(gpr, range, sigmas=2, color=plot.colors.blue):
 
 
 def plot_gpr_fit(
-    h_cr, gpr, gpr_range, 
-    h_sr=None, 
-    gpr_sigmas=2,
-    gpr_color=plot.colors.blue,
-    **kwargs,
-):
+        h_cr, gpr, gpr_range, 
+        h_sr=None, 
+        gpr_sigmas=2,
+        gpr_color=plot.colors.blue,
+        **kwargs,
+    ):
     '''
     Plots a single Gaussian process fit against an m(J) distribution.
         1. Data points are shown as error bars, with the CR in black and the SR in red.
@@ -522,7 +522,10 @@ def plot_gpr_fit(
     ### Ratios ###
     X_ratios = []
     for i in range(1, h_cr.GetNbinsX() + 1):
-        X_ratios.append(h_cr.GetBinCenter(i))
+        c = h_cr.GetBinCenter(i)
+        if c > gpr_range[1]:
+            break
+        X_ratios.append(c)
     X_ratios = np.array(X_ratios, dtype=float).reshape((-1, 1))
     gpr_preds, _ = gpr.predict(X_ratios, return_std=True)
     # TODO use gpr error in ratio?
@@ -532,9 +535,14 @@ def plot_gpr_fit(
     for h,o in zip([h_cr, h_sr], ['E', 'E']):
         if h is None: continue
         h = h.Clone()
-        for i in range(h.GetNbinsX()):
-            h.SetBinContent(i+1, h.GetBinContent(i+1) / gpr_preds[i])
-            h.SetBinError(i+1, h.GetBinError(i+1) / gpr_preds[i])
+        for i in range(1, h.GetNbinsX() + 1):
+            if i < len(gpr_preds):
+                h.SetBinContent(i, h.GetBinContent(i) / gpr_preds[i - 1])
+                h.SetBinError(i, h.GetBinError(i) / gpr_preds[i - 1])
+            else:
+                h.SetBinContent(i, 0)
+                h.SetBinError(i, 0)
+
         ratio_hists.append(h)
         ratio_opts.append(o)
 
@@ -743,14 +751,14 @@ def plot_pf(
 
 
 def plot_updown_fits(
-    scanner : ContourScanner, 
-    h_cr=None, 
-    h_mc=None, 
-    sr_window: tuple[float, float]=None,
-    filename='{stub}',
-    subtitle=[],
-    **plot_opts,
-):
+        scanner : ContourScanner, 
+        h_cr=None, 
+        h_mc=None, 
+        sr_window: tuple[float, float]=None,
+        filename='{stub}',
+        subtitle=[],
+        **plot_opts,
+    ):
     '''
     Plots the GPR posterior at the min nlml hyperparameter values and +- 1 sigma values.
     Makes 4 plots:
@@ -903,11 +911,11 @@ def _fractional_uncertainties(hists, opts, postfix='3', percents=False):
 
 
 def plot_summary_distribution(hists, 
-    subplot2='ratios',
-    subplot3='errors',
-    ratio_denom=lambda i: 0,
-    **kwargs
-):
+        subplot2='ratios',
+        subplot3='errors',
+        ratio_denom=lambda i: 0,
+        **kwargs
+    ):
     '''
     Creates a plot of the full fitted distribution, like m(VV), using discrete bins.
     Creates two subplots, the first shows the Fit / MC ratio, and the second shows the
@@ -1333,11 +1341,13 @@ def gpr_likelihood_contours(
         If [h_cr] is derived from MC, pass this histogram with the original MC errors and
         includes the SR region, which will be used for the closure test.
     @param h_data_sr
-        The SR data, which is used to obtain the predicted signal strength. Needs 
-        [h_diboson] to be passed too.
+        The SR data, which is used to obtain the predicted signal strength. If None, will
+        use asimov data = diboson + gpr MMLE.
+
+        WARNING in this case changing mu_diboson does nothing because [h_diboson] is the
+        nominal unscaled sample.
     @param h_diboson
-        The diboson MC sample. This is used to determine the diboson signal strength. If 
-        [h_data_sr] is None, will use asimov data = diboson + gpr MMLE. 
+        The diboson MC sample. This is used to determine the diboson signal strength.
     '''
     ### MC ###
     if h_mc:
@@ -1674,6 +1684,11 @@ def run(
         h_vjets.Add(h_zjets)
         if config.mu_diboson != 1:
             h_vjets.Add(h_diboson, 1 - config.mu_diboson) 
+        
+        h_data = h_wjets.Clone()
+        h_data.Add(h_zjets)
+        h_data.Add(h_diboson)
+        # TODO is this right?
     else:
         h_data  = file_manager.get_hist(config.lepton_channel, utils.Sample.data,  hist_name)
         h_ttbar = file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
@@ -1703,17 +1718,19 @@ def run(
         
         h_vjets_bin = prepare_bin(h_vjets)
         h_diboson_bin = prepare_bin(h_diboson) if h_diboson else None
+        h_data_bin = prepare_bin(h_data) if h_data else None
         
         if config.use_vjets_mc:
             h_mc = h_vjets_bin.Clone()
             set_sqrtn_errors(h_vjets_bin, width_scaled=True)
         else:
             h_mc = None
-        h_sr, h_cr = get_sr_cr(h_vjets_bin, config.sr_window)
+        _, h_cr = get_sr_cr(h_vjets_bin, config.sr_window)
 
         ### Run fit ###
         gpr_likelihood_contours(
             h_cr=h_cr, 
+            # h_data_sr=h_data_bin, # TODO do we really want to do this here? Need to subtract ttbar, etc... Just get the integral...
             h_mc=h_mc,
             h_diboson=h_diboson_bin,
             vary_bin=bin,

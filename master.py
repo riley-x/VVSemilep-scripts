@@ -64,13 +64,13 @@ def plot_sm_diboson_yield_variations(
     ):
     csv_base_spec = {
         'lep': config.lepton_channel, 
-        'fitter': f'{config.gpr_version}_mu_integral',
+        'fitter': f'{config.gpr_version}_marg_post',
         'vary': config.var.name, 
         'bins': config.bins_y,
     }
     i_nom = len(yields) // 2
-    graphs = [config.fit_results.get_graph(**csv_base_spec, variation=f'mu-diboson{x}') for x in yields]
-    graphs.insert(i_nom, config.fit_results.get_graph(**csv_base_spec, variation='nominal'))
+    graphs = [config.fit_results.get_graph(**csv_base_spec, variation=f'mu-diboson{x}', unscale_width=True) for x in yields]
+    graphs.insert(i_nom, config.fit_results.get_graph(**csv_base_spec, variation='nominal', unscale_width=True))
     legend = [str(x) for x in yields]
     legend.insert(i_nom, '1.0')
 
@@ -83,7 +83,7 @@ def plot_sm_diboson_yield_variations(
 
             h = h.Clone()
             for i in range(h.GetN()):
-                h.SetPointY(i, (h.GetPointY(i) - h_nom.GetPointY(i)) / (mu - 1))
+                h.SetPointY(i, (h.GetPointY(i) - h_nom.GetPointY(i)) / h_nom.GetPointY(i) / (1 - mu) )
                 h.SetPointEYhigh(i, 0)
                 h.SetPointEYlow(i, 0)
             hists2.append(h)
@@ -95,16 +95,19 @@ def plot_sm_diboson_yield_variations(
         subtitle=[
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
             f'{config.lepton_channel}-lepton channel',
-            'Scanning #mu_{diboson}',
+            'Scanning #mu^{diboson}_{guess}',
         ],
         legend=legend,
-        ytitle2='#frac{#DeltaFit}{#Delta#mu}',
+        ytitle='Events',
+        ytitle2='#frac{#DeltaFit / Fit_{nom}}{#Delta#mu}',
         xtitle=f'{config.var:title}',
         edge_labels=[str(x) for x in config.bins_y],
         subplot2=subplot,
         subplot3=None,
         opts2='P',
-        logy=False,
+        # logy=False,
+        y_range2=[0, 0.18],
+        ydivs2=503,
     )
 
 
@@ -153,6 +156,7 @@ def run_gpr(
         yields=mu_diboson_points,
         filename=f'{output_dir}/{config.lepton_channel}lep/{config.var}/gpr_diboson_mu_scan',
     )
+    return
 
     ### ttbar signal strength variations ###
     for variation in ['mu-ttbar_up', 'mu-ttbar_down']:
