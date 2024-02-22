@@ -446,11 +446,11 @@ class FitResults:
             # symmetrize the error
         return h
 
-    def get_graph(self, lep, vary, variation, fitter, bins, width_scaled=True):
+    def get_graph(self, lep, vary, variation, fitter, bins, unscale_width=False):
         g = ROOT.TGraphAsymmErrors(len(bins) - 1)
         for i in range(len(bins) - 1):
             bin = f'{bins[i]},{bins[i+1]}'
-            width = bins[i+1] - bins[i] if width_scaled else 1
+            width = bins[i+1] - bins[i] if unscale_width else 1
             y_mid = (bins[i+1] + bins[i]) / 2
 
             entry = self.get_entry(lep, vary, variation, fitter, bin)
@@ -1002,7 +1002,6 @@ def plot_summary_distribution(hists,
 
 
 
-
 ###############################################################################
 ###                                  FITTER                                 ###
 ###############################################################################
@@ -1445,13 +1444,13 @@ def gpr_likelihood_contours(
             err_down=scanner.optimal_int[1] / w,
         )
 
-        ### p(f) 2 sigma ###
+        ### Marginal posterior ###
         pf_val = pfs[0]
         pf_err_down = pf_val - pfs[1]
         pf_err_up = pfs[2] - pf_val
         config.fit_results.set_entry(
             **csv_base_args,
-            fitter=config.gpr_version + '_pf_scan2sig',
+            fitter=config.gpr_version + '_marg_post',
             val=pf_val / w, 
             err_up=pf_err_up / w, 
             err_down=pf_err_down / w,
@@ -1566,7 +1565,7 @@ class FitConfig:
 
         ### Signal contamination ###
         if variation.startswith('mu-diboson'):
-            self.mu_diboson = 1 + float(variation.removeprefix('mu-diboson'))
+            self.mu_diboson = float(variation.removeprefix('mu-diboson'))
         else:
             self.mu_diboson = 1
 
@@ -1613,7 +1612,7 @@ def summary_actions_from_csv(config : FitConfig):
     fitters = [
         'vjets_mc',
         f'{config.gpr_version}_nlml',
-        f'{config.gpr_version}_pf_scan2sig',
+        f'{config.gpr_version}_marg_post',
     ]
     legend = [
         'MC',
@@ -1624,7 +1623,7 @@ def summary_actions_from_csv(config : FitConfig):
         fitters = fitters[1:]
         legend = legend[1:]
 
-    graphs = [config.fit_results.get_graph(**csv_base_spec, fitter=x) for x in fitters]
+    graphs = [config.fit_results.get_graph(**csv_base_spec, fitter=x, unscale_width=True) for x in fitters]
     plot_summary_distribution(
         graphs,
         filename=f'{config.output_dir}/gpr_{config.lepton_channel}lep_{config.var}_summary',
@@ -1644,7 +1643,7 @@ def summary_actions_from_csv(config : FitConfig):
     
     h = config.fit_results.get_histogram(
         **csv_base_spec, 
-        fitter=config.gpr_version + '_pf_scan2sig', 
+        fitter=config.gpr_version + '_marg_post', 
         histname=f'Vjets_SR_{config.var}_{config.variation}',
     )
     h.Write()

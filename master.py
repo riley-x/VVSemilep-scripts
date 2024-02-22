@@ -54,6 +54,61 @@ import gpr
 import ttbar_fit
 
 ##########################################################################################
+###                                        PLOTS                                       ###
+##########################################################################################
+
+def plot_sm_diboson_yield_variations(
+        config : gpr.FitConfig,
+        yields,
+        filename,
+    ):
+    csv_base_spec = {
+        'lep': config.lepton_channel, 
+        'fitter': f'{config.gpr_version}_mu_integral',
+        'vary': config.var.name, 
+        'bins': config.bins_y,
+    }
+    i_nom = len(yields) // 2
+    graphs = [config.fit_results.get_graph(**csv_base_spec, variation=f'mu-diboson{x}') for x in yields]
+    graphs.insert(i_nom, config.fit_results.get_graph(**csv_base_spec, variation='nominal'))
+    legend = [str(x) for x in yields]
+    legend.insert(i_nom, '1.0')
+
+    def subplot(hists, **kwargs):
+        hists2 = []
+        h_nom = hists[i_nom]
+        for h,mu in zip(hists, legend):
+            mu = float(mu)
+            if mu == 1: continue
+
+            h = h.Clone()
+            for i in range(h.GetN()):
+                h.SetPointY(i, (h.GetPointY(i) - h_nom.GetPointY(i)) / (mu - 1))
+                h.SetPointEYhigh(i, 0)
+                h.SetPointEYlow(i, 0)
+            hists2.append(h)
+        return hists2
+
+    gpr.plot_summary_distribution(
+        hists=graphs,
+        filename=filename,
+        subtitle=[
+            '#sqrt{s}=13 TeV, 140 fb^{-1}',
+            f'{config.lepton_channel}-lepton channel',
+            'Scanning #mu_{diboson}',
+        ],
+        legend=legend,
+        ytitle2='#frac{#DeltaFit}{#Delta#mu}',
+        xtitle=f'{config.var:title}',
+        edge_labels=[str(x) for x in config.bins_y],
+        subplot2=subplot,
+        subplot3=None,
+        opts2='P',
+        logy=False,
+    )
+
+
+##########################################################################################
 ###                                         RUN                                        ###
 ##########################################################################################
 
@@ -84,7 +139,8 @@ def run_gpr(
     gpr.run(file_manager, config, from_csv_only)
 
     ### Diboson signal strength variations ###
-    for mu_diboson in [0.9, 0.95, 1.05, 1.1]:
+    mu_diboson_points = [0.9, 0.95, 1.05, 1.1]
+    for mu_diboson in mu_diboson_points:
         config = gpr.FitConfig(
             variation=f'mu-diboson{mu_diboson}',
             mu_stop=mu_stop[0],
@@ -92,6 +148,11 @@ def run_gpr(
             **config_base,
         )
         gpr.run(file_manager, config, from_csv_only)
+    plot_sm_diboson_yield_variations(
+        config=config, 
+        yields=mu_diboson_points,
+        filename=f'{output_dir}/{config.lepton_channel}lep/{config.var}/gpr_diboson_mu_scan',
+    )
 
     ### ttbar signal strength variations ###
     for variation in ['mu-ttbar_up', 'mu-ttbar_down']:
