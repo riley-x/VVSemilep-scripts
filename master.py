@@ -156,6 +156,7 @@ def plot_gpr_ttbar_and_stop_correlations(config : gpr.FitConfig, filename : str)
         ydivs2=503,
     )
 
+
 ##########################################################################################
 ###                                         RUN                                        ###
 ##########################################################################################
@@ -184,9 +185,10 @@ def run_gpr(
         mu_ttbar=ttbar_fitter.mu_ttbar_nom[0],
         **config_base,
     )
+    config_nom = config
     gpr.run(file_manager, config, from_csv_only)
 
-    # ### Diboson signal strength variations ###
+    ### Diboson signal strength variations ###
     mu_diboson_points = [0.9, 0.95, 1.05, 1.1]
     for mu_diboson in mu_diboson_points:
         config = gpr.FitConfig(
@@ -212,7 +214,7 @@ def run_gpr(
         )
         gpr.run(file_manager, config, from_csv_only)
 
-    ### stop signal strength variations ###
+    ### Single top signal strength variations ###
     config = gpr.FitConfig(
         variation='mu-stop_up',
         mu_stop=mu_stop[0] + mu_stop[1],
@@ -231,7 +233,7 @@ def run_gpr(
 
     # TODO syst variations
 
-    return config, mu_diboson_corrs
+    return config_nom, mu_diboson_corrs
     
 
 def run_channel(
@@ -269,9 +271,12 @@ def run_channel(
         )
 
         ### Diboson yield ###
+        # So this will be superceded by the profile likelihood fit, which will use the
+        # GPR fit results directly, but this is a nice check.
         bins = gpr_config.bins_y
+        h_diboson = ROOT.TH1F('h_diboson', 'Diboson', len(bins) - 1, np.array(bins, dtype=float))
         for i in range(len(bins) - 1):
-            diboson_fit.run_fit(
+            res = diboson_fit.run_fit(
                 file_manager=file_manager,
                 gpr_results=gpr_config.fit_results,
                 ttbar_fitter=ttbar_fitter,
@@ -281,8 +286,9 @@ def run_channel(
                 mu_stop=mu_stop,
                 gpr_mu_corr=gpr_mu_corr[i],
             )
-            break
-
+            mu = res['mu-diboson']
+            h_diboson.SetBinContent(i+1, mu[0])
+            h_diboson.SetBinError(i+1, mu[1])
 
         ### Profile likelihood unfolding fit ###
 

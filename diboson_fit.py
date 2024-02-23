@@ -3,43 +3,7 @@
 @file diboson_fit.py 
 @author Riley Xu - riley.xu@gmail.com, riley.xu@cern.ch 
 @date February 22, 2024 
-@brief Script for fitting the diboson yield using saved GPR fit results
-
-------------------------------------------------------------------------------------------
-SETUP
-------------------------------------------------------------------------------------------
-
-    setupATLAS 
-    lsetup "root recommended" 
-    lsetup "python centos7-3.9"
-
-Note that this can't be setup at the same time with AnalysisBase or else you get a lot of
-conflicts :(
-
-------------------------------------------------------------------------------------------
-CONFIG
-------------------------------------------------------------------------------------------
-
-Check [utils.Sample] and [utils.Variable] to make sure the hardcoded naming stuctures are
-correct.
-
-This script relies on the saved GPR fit results, which should be located at
-`{output}/gpr/gpr_fit_results.csv`.
-
-------------------------------------------------------------------------------------------
-RUN
-------------------------------------------------------------------------------------------
-
-    diboson_fit.py filepath/formatter_1.root [...]
-
-This will fetch histogram files using the naming convention supplied in the arguments.
-These arguments can include python formatters (using curly braces) for 'lep', which will
-be replaced with the lepton channel number, and 'sample', which uses
-[utils.Sample.file_stubs]. For example,
-
-    hists/{lep}lep/{sample}.root
-    
-See [utils.FileManager] for details.
+@brief Functions for fitting the diboson yield using saved GPR fit results
 '''
 
 import ROOT
@@ -88,15 +52,15 @@ def run_fit(
     )
 
     ### Get nominal yields ###
-    def _subr_get_nominal():
+    def _subr_get_nominal(asimov : bool):
         nom_name = utils.hist_name_variation(hist_name, 'nominal')
         hists = file_manager.get_hist_all_samples(lepton_channel, nom_name)
         
-        ### Data and diboson (always nominal) ###
+        ### Data and diboson ###
         n_data_nom = plot.integral_user(hists['data'], bin)
-        n_diboson_nom = plot.integral_user(hists['diboson'], bin)
+        n_diboson_nom = plot.integral_user(hists['diboson'], bin, return_error=True)
         
-        ### MC top backgrounds nominal (sum) ###
+        ### MC top backgrounds (sum) ###
         mu_ttbar_nom = ttbar_fitter.mu_ttbar_nom
         n_ttbar_nom = plot.integral_user(hists['ttbar'], bin, return_error=True)
         n_stop_nom = plot.integral_user(hists['stop'], bin, return_error=True)
@@ -104,18 +68,28 @@ def run_fit(
         err = ((mu_ttbar_nom[0] * n_ttbar_nom[1])**2 + (mu_stop[0] * n_stop_nom[1])**2)**0.5
         n_mc_nom = (val, err)
 
-        ### GPR nominal ###
+        ### GPR ###
         n_gpr_nom = gpr_results.get_entry(**gpr_csv_args, variation='nominal')
         n_gpr_nom = (n_gpr_nom[0], (n_gpr_nom[1] + n_gpr_nom[2]) / 2)
 
+        ### Nominal signal strength ###
+        if asimov:
+            n_data_nom = round(n_mc_nom[0] + n_diboson_nom[0] + n_gpr_nom[0]) # must be int for poisson
+        
+        numerator = n_data_nom - n_mc_nom[0] - n_gpr_nom[0]
+        numerator_err = n_data_nom + n_mc_nom[1]**2 + n_gpr_nom[1]**2
+        mu_diboson_err = numerator_err / numerator**2 + (n_diboson_nom[1] / n_diboson_nom[0])**2
+        mu_diboson_val = numerator / n_diboson_nom[0]
+        mu_diboson_nom = (mu_diboson_val, mu_diboson_val * mu_diboson_err**0.5)
+
+        print(f'diboson_fit.py::run_fit({variable}, {bin}) inputs:')
         print(f'    {"Variation":20}: {"top MCs":>10} {"GPR":>10}')
         print('    ' + '-' * 43)
         print(f'    {"nominal_val":20}: {n_mc_nom[0]:10.2f} {n_gpr_nom[0]:10.2f}')
         print(f'    {"nominal_err":20}: {n_mc_nom[1]:10.2f} {n_gpr_nom[1]:10.2f}')
 
-        return n_data_nom, n_diboson_nom, n_mc_nom, n_gpr_nom
-    n_data_nom, n_diboson_nom, n_mc_nom, n_gpr_nom = _subr_get_nominal()
-    n_data_nom = round(n_mc_nom[0] + n_diboson_nom + n_gpr_nom[0]) # must be int for poisson
+        return n_data_nom, n_diboson_nom[0], n_mc_nom, n_gpr_nom, mu_diboson_nom
+    n_data_nom, n_diboson_nom, n_mc_nom, n_gpr_nom, mu_diboson_nom = _subr_get_nominal(asimov=False)
 
     ### Get variation errors ###
     var_sigmas = {
@@ -163,8 +137,8 @@ def run_fit(
         
         mc_err /= 2
         gpr_err /= 2
-        var_sigmas[variation_base] = mc_err + gpr_err
-        var_index[variation_base] = index
+        var_sigmas[f'gamma_{variation_base}'] = mc_err + gpr_err
+        var_index[f'gamma_{variation_base}'] = index
         index += 1
         print(f'    {variation_base:20}: {mc_err:10.2f} {gpr_err:10.2f}')
 
@@ -172,7 +146,7 @@ def run_fit(
     def nll(params):
         mu_diboson = params[0]
         pred = mu_diboson * n_diboson_nom + n_mc_nom[0] + n_gpr_nom[0]
-        # pred += gpr_mu_corr * n_gpr_nom[0] * (1 - mu_diboson)
+        pred += gpr_mu_corr * n_gpr_nom[0] * (1 - mu_diboson) # signal contamination correction
         nll_val = 0
         for var,i in var_index.items():
             pred += params[i] * var_sigmas[var]
@@ -200,6 +174,7 @@ def run_fit(
     errs = np.diag(cov) ** 0.5
     cov_norm = cov / errs / errs[:, None]
     out = {
+        'mu-diboson-nom': mu_diboson_nom,
         'mu-diboson': (res.x[0], errs[0]),
         'cov': cov,
         'cov_norm': cov_norm,
@@ -208,18 +183,15 @@ def run_fit(
         out[var] = (res.x[i], errs[i])
     
     ### Printout ###
-    notice_msg = f'diboson_fit.py::run_fit({variable}, {bin}) fit results:'
+    notice_msg = f'\n    Fit results:\n    ' + '-' * 50
     for k,v in out.items():
         if 'cov' in k: continue
-        notice_msg += f'\n    {k:10}: {v[0]:7.4f} +- {v[1]:.4f}'
+        notice_msg += f'\n    {k:20}: {v[0]:7.4f} +- {v[1]:.4f}'
     notice_msg += f'\n    cov:'
     for i in range(len(errs)):
         notice_msg += f'\n        '
         for j in range(len(errs)):
             notice_msg += f'{cov_norm[i][j]:7.4f}  '
-    plot.notice(notice_msg)
+    print(notice_msg)
 
-    mu_nom = (n_data_nom - n_mc_nom[0] - n_gpr_nom[0]) / n_diboson_nom
-    print(n_data_nom, n_diboson_nom, mu_nom)
-    
     return out

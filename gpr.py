@@ -26,8 +26,8 @@ edit or rerun a specific bin.
 The script will generate a plot named `gpr_{lep}_{var}_summary` in both png and pdf
 formats containing a summary distribution of the fits. For each bin fit, will also
 generate the following plots:
-    - nlml_cont: contour lines of the NLML space as a function of the two hyperparameters.
-    - yields: fitted SR yields in the same space.
+    - cont_nlml: contour lines of the NLML space as a function of the two hyperparameters.
+    - cont_yields: fitted SR yields in the same space.
     - fit_opt: posterior prediction using the MMLE fit
     - fit_m1s/fit_p1s: posterior predictions using +-1 sigma in the hyperparameter space
       fits
@@ -70,6 +70,22 @@ be replaced with the lepton channel number, and 'sample', which uses
     hists/{lep}lep/{sample}.root
     
 See [utils.FileManager] for details.
+
+------------------------------------------------------------------------------------------
+IMPLEMENTATION DETAILS
+------------------------------------------------------------------------------------------
+There's a lot of code here so here's a quick breakdown of the main callstack:
+
+    1. main() - Fetches files and defines the config from command line args
+    2. run() - Actual run function, which can be called from another script too. Takes a
+       config and runs the full set of fits for the given variable. Handles fetching
+       histograms and prepping the data.
+    3. gpr_likelihood_contours() - Run wrapper for a single contour scan (i.e. one bin in 
+       the above variable). Handles saving results and plots of the scan.
+    4. ContourScanner - Class that actually handles the contour scan and calculating the
+       marginal posterior.
+    5. GPR - Class that handles a single GPR fit (which is repeated 25x25 times in the 
+       contour scan).
 
 '''
 
@@ -237,7 +253,6 @@ def get_bin_range(h, xmin, xmax) -> tuple[int, int]:
         raise RuntimeError(f"get_bin_range() couldn't find bin matching x={xmax}")
     return (i_min, i_max)
             
-
 class RatioWithError:
     def __init__(self, num, num_err, denom, denom_err):
         self.num = num
@@ -477,21 +492,11 @@ class FitResults:
 ###                                 PLOTTING                                ###
 ###############################################################################
 
-def create_gpr_graph(gpr, range, sigmas=2, color=plot.colors.blue):
-    ### GPR ###
-    X = linspace_bin_centered(*range, 100).reshape((-1, 1))
-    mean, std = gpr.predict(X, return_std=True) 
-
-    g_gpr = ROOT.TGraphErrors(len(X), X.reshape(-1), mean, np.zeros(mean.shape), sigmas * std)
-    g_gpr.SetFillColorAlpha(color, 0.3)
-    g_gpr.SetLineWidth(3)
-    g_gpr.SetLineColor(color)
-
-    return g_gpr
-
 
 def plot_gpr_fit(
-        h_cr, gpr, gpr_range, 
+        h_cr,
+        gpr : GPR, 
+        gpr_range, 
         h_sr=None, 
         gpr_sigmas=2,
         gpr_color=plot.colors.blue,
@@ -514,7 +519,7 @@ def plot_gpr_fit(
         A tuple of the x range to plot the gpr
     '''
     ### GPR ###
-    g_gpr = create_gpr_graph(gpr, gpr_range, gpr_sigmas, gpr_color)
+    g_gpr = gpr.create_graph(gpr_range, gpr_sigmas, gpr_color)
 
     ### Histogram styles ###
     h_cr.SetLineColor(ROOT.kBlack)
@@ -835,7 +840,7 @@ def plot_updown_fits(
         g = plot_gpr_fit(
             h_cr=h_cr, 
             h_sr=h_sr,
-            gpr=scanner.fitter.gpr, 
+            gpr=scanner.fitter, 
             gpr_range=scanner.fitter.fit_range,
             gpr_color=color,
             filename=filename.format(stub = f'fit_{name}'),
@@ -1026,6 +1031,76 @@ def plot_summary_distribution(hists,
         plot.plot_discrete_bins(hists, plotter=plot.plot, **kwargs)
 
 
+def plot_postfit(h_gpr, h_data, h_ttbar, h_stop, h_diboson, filename, sr_window, mu_diboson=1, **plot_args):
+    ### Hists ###
+    h_diboson = h_diboson.Clone()
+    h_diboson.Scale(mu_diboson)
+
+    h_sum = h_gpr.Clone()
+    h_sum.Add(h_ttbar)
+    h_sum.Add(h_stop)
+    h_sum.Add(h_diboson)
+
+    ratio = h_data.Clone()
+    ratio.Divide(h_sum)
+
+    h_sr, h_cr = get_sr_cr(h_data, sr_window)
+    ratio_sr, ratio_cr = get_sr_cr(ratio, sr_window)
+
+    ### Plot ###
+    pads = plot.RatioPads(**plot_args)
+    plotter1 = pads.make_plotter1(
+        ytitle='Events / GeV',
+        **plot_args,
+    )
+    plotter1.add(
+        objs=[h_gpr, h_stop, h_ttbar, h_diboson], 
+        legend=['GPR (V+jets)', 'Single top', 't#bar{t}', f'diboson (#mu={round(mu_diboson, 2)})'],
+        stack=True,
+        opts='HIST',
+        fillcolor=plot.colors.pastel,
+        linewidth=1,
+    )
+    plotter1.add(
+        objs=[h_sum],
+        fillcolor=plot.colors.gray,
+        fillstyle=3145,
+        linewidth=0,
+        markerstyle=0,
+        opts='E2',
+        legend_opts='F',
+        legend=['GPR err + MC stat'],
+    )
+    plotter1.add(
+        objs=[h_sr, h_cr],
+        legend=['Data SR', 'Data MCR'],
+        linecolor=[plot.colors.blue, ROOT.kBlack],
+        markercolor=[plot.colors.blue, ROOT.kBlack],
+        opts='PE',
+        legend_opts='PEL',
+    )
+    
+    plotter1.draw()
+
+    ### Subplot ###
+    plotter2 = pads.make_plotter2(
+        ytitle='Data / Bkgs',
+        xtitle='m(J) [GeV]',
+    )
+    plotter2.add(
+        objs=[ratio_sr, ratio_cr],
+        linecolor=[plot.colors.blue, ROOT.kBlack],
+        markercolor=[plot.colors.blue, ROOT.kBlack],
+        opts='PE',
+        legend=None,
+    )
+    plotter2.draw()
+    plotter2.draw_hline(1, ROOT.kDashed)
+
+    plot.save_canvas(pads.c, filename)
+
+
+
 
 ###############################################################################
 ###                                  FITTER                                 ###
@@ -1109,15 +1184,6 @@ class GPR:
         self.gpr.optimizer = None
         self.gpr.kernel.theta = np.log(theta)
         self.gpr.fit(self.X_train, self.y_train)
-    
-    def plot(self, plotter, color=plot.colors.blue, label=None, **kwargs):
-        g_gpr = create_gpr_graph(self.gpr, self.fit_range, color=color)
-        plotter.add([g_gpr],
-            opts='3C',
-            legend=[label] if label is not None else ['GPR Mean #pm 2#sigma'],
-            legend_opts='LF',
-            **kwargs,
-        )
 
     def integral(self, sr_range, test_points=100):
         ### Split into [test_points] bins, and get the bin centers ###
@@ -1176,6 +1242,30 @@ class GPR:
         for y1,y2,e1 in zip(self.y_train, vals, self.e_train):
             accum += (y1 - y2)**2 / e1**2 # should use error on GPR?
         self.chi2 = accum / self.ndof
+
+    def create_graph(self, range, sigmas=2, color=plot.colors.blue):
+        X = linspace_bin_centered(*range, 100).reshape((-1, 1))
+        mean, std = self.predict(X, return_std=True) 
+
+        g_gpr = ROOT.TGraphErrors(len(X), X.reshape(-1), mean, np.zeros(mean.shape), sigmas * std)
+        g_gpr.SetFillColorAlpha(color, 0.3)
+        g_gpr.SetLineWidth(3)
+        g_gpr.SetLineColor(color)
+
+        return g_gpr
+    
+    def create_hist(self, bins):
+        x = []
+        for i in range(len(bins) - 1):
+            x.append((bins[i] + bins[i + 1]) / 2)
+        mean, std = self.predict(np.reshape(x, (-1, 1)), return_std=True) 
+
+        h = ROOT.TH1F('h_gpr', 'GPR', len(bins) - 1, bins)
+        for i in range(len(x)):
+            h.SetBinContent(i + 1, mean[i])
+            h.SetBinError(i + 1, std[i])
+
+        return h
 
 
 class ContourScanner:
@@ -1400,7 +1490,7 @@ def gpr_likelihood_contours(
 
     ### Plot contours ###
     plot_opts = {
-        'filename': filebase + 'nlml_cont',
+        'filename': filebase + 'cont_nlml',
         'subtitle': subtitle + [scanner.optimal_title],
         'z_range': [scanner.min_nlml - 1, min(scanner.max_nlml, scanner.min_nlml + 100)],
     }
@@ -1408,7 +1498,7 @@ def gpr_likelihood_contours(
 
     ### Plot integral yields ###
     plot_opts = {
-        'filename': filebase + 'yields',
+        'filename': filebase + 'cont_yields',
         'subtitle': [
             *subtitle,
             scanner.optimal_title,
@@ -1497,8 +1587,8 @@ def gpr_likelihood_contours(
                 **csv_base_args,
                 fitter=config.gpr_version + '_mu_weighted_average',
                 val=val, 
-                err_up=err_down**0.5, 
-                err_down=err_up**0.5,
+                err_up=err_up**0.5, 
+                err_down=err_down**0.5,
             )
 
             ### Integral - integral ###
@@ -1514,9 +1604,13 @@ def gpr_likelihood_contours(
                 **csv_base_args,
                 fitter=config.gpr_version + '_mu_integral',
                 val=val, 
-                err_up=err_down, 
-                err_down=err_up,
+                err_up=err_up, 
+                err_down=err_down,
             )
+
+            scanner.mu_integral = (val, (err_up + err_down) / 2)
+
+    return scanner
             
 
 ##########################################################################################
@@ -1711,50 +1805,46 @@ def run(
 
         h_vjets = h_wjets.Clone()
         h_vjets.Add(h_zjets)
+        h_vjets_diboson = h_vjets.Clone() # vjets + diboson, for signal strength estimate
         if config.mu_diboson != 1:
             h_vjets.Add(h_diboson, 1 - config.mu_diboson) 
         
-        h_data = h_wjets.Clone()
-        h_data.Add(h_zjets)
-        h_data.Add(h_diboson)
-        # TODO is this right?
         h_data = None
     else:
         h_data  = file_manager.get_hist(config.lepton_channel, utils.Sample.data,  hist_name)
         h_ttbar = file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
         h_stop  = file_manager.get_hist(config.lepton_channel, utils.Sample.stop,  hist_name)
+
+        h_ttbar.Scale(config.mu_ttbar)
+        h_stop.Scale(config.mu_stop)
         
         h_vjets = h_data.Clone()
-        h_vjets.Add(h_diboson, -config.mu_diboson)
-        h_vjets.Add(h_ttbar, -config.mu_ttbar)
-        h_vjets.Add(h_stop, -config.mu_stop)
-
-        h_data_orig = h_data
-        h_data = h_data.Clone()
-        h_data.Add(h_ttbar, -config.mu_ttbar)
-        h_data.Add(h_stop, -config.mu_stop)
+        h_vjets.Add(h_ttbar, -1)
+        h_vjets.Add(h_stop, -1)
+        h_vjets_diboson = h_vjets.Clone() # vjets + diboson, for signal strength estimate
+        h_vjets.Add(h_diboson, -config.mu_diboson) 
 
     ### Run for each bin ###
     for i in range(len(config.bins_y) - 1):
         ### Common options ###
-        bin = (config.bins_y[i], config.bins_y[i+1])
-        binstr = f'{bin[0]},{bin[1]}'
+        bin_y = (config.bins_y[i], config.bins_y[i+1])
+        binstr = f'{bin_y[0]},{bin_y[1]}'
         common_subtitle = [
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{config.var.title} #in {bin} {config.var.unit}',
+            f'{config.var.title} #in {bin_y} {config.var.unit}',
         ]
 
         ### Histogram manipulation ###
-        bins_x = config.get_bins_x(bin)
-        def prepare_bin(h):
-            h = plot.projectX(h, bin)
-            h = plot.rebin(h, bins_x)
+        bins_x = config.get_bins_x(bin_y)
+        def prepare_bin(h, bins=bins_x):
+            h = plot.projectX(h, bin_y)
+            h = plot.rebin(h, bins)
             h.Scale(1, 'width')
             return h
         
         h_vjets_bin = prepare_bin(h_vjets)
         h_diboson_bin = prepare_bin(h_diboson) if h_diboson else None
-        h_data_bin = prepare_bin(h_data) if h_data else None
+        h_vjets_diboson_bin = prepare_bin(h_vjets_diboson) if h_vjets_diboson else None
         
         if config.use_vjets_mc:
             h_mc = h_vjets_bin.Clone()
@@ -1764,16 +1854,37 @@ def run(
         _, h_cr = get_sr_cr(h_vjets_bin, config.sr_window)
 
         ### Run fit ###
-        gpr_likelihood_contours(
+        contour_scanner = gpr_likelihood_contours(
             h_cr=h_cr, 
-            h_data_sr=h_data_bin, 
+            h_data_sr=h_vjets_diboson_bin, 
             h_mc=h_mc,
             h_diboson=h_diboson_bin,
-            vary_bin=bin,
+            vary_bin=bin_y,
             filebase=f'{config.output_dir}/gpr_{config.lepton_channel}lep_{config.var}_{config.variation}_{binstr}_',
             config=config,
             subtitle=common_subtitle,
         )
+
+        ### Postfit plot ###
+        if h_data:
+            contour_scanner.fitter.refit(contour_scanner.scikit_theta)
+            for i,x in enumerate(bins_x):
+                if x >= config.get_fit_range(bin_y)[1]:
+                    break
+            bins = bins_x[:i]
+            h_gpr = contour_scanner.fitter.create_hist(bins)
+            plot_postfit(
+                h_gpr=h_gpr,
+                h_data=prepare_bin(h_data, bins),
+                h_ttbar=prepare_bin(h_ttbar, bins),
+                h_stop=prepare_bin(h_stop, bins),
+                h_diboson=prepare_bin(h_diboson, bins),
+                filename=f'{config.output_dir}/gpr_{config.lepton_channel}lep_{config.var}_{config.variation}_{binstr}_postfit',
+                subtitle=common_subtitle,
+                sr_window=config.sr_window,
+                mu_diboson=contour_scanner.mu_integral[0],
+            )
+        contour_scanner = None # this cleans up the ROOT objects held in memory by contour_scanner
 
     summary_actions_from_csv(config)
 
