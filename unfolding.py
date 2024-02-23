@@ -32,7 +32,8 @@ CONFIG
 ------------------------------------------------------------------------------------------
 
 Check [utils.Sample] to make sure the hardcoded naming stuctures are correct. Also check
-the hardcoded variables and binning in [get_bins].
+the hardcoded variables and binning in [utils.get_bins]. If optimizing bins, check the
+parameters in [optimize_binning].
 
 ------------------------------------------------------------------------------------------
 RUN
@@ -40,6 +41,11 @@ RUN
 
     unfolding.py path/to/reader/hists/diboson.root diboson 1
 
+Optionally specify
+
+    --optimizeToRange 500,300
+
+To run the automatic bin optimization.
 '''
 
 from plotting import plot
@@ -157,10 +163,10 @@ def get_response_matrix(h):
 
 def optimize_binning(
         h, fid_range,
-        threshold_diag=0.8,
+        threshold_diag=0.7,
         threshold_err=0.4,
-        monotonic_bin_sizes=True,
-):
+        monotonic_bin_sizes=False,
+    ):
     '''
     Attempts to optimize the binning for unfolding such that migration matrix is
     well-behaved. It checks for the following conditions:
@@ -297,40 +303,13 @@ def plot_fid_reco(mtx, var, **kwargs):
     )
 
 
-
-
 ##########################################################################################
-###                                       CONFIG                                       ###
+###                                        MAIN                                        ###
 ##########################################################################################
-
-def get_bins(sample, lepton_channel : int, var: utils.Variable):
-    if var.name == "vv_m":
-        if lepton_channel == 0:
-            # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
-            return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
-        elif lepton_channel == 1:
-            # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
-            return [500, 740, 920, 1140, 1410, 1700, 2080, 3000]
-            # old binning
-            return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
-        elif lepton_channel == 2:
-            # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
-            return [500, 580, 680, 780, 900, 1050, 1220, 1410, 1680, 1910, 2210, 3000]
-    elif var.name == "vhad_pt":
-        if lepton_channel == 1:
-            # optimized binning with threshold_diag=0.8, threshold_err=0.4, monotonic_bin_sizes=True
-            return [300, 360, 460, 580, 730, 940, 1200, 1460, 3000]
-
-    raise NotImplementedError(f"unfolding.py::get_bins({sample}, {lepton_channel}, {var.name})")
-
 
 _default_vars = [
     utils.Variable.vv_m,
 ]
-
-##########################################################################################
-###                                        MAIN                                        ###
-##########################################################################################
 
 def main(
         file_manager : utils.FileManager,
@@ -378,7 +357,7 @@ def main(
         if optimization_range:
             bins = optimize_binning(mtx, optimization_range)
         else:
-            bins = get_bins(sample, lepton_channel, var)
+            bins = utils.get_bins(sample, lepton_channel, var)
         mtx = plot.rebin2d(mtx, bins, bins)
     
         ### Plot ###
@@ -432,6 +411,7 @@ if __name__ == "__main__":
 
     ### Run ###
     plot.file_formats = ['png', 'pdf']
+    plot.save_transparent_png = False
     main(
         file_manager=file_manager,
         sample=sample, 

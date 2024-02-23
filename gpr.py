@@ -1084,7 +1084,7 @@ def plot_postfit(h_gpr, h_data, h_ttbar, h_stop, h_diboson, filename, sr_window,
 
     ### Subplot ###
     plotter2 = pads.make_plotter2(
-        ytitle='Data / Bkgs',
+        ytitle='Data / Fit',
         xtitle='m(J) [GeV]',
     )
     plotter2.add(
@@ -1705,8 +1705,8 @@ class FitConfig:
         return np.array(out, dtype=float)
 
     def get_bins_y(self):
-        # TODO these should probably be the same as the unfolding bins; maybe just call
-        # that function directly?
+        return utils.get_bins(sample=None, lepton_channel=self.lepton_channel, var=self.var)
+        
         if self.var.name == "vv_m":
             if self.lepton_channel == 0:
                 return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
@@ -1797,7 +1797,8 @@ def run(
         return
     
     ### Retrieve histograms ###
-    hist_name = f'{{sample}}_VV{{lep}}Lep_Merg_{config.var}__v__fatjet_m' # TODO Variation name
+    hist_name = f'{{sample}}_VV{{lep}}Lep_Merg_{config.var}__v__fatjet_m'
+    hist_name = utils.hist_name_variation(hist_name, config.variation)
     h_diboson = file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name)
     if config.use_vjets_mc:
         h_wjets = file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name)
@@ -1815,6 +1816,8 @@ def run(
         h_ttbar = file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
         h_stop  = file_manager.get_hist(config.lepton_channel, utils.Sample.stop,  hist_name)
 
+        h_ttbar = h_ttbar.Clone() # This clone is really important! Or else the next call will be double scaled, etc.
+        h_stop = h_stop.Clone() # This clone is really important! Or else the next call will be double scaled, etc.
         h_ttbar.Scale(config.mu_ttbar)
         h_stop.Scale(config.mu_stop)
         
