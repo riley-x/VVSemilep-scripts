@@ -157,6 +157,29 @@ def plot_gpr_ttbar_and_stop_correlations(config : gpr.FitConfig, filename : str)
     )
 
 
+def plot_diboson_yield(h_fit, h_mc, **plot_opts):
+    h_mc.SetMarkerSize(0)
+    h_mc.SetLineColor(plot.colors.blue)
+
+    h_mc_err = h_mc.Clone()
+    h_mc_err.SetFillColorAlpha(plot.colors.blue, 0.3)
+
+    ratio = h_fit.Clone()
+    ratio.Divide(h_mc)
+
+    plot.plot_ratio(
+        objs1=[h_mc, h_mc_err, h_fit],
+        objs2=[ratio],
+        legend=['', 'MC (stat only)', 'Fit'],
+        opts=['HIST', 'E2', 'PE'],
+        legend_opts=['', 'FL', 'PEL'],
+        opts2='PE',
+        ytitle='Events',
+        ytitle2='Fit / MC',
+        hline=1,
+        **plot_opts,
+    )
+
 ##########################################################################################
 ###                                         RUN                                        ###
 ##########################################################################################
@@ -274,7 +297,8 @@ def run_channel(
         # So this will be superceded by the profile likelihood fit, which will use the
         # GPR fit results directly, but this is a nice check.
         bins = gpr_config.bins_y
-        h_diboson = ROOT.TH1F('h_diboson', 'Diboson', len(bins) - 1, np.array(bins, dtype=float))
+        h_diboson_fit = ROOT.TH1F('h_diboson', 'Diboson', len(bins) - 1, np.array(bins, dtype=float))
+        h_diboson_mc = ROOT.TH1F('h_diboson', 'Diboson', len(bins) - 1, np.array(bins, dtype=float))
         for i in range(len(bins) - 1):
             res = diboson_fit.run_fit(
                 file_manager=file_manager,
@@ -286,11 +310,26 @@ def run_channel(
                 mu_stop=mu_stop,
                 gpr_mu_corr=gpr_mu_corr[i],
             )
-            mu = res['mu-diboson']
-            h_diboson.SetBinContent(i+1, mu[0])
-            h_diboson.SetBinError(i+1, mu[1])
+            diboson_yield = res['diboson-yield']
+            h_diboson_fit.SetBinContent(i+1, diboson_yield[0])
+            h_diboson_fit.SetBinError(i+1, diboson_yield[1])
+
+            diboson_yield = res['diboson-yield-mc-statonly']
+            h_diboson_mc.SetBinContent(i+1, diboson_yield[0])
+            h_diboson_mc.SetBinError(i+1, diboson_yield[1])
+        plot_diboson_yield(
+            h_fit=h_diboson_fit, 
+            h_mc=h_diboson_mc,
+            filename=f'{output_dir}/{lepton_channel}lep_{var}_yields',
+            subtitle=[
+                '#sqrt{s}=13 TeV, 140 fb^{-1}',
+                f'{lepton_channel}-lepton channel',
+            ],
+            xtitle=f'{var:title}',
+        )
 
         ### Profile likelihood unfolding fit ###
+        
 
 
 

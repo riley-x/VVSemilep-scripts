@@ -88,7 +88,7 @@ def run_fit(
         print(f'    {"nominal_val":20}: {n_mc_nom[0]:10.2f} {n_gpr_nom[0]:10.2f}')
         print(f'    {"nominal_err":20}: {n_mc_nom[1]:10.2f} {n_gpr_nom[1]:10.2f}')
 
-        return n_data_nom, n_diboson_nom[0], n_mc_nom, n_gpr_nom, mu_diboson_nom
+        return n_data_nom, n_diboson_nom, n_mc_nom, n_gpr_nom, mu_diboson_nom
     n_data_nom, n_diboson_nom, n_mc_nom, n_gpr_nom, mu_diboson_nom = _subr_get_nominal(asimov=False)
 
     ### Get variation errors ###
@@ -145,7 +145,7 @@ def run_fit(
     ### Define NLL form ###
     def nll(params):
         mu_diboson = params[0]
-        pred = mu_diboson * n_diboson_nom + n_mc_nom[0] + n_gpr_nom[0]
+        pred = mu_diboson * n_diboson_nom[0] + n_mc_nom[0] + n_gpr_nom[0]
         pred += gpr_mu_corr * n_gpr_nom[0] * (1 - mu_diboson) # signal contamination correction
         nll_val = 0
         for var,i in var_index.items():
@@ -159,7 +159,7 @@ def run_fit(
     n_params = len(var_index) + 1
     params = np.zeros(n_params)
     params[0] = 1
-    bounds = [(0, 3)] + [(-4, 4)] * len(var_index)
+    bounds = [(0, 5)] + [(-4, 4)] * len(var_index)
 
     res = optimize.minimize(nll, params, bounds=bounds, method='L-BFGS-B')#, options={'ftol': 1e-15, 'gtol': 1e-15})
     if not res.success:
@@ -176,6 +176,8 @@ def run_fit(
     out = {
         'mu-diboson-nom': mu_diboson_nom,
         'mu-diboson': (res.x[0], errs[0]),
+        'diboson-yield': (res.x[0] * n_diboson_nom[0], errs[0] * n_diboson_nom[0]),
+        'diboson-yield-mc-statonly': n_diboson_nom,
         'cov': cov,
         'cov_norm': cov_norm,
     }
