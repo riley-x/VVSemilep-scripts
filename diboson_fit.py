@@ -64,25 +64,27 @@ def run_fit(
         gpr_results : gpr.FitResults,
         ttbar_fitter : ttbar_fit.TtbarSysFitter,
         lepton_channel : int, 
-        var : utils.Variable,
+        variable : utils.Variable,
         bin : tuple[float, float],
         mu_stop : tuple[float, float],
+        gpr_mu_corr : float,
     ):
     '''
     '''
     from scipy import optimize, stats
 
     ### Setup ###
-    hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(var, lepton_channel).name
+    hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lepton_channel).name
     variations = [
         'mu-ttbar',
         'mu-stop',
     ]
     gpr_csv_args = dict(
         lep=lepton_channel,
-        vary=var.name,
+        vary=variable.name,
         fitter='rbf_marg_post',
         bin=bin,
+        unscale_width=True,
     )
 
     ### Get nominal yields ###
@@ -113,10 +115,18 @@ def run_fit(
 
         return n_data_nom, n_diboson_nom, n_mc_nom, n_gpr_nom
     n_data_nom, n_diboson_nom, n_mc_nom, n_gpr_nom = _subr_get_nominal()
-    
+    n_data_nom = round(n_mc_nom[0] + n_diboson_nom + n_gpr_nom[0]) # must be int for poisson
+
     ### Get variation errors ###
-    var_sigmas_gpr = {}
-    var_sigmas_mc = {}
+    var_sigmas = {
+        'gamma_mc': n_mc_nom[1],
+        'gamma_gpr': n_gpr_nom[1],
+    }
+    var_index = { # mu_diboson is 0
+        'gamma_mc': 1,
+        'gamma_gpr': 2,
+    }
+    index = 3
     for variation_base in variations:
         mc_err = 0
         gpr_err = 0
@@ -142,60 +152,63 @@ def run_fit(
 
             ### Get diff ###
             val = n_ttbar * mu_ttbar + n_stop * mu_stop_1
-            mc_err += abs(val - n_mc_nom[0])
+            mc_err += (val - n_mc_nom[0]) * (1 if updown == 'up' else -1)
 
             ### Get GPR err ###
             val = gpr_results.get_entry(
                 variation=variation_updown,
                 **gpr_csv_args,
             )[0]
-            gpr_err += abs(val - n_gpr_nom[0])
+            gpr_err += (val - n_gpr_nom[0]) * (1 if updown == 'up' else -1)
         
         mc_err /= 2
         gpr_err /= 2
-        var_sigmas_mc[variation_base] = mc_err
-        var_sigmas_gpr[variation_base] = gpr_err
+        var_sigmas[variation_base] = mc_err + gpr_err
+        var_index[variation_base] = index
+        index += 1
         print(f'    {variation_base:20}: {mc_err:10.2f} {gpr_err:10.2f}')
-    return
 
     ### Define NLL form ###
     def nll(params):
-        mu_ttbar = params[0]
-        mu_stop = params[1]
-        gamma_mc = params[2]
+        mu_diboson = params[0]
+        pred = mu_diboson * n_diboson_nom + n_mc_nom[0] + n_gpr_nom[0]
+        # pred += gpr_mu_corr * n_gpr_nom[0] * (1 - mu_diboson)
+        nll_val = 0
+        for var,i in var_index.items():
+            pred += params[i] * var_sigmas[var]
+            nll_val -= stats.norm.logpdf(params[i])
 
-        mc_error = (mu_ttbar * n_ttbar[1])**2 + (mu_stop * n_stop[1])**2 + n_else[1]**2
-        mc_error = mc_error**0.5
-
-        pred = mu_ttbar * n_ttbar[0] + mu_stop * n_stop[0] + n_else[0] + gamma_mc * mc_error
-        out = -stats.poisson.logpmf(n_data[0], pred) \
-            - stats.norm.logpdf(mu_stop, loc=mu_stop_0[0], scale=mu_stop_0[1]) \
-            - stats.norm.logpdf(gamma_mc)
-        return out
-            
+        nll_val -= stats.poisson.logpmf(n_data_nom, pred)
+        return nll_val
+    
     ### Minimize ###
-    res = optimize.minimize(nll, [1, mu_stop_0[0], 0], bounds=[(1e-2, 2), (1e-2, 2), (-5, 5)], method='L-BFGS-B')#, options={'ftol': 1e-15, 'gtol': 1e-15})
+    n_params = len(var_index) + 1
+    params = np.zeros(n_params)
+    params[0] = 1
+    bounds = [(0, 3)] + [(-4, 4)] * len(var_index)
+
+    res = optimize.minimize(nll, params, bounds=bounds, method='L-BFGS-B')#, options={'ftol': 1e-15, 'gtol': 1e-15})
     if not res.success:
-        plot.error(f'ttbar_fit.py::run_fit() did not succeed:\n{res}')
+        plot.error(f'diboson_fit.py::run_fit() did not succeed:\n{res}')
         raise RuntimeError()
 
     ### Covariances ###
     # Note we don't use the Scipy covariance which is not too accurate
     # cov = res.hess_inv.todense()
-    hess = hessian(nll, res.x, [0.001, 0.001, 0.001])
+    hess = ttbar_fit.hessian(nll, res.x, [0.001] * n_params)
     cov = np.linalg.inv(hess)
     errs = np.diag(cov) ** 0.5
     cov_norm = cov / errs / errs[:, None]
     out = {
-        'mu_ttbar': (res.x[0], errs[0]),
-        'mu_stop': (res.x[1], errs[1]),
-        'gamma_mc': (res.x[2], errs[2]),
+        'mu-diboson': (res.x[0], errs[0]),
         'cov': cov,
         'cov_norm': cov_norm,
     }
+    for var,i in var_index.items():
+        out[var] = (res.x[i], errs[i])
     
     ### Printout ###
-    notice_msg = f'ttbar_fit.py::run_fit({variation_base}) fit results:'
+    notice_msg = f'diboson_fit.py::run_fit({variable}, {bin}) fit results:'
     for k,v in out.items():
         if 'cov' in k: continue
         notice_msg += f'\n    {k:10}: {v[0]:7.4f} +- {v[1]:.4f}'
@@ -205,5 +218,8 @@ def run_fit(
         for j in range(len(errs)):
             notice_msg += f'{cov_norm[i][j]:7.4f}  '
     plot.notice(notice_msg)
+
+    mu_nom = (n_data_nom - n_mc_nom[0] - n_gpr_nom[0]) / n_diboson_nom
+    print(n_data_nom, n_diboson_nom, mu_nom)
     
     return out

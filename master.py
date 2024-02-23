@@ -178,29 +178,29 @@ def run_gpr(
     }
     
     ### Nominal ###
-    # config = gpr.FitConfig(
-    #     variation='nominal',
-    #     mu_stop=mu_stop[0],
-    #     mu_ttbar=ttbar_fitter.mu_ttbar_nom[0],
-    #     **config_base,
-    # )
-    # gpr.run(file_manager, config, from_csv_only)
+    config = gpr.FitConfig(
+        variation='nominal',
+        mu_stop=mu_stop[0],
+        mu_ttbar=ttbar_fitter.mu_ttbar_nom[0],
+        **config_base,
+    )
+    gpr.run(file_manager, config, from_csv_only)
 
     # ### Diboson signal strength variations ###
-    # mu_diboson_points = [0.9, 0.95, 1.05, 1.1]
-    # for mu_diboson in mu_diboson_points:
-    #     config = gpr.FitConfig(
-    #         variation=f'mu-diboson{mu_diboson}',
-    #         mu_stop=mu_stop[0],
-    #         mu_ttbar=ttbar_fitter.mu_ttbar_nom[0],
-    #         **config_base,
-    #     )
-    #     gpr.run(file_manager, config, from_csv_only)
-    # mu_diboson_corrs = plot_gpr_mu_diboson_correlations(
-    #     config=config, 
-    #     yields=mu_diboson_points,
-    #     filename=f'{output_dir}/{config.lepton_channel}lep/{config.var}/gpr_diboson_mu_scan',
-    # )
+    mu_diboson_points = [0.9, 0.95, 1.05, 1.1]
+    for mu_diboson in mu_diboson_points:
+        config = gpr.FitConfig(
+            variation=f'mu-diboson{mu_diboson}',
+            mu_stop=mu_stop[0],
+            mu_ttbar=ttbar_fitter.mu_ttbar_nom[0],
+            **config_base,
+        )
+        gpr.run(file_manager, config, from_csv_only)
+    mu_diboson_corrs = plot_gpr_mu_diboson_correlations(
+        config=config, 
+        yields=mu_diboson_points,
+        filename=f'{output_dir}/{config.lepton_channel}lep/{config.var}/gpr_diboson_mu_scan',
+    )
 
     ### ttbar signal strength variations ###
     for variation in ['mu-ttbar_up', 'mu-ttbar_down']:
@@ -231,7 +231,7 @@ def run_gpr(
 
     # TODO syst variations
 
-    return config
+    return config, mu_diboson_corrs
     
 
 def run_channel(
@@ -258,7 +258,7 @@ def run_channel(
     ### Run GPR fit ###
     for var in vars:
         plot.notice(f'{log_base} running GPR fits for {var}')
-        gpr_config = run_gpr(
+        gpr_config, gpr_mu_corr = run_gpr(
             file_manager=file_manager,
             lepton_channel=lepton_channel,
             var=var,
@@ -276,9 +276,10 @@ def run_channel(
                 gpr_results=gpr_config.fit_results,
                 ttbar_fitter=ttbar_fitter,
                 lepton_channel=lepton_channel,
-                var=var,
+                variable=var,
                 bin=(bins[i], bins[i+1]),
                 mu_stop=mu_stop,
+                gpr_mu_corr=gpr_mu_corr[i],
             )
             break
 

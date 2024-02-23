@@ -423,10 +423,19 @@ class FitResults:
     def filter(self, lep=slice(None), vary=slice(None), variation=slice(None), fitter=slice(None), bin=slice(None), **_):
         return self.df.loc[(lep, vary, variation, fitter, bin), :]
 
-    def get_entry(self, lep, vary, variation, fitter, bin, **_) -> tuple[float, float, float]:
+    def get_entry(self, lep, vary, variation, fitter, bin, unscale_width=False, **_) -> tuple[float, float, float]:
         if not isinstance(bin, str):
+            bin_edges = bin
             bin = f'{bin[0]},{bin[1]}'
-        return self.df.loc[(lep, vary, variation, fitter, bin)]
+        elif unscale_width:
+            bin_edges = [float(x) for x in bin.split(',')]
+
+        out = self.df.loc[(lep, vary, variation, fitter, bin)]
+
+        if unscale_width:
+            w = bin_edges[1] - bin_edges[0]
+            return [x * w for x in out]
+        return out
 
     def set_entry(self, lep, vary, variation, fitter, bin, val, err_up, err_down, **_):
         self.df.loc[(lep, vary, variation, fitter, bin)] = [val, err_up, err_down]
@@ -1757,7 +1766,7 @@ def run(
         ### Run fit ###
         gpr_likelihood_contours(
             h_cr=h_cr, 
-            # h_data_sr=h_data_bin, 
+            h_data_sr=h_data_bin, 
             h_mc=h_mc,
             h_diboson=h_diboson_bin,
             vary_bin=bin,
