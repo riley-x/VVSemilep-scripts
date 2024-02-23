@@ -331,6 +331,14 @@ def set_sqrtn_errors(h, width_scaled=False):
         else:
             h.SetBinError(i, np.sqrt(val))
 
+def clamp_errors(h, threshold):
+    for i in range(h.GetNcells()):
+        val = h.GetBinContent(i)
+        err = h.GetBinError(i)
+        if val > 0 and err > val * threshold:
+            h.SetBinError(i, val * threshold)
+            
+
 def weighted_integral(h, x_min, x_max, weights, width_scaled=True):
     start, end = get_bin_range(h, x_min, x_max)
     assert(len(weights) == end - start)
@@ -553,7 +561,7 @@ def plot_gpr_fit(
         if h is None: continue
         h = h.Clone()
         for i in range(1, h.GetNbinsX() + 1):
-            if i < len(gpr_preds):
+            if i <= len(gpr_preds):
                 h.SetBinContent(i, h.GetBinContent(i) / gpr_preds[i - 1])
                 h.SetBinError(i, h.GetBinError(i) / gpr_preds[i - 1])
             else:
@@ -668,12 +676,12 @@ def plot_yield_scan(h_yields, marker, **kwargs):
 
 
 def plot_pf(
-    h_pf, 
-    filename='pf.png', 
-    subtitle=[], 
-    mc_yield : tuple[float, float] = None,
-    **plot_opts,
-):
+        h_pf, 
+        filename='pf.png', 
+        subtitle=[], 
+        mc_yield : tuple[float, float] = None,
+        **plot_opts,
+    ):
     '''
     Creates a graph of p(f | X,y), where f is the yield in the SR region.
 
@@ -1055,7 +1063,7 @@ def plot_postfit(h_gpr, h_data, h_ttbar, h_stop, h_diboson, filename, sr_window,
     )
     plotter1.add(
         objs=[h_gpr, h_stop, h_ttbar, h_diboson], 
-        legend=['GPR (V+jets)', 'Single top', 't#bar{t}', f'diboson (#mu={round(mu_diboson, 2)})'],
+        legend=['GPR MMLE (V+jets)', 'Single top', 't#bar{t}', f'diboson (#mu={round(mu_diboson, 2)})'],
         stack=True,
         opts='HIST',
         fillcolor=plot.colors.pastel,
@@ -1122,26 +1130,36 @@ class GPR:
     def __init__(self, version):
         self.version = version
         self.title = 'GPR'
+        self.length_scale_bounds = (10, 1e3)
+        self.noise_level_bounds = (1e-1, 1e2)
+        self.use_data_alpha = True
         if version == 'rbf':
-            rbf = RBF(length_scale=100, length_scale_bounds=(10, 1e3))
-            constant = ConstantKernel(10, (1e-1, 1e2))
+            rbf = RBF(length_scale=100, length_scale_bounds=self.length_scale_bounds)
+            constant = ConstantKernel(1, self.noise_level_bounds)
             self.kernel = constant * rbf
         elif version == 'rbf+white':
-            rbf = RBF(length_scale=100, length_scale_bounds=(10, 1e3))
-            noise = WhiteKernel(noise_level=0.01, noise_level_bounds=(1e-5, 1e2))
-            constant = ConstantKernel(10, (1e-1, 1e2))
-            self.kernel = constant * rbf + noise
+            self.use_data_alpha = False
+            self.noise_level_bounds = (1e-5, 1e2)
+            rbf = RBF(length_scale=100, length_scale_bounds=self.length_scale_bounds)
+            noise = WhiteKernel(noise_level=1, noise_level_bounds=self.noise_level_bounds)
+            self.kernel = noise + rbf
         elif version == 'matern2.5':
-            matern = Matern(length_scale=100, length_scale_bounds=(10, 1e3), nu=2.5)
-            constant = ConstantKernel(10, (1e-1, 1e2))
+            matern = Matern(length_scale=100, length_scale_bounds=self.length_scale_bounds, nu=2.5)
+            constant = ConstantKernel(1, self.noise_level_bounds)
             self.kernel = constant * matern
         else:
             raise RuntimeError(f'Unknown version {version}')
 
     def __str__(self):
-        return f'{self.gpr.kernel_}' \
-            .replace('length_scale', 'l') \
-            .replace('nu', '#nu')
+        if self.version == 'rbf+white':
+            theta = np.exp(self.gpr.kernel_.theta)
+            return f'{theta[0]**0.5:.2f}' + '^{2}#delta_{ij}' + f' + RBF(l={theta[1]:.0f})'
+        else: 
+            return f'{self.gpr.kernel_}' \
+                .replace('length_scale', 'l') \
+                .replace('nu', '#nu')
+        
+
 
     def fit(self, h, fit_range):
         ### Training data ###
@@ -1163,11 +1181,14 @@ class GPR:
         self.e_train = np.array(e_train) 
         scaler = preprocessing.StandardScaler().fit(self.y_train.reshape(-1, 1))
 
+        alpha = (self.e_train / scaler.scale_)**2
+        alpha[alpha > 0.1] = 2 / (1/alpha[alpha > 0.1] + 1/0.1) # Harmonic mean
+
         ### Gaussian process ###
         self.gpr = GaussianProcessRegressor(
             kernel=self.kernel, 
             normalize_y=True, 
-            alpha=(self.e_train / scaler.scale_) ** 2, 
+            alpha=alpha if self.use_data_alpha else 1e-10, 
             n_restarts_optimizer=4,
         )
         self.gpr.fit(self.X_train, self.y_train)
@@ -1326,11 +1347,11 @@ class ContourScanner:
 
     def scan(self):
         # These are centered on the x axis around self.scikit_int. 
-        self.h_pf = ROOT.TH1D('h_pf', '', 200, 0.8 * self.scikit_int[0], 1.2 * self.scikit_int[0]) # probability of each f value
+        self.h_pf = ROOT.TH1D('h_pf', '', 200, 0.5 * self.scikit_int[0], 1.5 * self.scikit_int[0]) # probability of each f value
         self.h_pf_1s = self.h_pf.Clone() # only scan 1 sigma range
         if self.integral_weights is not None:
             int_weighted, int_weighted_err = self.fitter.weighted_integral(self.sr_def, self.integral_weights)
-            self.h_pf_weighted = ROOT.TH1D('h_pf_weighted', '', 200, 0.8 * int_weighted, 1.2 * int_weighted)
+            self.h_pf_weighted = ROOT.TH1D('h_pf_weighted', '', 200, 0.5 * int_weighted, 1.5 * int_weighted)
 
         # Get probability integrals for use in converting p(y|theta) to p(theta|y)
         # Assume constant prior p(theta) in log theta space
@@ -1398,8 +1419,8 @@ class ContourScanner:
             print('\n\n')
             plot.warning('Scikit optimal point is different from grid search')
             print(f'    Scikit NLML: {self.scikit_nlml:6.2f}        Min NLML: {self.min_nlml:6.2f}')
-            print(f'    Scikit ell:  {self.scikit_theta[1]:6.2f}        Min ell:  {self.optimal_theta[1]:6.2f}')
-            print(f'    Scikit var:  {self.scikit_theta[0]:6.2f}        Min var:  {self.optimal_theta[0]:6.2f}')
+            print(f'    Scikit ell:  {self.scikit_theta[1]:6.2f}        Min ell:  {self.grid_opt_theta[1]:6.2f}')
+            print(f'    Scikit var:  {self.scikit_theta[0]:6.2f}        Min var:  {self.grid_opt_theta[0]:6.2f}')
             print('')
         
         ### Finalize h_pf histograms ###
@@ -1483,8 +1504,8 @@ def gpr_likelihood_contours(
         weights = None
     
     ### Scan theta ###
-    constant_factor = np.logspace(-1, 3, num=25)
-    length_scale = np.logspace(1, 3, num=25)
+    constant_factor = np.logspace(*(np.log10(x) for x in fitter.noise_level_bounds), num=25)
+    length_scale = np.logspace(*(np.log10(x) for x in fitter.length_scale_bounds), num=25)
     scanner = ContourScanner(fitter, config.sr_window, constant_factor, length_scale, integral_weights=weights)
     scanner.scan()
 
@@ -1697,7 +1718,7 @@ class FitConfig:
         out = None
         if self.var.name == "vv_m":
             if bin_y[0] > 2000:
-                out = [50, 72, 102, 150, 250]
+                out = [50, 72, 102, 150, 200, 250]
             elif bin_y[0] > 1400:
                 out = np.concatenate(([50, 60, 72, 82, 92, 102], np.arange(120, 250, 20)))
         if out is None:
@@ -1855,6 +1876,7 @@ def run(
         else:
             h_mc = None
         _, h_cr = get_sr_cr(h_vjets_bin, config.sr_window)
+        # clamp_errors(h_cr, 0.5)
 
         ### Run fit ###
         contour_scanner = gpr_likelihood_contours(

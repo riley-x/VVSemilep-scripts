@@ -208,7 +208,6 @@ def run_gpr(
         mu_ttbar=ttbar_fitter.mu_ttbar_nom[0],
         **config_base,
     )
-    config_nom = config
     gpr.run(file_manager, config, from_csv_only)
 
     ### Diboson signal strength variations ###
@@ -256,7 +255,7 @@ def run_gpr(
 
     # TODO syst variations
 
-    return config_nom, mu_diboson_corrs
+    return config, mu_diboson_corrs
     
 
 def run_channel(

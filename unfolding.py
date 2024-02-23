@@ -164,15 +164,16 @@ def get_response_matrix(h):
 def optimize_binning(
         h, fid_range,
         threshold_diag=0.7,
-        threshold_err=0.4,
+        max_mc_frac_err=0.4,
         monotonic_bin_sizes=False,
     ):
     '''
     Attempts to optimize the binning for unfolding such that migration matrix is
     well-behaved. It checks for the following conditions:
         1. The diagonal entries have at least [thresold_diag] fraction of the events.
-        2. The fractional MC stat error of the fiducial distribution < [threshold_err] in
-           each bin.
+        2. The fractional MC stat error of the fiducial distribution < [max_mc_frac_err]
+           in each bin.
+        3. The reco event count in the bin 
 
     @param h
         Input 2d histogram of fid vs reco. The y axis should be the reco distribution of a
@@ -187,6 +188,7 @@ def optimize_binning(
     i = i_start
 
     ### Denominator in truth bin ###
+    h_reco = h.ProjectionY()
     h_fid = h.ProjectionX('_px', i_start, i_end - 1) # end is inclusive :)
 
     ### Running bins ###
@@ -199,12 +201,13 @@ def optimize_binning(
         ### Find size of this bin ###
         n_tot = 0
         n_diag = 0
+        n_reco = 0
         err_tot = 0
         merge_size = 0
         while (n_diag <= 0
                or n_diag / n_tot < threshold_diag
                or (monotonic_bin_sizes and merge_size < last_merge_size)
-               or err_tot**0.5 / n_tot > threshold_err):
+               or err_tot**0.5 / n_tot > max_mc_frac_err):
             
             ### Last bin incomplete ###
             if i + merge_size >= i_end:
@@ -213,10 +216,13 @@ def optimize_binning(
                 bin_indices.pop()
                 break
 
-            ### Merge diagonal ###
-            # This is essentially adding "L" blocks 
+            ### Increase bin size by 1 fine bin ###
+            n_reco += h_reco.GetBinContent(i + merge_size)
             n_tot += h_fid.GetBinContent(i + merge_size)
             err_tot += h_fid.GetBinError(i + merge_size)**2
+
+            ### Merge diagonal ###
+            # Merge the diagonal count by essentially adding "L" blocks 
             # First add top of "L"
             for x in range(i, i + merge_size):
                 n_diag += h.GetBinContent(x, i + merge_size)
@@ -231,7 +237,7 @@ def optimize_binning(
         bin_indices.append(i)
         last_merge_size = merge_size
 
-    print('Optimized bins:', h.GetName(), [int(x) for x in bin_edges])
+    print('unfolding.py Optimized bins:', h.GetName(), [int(x) for x in bin_edges])
     return bin_edges
 
 
