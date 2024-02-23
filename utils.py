@@ -146,6 +146,7 @@ def get_bins(sample, lepton_channel : int, var: Variable):
             # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
             return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
         elif lepton_channel == 1:
+            return [700, 810, 940, 1090, 1260, 1500, 2000, 3000]
             # optimized binning with threshold_diag=0.6, threshold_err=0.4, monotonic_bin_sizes=False, 
             return [500, 690, 810, 940, 1090, 1260, 1450, 1640, 1850, 2090, 2390, 3000]
             # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False

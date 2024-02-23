@@ -1130,7 +1130,7 @@ class GPR:
     def __init__(self, version):
         self.version = version
         self.title = 'GPR'
-        self.length_scale_bounds = (10, 1e3)
+        self.length_scale_bounds = (30, 1e3)
         self.noise_level_bounds = (1e-1, 1e2)
         self.use_data_alpha = True
         if version == 'rbf':
@@ -1182,7 +1182,11 @@ class GPR:
         scaler = preprocessing.StandardScaler().fit(self.y_train.reshape(-1, 1))
 
         alpha = (self.e_train / scaler.scale_)**2
-        alpha[alpha > 0.1] = 2 / (1/alpha[alpha > 0.1] + 1/0.1) # Harmonic mean
+        # alpha = (self.e_train / scaler.scale_)
+        # mean_alpha = np.median(alpha)
+        # alpha = 2 / (1/alpha + 1/mean_alpha)
+        # alpha_max = 0.2
+        # alpha[alpha > alpha_max] = 2 / (1/alpha[alpha > alpha_max] + 1/alpha_max) # Harmonic mean
 
         ### Gaussian process ###
         self.gpr = GaussianProcessRegressor(
@@ -1717,9 +1721,9 @@ class FitConfig:
     def get_bins_x(self, bin_y):
         out = None
         if self.var.name == "vv_m":
-            if bin_y[0] > 2000:
-                out = [50, 72, 102, 150, 200, 250]
-            elif bin_y[0] > 1400:
+            if bin_y[0] >= 2000:
+                out = [50, 72, 102, 160, 200, 250]
+            elif bin_y[0] > 1000:
                 out = np.concatenate(([50, 60, 72, 82, 92, 102], np.arange(120, 250, 20)))
         if out is None:
             out = np.concatenate(([50, 53, 56, 59], np.arange(62, 250, 5)))
@@ -1727,22 +1731,11 @@ class FitConfig:
 
     def get_bins_y(self):
         return utils.get_bins(sample=None, lepton_channel=self.lepton_channel, var=self.var)
-        
-        if self.var.name == "vv_m":
-            if self.lepton_channel == 0:
-                return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
-            elif self.lepton_channel == 1:
-                return [500, 740, 920, 1140, 1410, 1700, 2080, 3000]
-            elif self.lepton_channel == 2:
-                return [500, 580, 680, 780, 900, 1050, 1220, 1410, 1680, 1910, 2210, 3000]
-        elif self.var.name == "fatjet_pt":
-            return [300, 330, 370, 410, 450, 500, 3000]
-        raise NotImplementedError(f'get_bins_y() {self.var} {self.lepton_channel}')
 
     def get_fit_range(self, bin_y):
-        if self.var.name == "vv_m" and bin_y[0] > 2000:
-            return (50, 250)
-        return (50, 180)
+        # if self.var.name == "vv_m" and bin_y[0] > 1400:
+        #     return (50, 250)
+        return (50, 160)
 
 
 ##########################################################################################
@@ -1893,9 +1886,12 @@ def run(
         ### Postfit plot ###
         if h_data:
             contour_scanner.fitter.refit(contour_scanner.scikit_theta)
-            for i,x in enumerate(bins_x):
-                if x >= config.get_fit_range(bin_y)[1]:
+            fit_range = config.get_fit_range(bin_y)
+            i = 0
+            for x in bins_x:
+                if x > fit_range[1]:
                     break
+                i += 1
             bins = bins_x[:i]
             h_gpr = contour_scanner.fitter.create_hist(bins)
             plot_postfit(
