@@ -1697,14 +1697,14 @@ class FitConfig:
         self.var = var
         self.variation = variation
         self.use_vjets_mc = use_vjets_mc
-        self.output_dir = output_dir
+        self.output_root = output_dir
         self.gpr_version = gpr_version
         self.sr_window = sr_window
         self.mu_stop = mu_stop
         self.mu_ttbar = mu_ttbar
 
         ### Outputs ###
-        self.output_dir += f'/{lepton_channel}lep/{var}/{variation}'
+        self.output_dir = f'{output_dir}/{lepton_channel}lep/{var}/{variation}'
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
         self.fit_results = FitResults(f'{output_dir}/gpr_fit_results.csv') # original output_dir
@@ -1786,7 +1786,7 @@ def summary_actions_from_csv(config : FitConfig):
     )
 
     ### Save output histogram ###
-    f_output = ROOT.TFile(f'{config.output_dir}/gpr_{config.lepton_channel}lep_vjets_yield.root', 'UPDATE')
+    f_output = ROOT.TFile(f'{config.output_root}/gpr_{config.lepton_channel}lep_vjets_yield.root', 'UPDATE')
     
     h = config.fit_results.get_histogram(
         **csv_base_spec, 

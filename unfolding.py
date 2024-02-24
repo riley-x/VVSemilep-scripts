@@ -270,6 +270,7 @@ def plot_migration_matrix(mtx, var, **kwargs):
         opts='COLZ TEXT',
         **kwargs,
     )
+    ROOT.gStyle.SetPalette(ROOT.kBird)
 
 
 def plot_eff_acc(mtx, var, **kwargs):

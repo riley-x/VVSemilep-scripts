@@ -256,6 +256,10 @@ def run_gpr(
 
     # TODO syst variations
 
+
+    ### Create histograms for ResonanceFinder ###
+    
+
     return config, mu_diboson_corrs
     
 
@@ -271,14 +275,14 @@ def run_channel(
     vars = [utils.Variable.vv_m]
 
     ### Generate response matricies ###
-    # plot.notice(f'{log_base} creating response matrix')
-    # response_matrix_filepath = unfolding.main(
-    #     file_manager=file_manager,
-    #     sample=utils.Sample.diboson,
-    #     lepton_channel=lepton_channel,
-    #     output=f'{args.output}/response_matrix',
-    #     vars=vars,
-    # )
+    plot.notice(f'{log_base} creating response matrix')
+    response_matrix_filepath = unfolding.main(
+        file_manager=file_manager,
+        sample=utils.Sample.diboson,
+        lepton_channel=lepton_channel,
+        output=f'{output_dir}/response_matrix',
+        vars=vars,
+    )
 
     ### Run GPR fit ###
     for var in vars:
