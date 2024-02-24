@@ -209,6 +209,7 @@ def run_gpr(
         **config_base,
     )
     gpr.run(file_manager, config, from_csv_only)
+    # raise RuntimeError('asdf')
 
     ### Diboson signal strength variations ###
     mu_diboson_points = [0.9, 0.95, 1.05, 1.1]

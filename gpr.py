@@ -1722,9 +1722,9 @@ class FitConfig:
         out = None
         if self.var.name == "vv_m":
             if bin_y[0] >= 2000:
-                out = [50, 60, 72, 102, 130, 160, 200, 250]
+                out = [50, 72, 102, 150, 200, 250]
             elif bin_y[0] > 1000:
-                out = np.concatenate(([50, 60, 72, 82, 92, 102], np.arange(120, 250, 20)))
+                out = [50, 55, 60, 66, 72, 82, 92, 102, 125, 150, 175, 200, 250]
         if out is None:
             out = np.concatenate(([50, 53, 56, 59], np.arange(62, 250, 5)))
         return np.array(out, dtype=float)
@@ -1735,7 +1735,7 @@ class FitConfig:
     def get_fit_range(self, bin_y):
         # if self.var.name == "vv_m" and bin_y[0] >= 2000:
         #     return (50, 250)
-        return (50, 160)
+        return (50, 250)
 
 
 ##########################################################################################
