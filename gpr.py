@@ -1185,8 +1185,8 @@ class GPR:
         # alpha = (self.e_train / scaler.scale_)
         # mean_alpha = np.median(alpha)
         # alpha = 2 / (1/alpha + 1/mean_alpha)
-        # alpha_max = 0.2
-        # alpha[alpha > alpha_max] = 2 / (1/alpha[alpha > alpha_max] + 1/alpha_max) # Harmonic mean
+        alpha_max = 0.2
+        alpha[alpha > alpha_max] = 2 / (1/alpha[alpha > alpha_max] + 1/alpha_max) # Harmonic mean
 
         ### Gaussian process ###
         self.gpr = GaussianProcessRegressor(
@@ -1722,7 +1722,7 @@ class FitConfig:
         out = None
         if self.var.name == "vv_m":
             if bin_y[0] >= 2000:
-                out = [50, 72, 102, 160, 200, 250]
+                out = [50, 60, 72, 102, 130, 160, 200, 250]
             elif bin_y[0] > 1000:
                 out = np.concatenate(([50, 60, 72, 82, 92, 102], np.arange(120, 250, 20)))
         if out is None:
@@ -1733,7 +1733,7 @@ class FitConfig:
         return utils.get_bins(sample=None, lepton_channel=self.lepton_channel, var=self.var)
 
     def get_fit_range(self, bin_y):
-        # if self.var.name == "vv_m" and bin_y[0] > 1400:
+        # if self.var.name == "vv_m" and bin_y[0] >= 2000:
         #     return (50, 250)
         return (50, 160)
 
@@ -1869,7 +1869,6 @@ def run(
         else:
             h_mc = None
         _, h_cr = get_sr_cr(h_vjets_bin, config.sr_window)
-        # clamp_errors(h_cr, 0.5)
 
         ### Run fit ###
         contour_scanner = gpr_likelihood_contours(
