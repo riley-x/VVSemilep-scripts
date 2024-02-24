@@ -1730,7 +1730,7 @@ class FitConfig:
         return np.array(out, dtype=float)
 
     def get_bins_y(self):
-        return utils.get_bins(sample=None, lepton_channel=self.lepton_channel, var=self.var)
+        return utils.get_bins(lepton_channel=self.lepton_channel, var=self.var)
 
     def get_fit_range(self, bin_y):
         # if self.var.name == "vv_m" and bin_y[0] >= 2000:
@@ -1916,7 +1916,7 @@ def run(
 
 def parse_args():
     parser = ArgumentParser(
-        description="Plots the migration matrix, efficiency and fiducial accuracy. Saves the response matrix as histograms for use in ResonanceFinder.", 
+        description="", 
         formatter_class=ArgumentDefaultsHelpFormatter
     )
     parser.add_argument('filepaths', nargs='+')

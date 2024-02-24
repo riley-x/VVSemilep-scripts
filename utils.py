@@ -141,7 +141,7 @@ Sample.data = Sample('data', 'data', ['data', 'data15', 'data16', 'data17', 'dat
 #########################################################################################
 
 
-def get_bins(sample, lepton_channel : int, var: Variable):
+def get_bins(lepton_channel : int, var: Variable):
     if var.name == "vv_m":
         if lepton_channel == 0:
             # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
@@ -163,7 +163,7 @@ def get_bins(sample, lepton_channel : int, var: Variable):
             # optimized binning with threshold_diag=0.8, threshold_err=0.4, monotonic_bin_sizes=True
             return [300, 360, 460, 580, 730, 940, 1200, 1460, 3000]
 
-    raise NotImplementedError(f"utils.py::get_bins({sample}, {lepton_channel}, {var.name})")
+    raise NotImplementedError(f"utils.py::get_bins({lepton_channel}, {var.name})")
 
 
 
@@ -299,6 +299,15 @@ class FileManager:
                 else:
                     h_out.Add(h)
         return h_out
+    
+    def get_file_names(self, lep : int, sample : Union[str, Sample], hist_name_format : str) -> list[str]:
+        '''
+        Returns the list of files matching this (lep, sample).
+        '''
+        if isinstance(sample, str):
+            sample = self.samples[sample]
+        files = self.files[(lep, sample.name)]
+        return [file.GetName() for file in files]
     
     def get_hist_all_samples(self, lep : int, hist_name_format : str) -> dict[str, ROOT.TH1F]:
         '''

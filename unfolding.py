@@ -364,7 +364,7 @@ def main(
         if optimization_range:
             bins = optimize_binning(mtx, optimization_range)
         else:
-            bins = utils.get_bins(sample, lepton_channel, var)
+            bins = utils.get_bins(lepton_channel, var)
         mtx = plot.rebin2d(mtx, bins, bins)
     
         ### Plot ###
