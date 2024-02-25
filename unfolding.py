@@ -387,8 +387,12 @@ def main(
         ### Save ###
         reponse_matrix = get_response_matrix(mtx)
         for x in range(1, reponse_matrix.GetNbinsX() + 1):
-            p = reponse_matrix.ProjectionY(reponse_matrix.GetName() + f'_projY_{x}', x, x)
-            p.Write(f'ResponseMatrix_{var}_fid' + str(x).rjust(2, '0'))
+            name = f'ResponseMatrix_{var}_fid' + str(x).rjust(2, '0')
+            p = reponse_matrix.ProjectionY(name, x, x)
+            # Need to convert TH1D to TH1F for ResonanceFinder!!!! Or else it death spirals :)
+            h = ROOT.TH1F(f'temp_{var}_{x}', '', 1, 0, 1)
+            p.Copy(h) # Yes, this is the correct syntax. Physicists are awesome.
+            h.Write()
     
     plot.success(f'Saved response matrix histograms to {rf_output_path}')
     return rf_output_path

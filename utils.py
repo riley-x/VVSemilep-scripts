@@ -176,6 +176,9 @@ variations_custom = [
     'mu-ttbar',
     'mu-stop',
 ]
+variations_hist = [
+
+]
 
 def is_histo_syst(x):
     if x == variation_nom: return False

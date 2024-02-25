@@ -7,7 +7,6 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import utils
 
-
 def run(
         file_manager : utils.FileManager,
         lepton_channel : int,
@@ -27,6 +26,9 @@ def run(
     VVUnfold = RF.DefaultAnalysisRunner(analysis)
     VVUnfold.setOutputDir(output_dir + '/rf')
     VVUnfold.setOutputWSTag(outputWSTag)
+    # VVUnfold.setCollectionTagNominal("")
+    # VVUnfold.setCollectionTagUp("_up")
+    # VVUnfold.setCollectionTagDown("_down")
 
     ### Single region ###
     region = "SR"
@@ -50,6 +52,8 @@ def run(
     sample.multiplyBy('mu-ttbar', mu_ttbar[0], mu_ttbar[0] - mu_ttbar[1], mu_ttbar[0] + mu_ttbar[1], RF.MultiplicativeFactor.GAUSSIAN)
     sample.multiplyBy('lumiNP',  1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
     sample.setUseStatError(True)
+    for variation in utils.variations_hist:
+        sample.addVariation(variation)
 
     ### Add stop ###
     file_names = file_manager.get_file_names(lepton_channel, utils.Sample.stop)
@@ -59,22 +63,29 @@ def run(
     sample.multiplyBy('mu-stop', mu_stop[0], mu_stop[0] - mu_stop[1], mu_stop[0] + mu_stop[1], RF.MultiplicativeFactor.GAUSSIAN)
     sample.multiplyBy('lumiNP',  1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
     sample.setUseStatError(True)
+    for variation in utils.variations_hist:
+        sample.addVariation(variation)
 
     ### Add GPR ###
-    VVUnfold.channel(region).addSample('vjets', output_dir + '/gpr/gpr_' + str(lepton_channel) + 'lep_vjets_yield.root')
+    VVUnfold.channel(region).addSample('vjets', output_dir + f'/gpr/gpr_{lepton_channel}lep_vjets_yield.root')
     sample = VVUnfold.channel(region).sample('vjets')
     sample.setSearchStrings('Vjets_SR_' + variable.name)
     sample.setUseStatError(True)
 
+    for variation in utils.variations_custom:
+        sample.addVariation(variation)
+    for variation in utils.variations_hist:
+        sample.addVariation(variation)
+
     ### Add signals ###
-    for i in range(1, len(bins) + 1):
+    for i in range(1, len(bins)):
         i_str = str(i).rjust(2, '0')
         sigName = "bin" + i_str
         poiName = "mu_" + i_str
 
-        VVUnfold.channel(region).addSample(sigName, response_matrix_path, "ResponseMatrix_fid" + i_str)
+        VVUnfold.channel(region).addSample(sigName, response_matrix_path, f'ResponseMatrix_{variable}_fid{i_str}')
         VVUnfold.channel(region).sample(sigName).multiplyBy(poiName, 0, 0, 1e6)
-        VVUnfold.defineSignal(VVUnfold.channel(region).sample(sigName), "Unfold")
+        VVUnfold.defineSignal(VVUnfold.channel(region).sample(sigName), 'Unfold')
         VVUnfold.addPOI(poiName)
 
     ### Make workspace ###
@@ -125,7 +136,7 @@ def main():
         lepton_channel=args.lepton,
         variable=var,
         bins=utils.get_bins(args.lepton, var),
-        response_matrix_path=args.output + '/response_matrix/diboson_' + str(args.lepton) + 'lep_rf_histograms.root',
+        response_matrix_path=f'{args.output}/response_matrix/diboson_{args.lepton}lep_rf_histograms.root',
         output_dir=args.output,
         mu_stop=(1, 0.2),
         mu_ttbar=(0.72, 0.03),

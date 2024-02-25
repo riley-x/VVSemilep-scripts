@@ -1788,10 +1788,16 @@ def summary_actions_from_csv(config : FitConfig):
     ### Save output histogram ###
     f_output = ROOT.TFile(f'{config.output_root}/gpr_{config.lepton_channel}lep_vjets_yield.root', 'UPDATE')
     
+    # This naming convention is pretty important to match that in the CxAODReader outputs
+    # Since ResonanceFinder uses the same convention for ALL samples.
+    if config.variation == utils.variation_nom:
+        histname = f'Vjets_SR_{config.var}'
+    else:
+        histname = f'Vjets_SR_{config.var}__{config.variation}'
     h = config.fit_results.get_histogram(
         **csv_base_spec, 
         fitter=config.gpr_version + '_marg_post', 
-        histname=f'Vjets_SR_{config.var}_{config.variation}',
+        histname=histname,
     )
     h.Write()
 
