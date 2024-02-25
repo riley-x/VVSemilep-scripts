@@ -300,7 +300,7 @@ class FileManager:
                     h_out.Add(h)
         return h_out
     
-    def get_file_names(self, lep : int, sample : Union[str, Sample], hist_name_format : str) -> list[str]:
+    def get_file_names(self, lep : int, sample : Union[str, Sample]) -> list[str]:
         '''
         Returns the list of files matching this (lep, sample).
         '''
