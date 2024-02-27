@@ -197,34 +197,41 @@ def plot_pre_plu_fit(
     h_gpr = f_gpr.Get('Vjets_SR_' + variable.name)
         
     hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lepton_channel).name
+    h_diboson = file_manager.get_hist(lepton_channel, utils.Sample.diboson, hist_name)
     h_ttbar = file_manager.get_hist(lepton_channel, utils.Sample.ttbar, hist_name)
     h_stop = file_manager.get_hist(lepton_channel, utils.Sample.stop, hist_name)
     h_data = file_manager.get_hist(lepton_channel, utils.Sample.data, hist_name)
 
     bins = utils.get_bins(lepton_channel, variable)
+    h_diboson = plot.rebin(h_diboson, bins)
     h_ttbar = plot.rebin(h_ttbar, bins)
     h_stop = plot.rebin(h_stop, bins)
     h_data = plot.rebin(h_data, bins)
 
-    h_stop.Scale(mu_stop[0])
     h_ttbar.Scale(mu_ttbar[0])
+    h_stop.Scale(mu_stop[0])
 
     h_sum = h_gpr.Clone()
+    h_sum.Add(h_diboson)
     h_sum.Add(h_ttbar)
     h_sum.Add(h_stop)
 
     h_ratio = h_data.Clone()
+    h_errs = h_sum.Clone()
     h_ratio.Divide(h_sum)
+    h_errs.Divide(h_sum)
+
 
     ### Plot ###
     pads = plot.RatioPads(**plot_opts)
     plotter1 = pads.make_plotter1(
-        ytitle='Events / GeV',
+        ytitle='Events',
+        logy=True,
         **plot_opts,
     )
     plotter1.add(
-        objs=[h_gpr, h_stop, h_ttbar], 
-        legend=['GPR MMLE (V+jets)', 'Single top', 't#bar{t}'],
+        objs=[h_gpr, h_ttbar, h_stop, h_diboson], 
+        legend=['GPR (V+jets)', 't#bar{t}', 'Single top', 'Diboson'],
         stack=True,
         opts='HIST',
         fillcolor=plot.colors.pastel,
@@ -250,8 +257,18 @@ def plot_pre_plu_fit(
 
     ### Subplot ###
     plotter2 = pads.make_plotter2(
-        ytitle='Data / Fit',
+        ytitle='Data / Bkgs',
         xtitle='m(J) [GeV]',
+        ignore_outliers_y=False,
+    )
+    plotter2.add(
+        objs=[h_errs],
+        fillcolor=plot.colors.gray,
+        fillstyle=3145,
+        linewidth=0,
+        markerstyle=0,
+        opts='E2',
+        legend=None,
     )
     plotter2.add(
         objs=[h_ratio],
@@ -457,7 +474,7 @@ def run_channel(
             filename=f'{output_dir}/{lepton_channel}lep_{var}_yields',
             subtitle=[
                 '#sqrt{s}=13 TeV, 140 fb^{-1}',
-                f'{lepton_channel}-lepton channel',
+                f'{lepton_channel}-lepton channel prefit',
             ],
             xtitle=f'{var:title}',
         )
@@ -470,6 +487,10 @@ def run_channel(
             mu_stop=mu_stop,
             mu_ttbar=ttbar_fitter.mu_ttbar_nom,
             output_dir=output_dir,
+            subtitle=[
+                '#sqrt{s}=13 TeV, 140 fb^{-1}',
+                f'{lepton_channel}-lepton channel',
+            ],
         )
 
         ### Profile likelihood unfolding fit ###

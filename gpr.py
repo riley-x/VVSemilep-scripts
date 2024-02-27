@@ -457,7 +457,7 @@ class FitResults:
 
         if unscale_width:
             w = bin_edges[1] - bin_edges[0]
-            return [x * w for x in out]
+            return out * w
         return out
 
     def set_entry(self, lep, vary, variation, fitter, bin, val, err_up, err_down, **_):
@@ -474,7 +474,7 @@ class FitResults:
         h = ROOT.TH1F(histname, histname, len(bins_float) - 1, bins_float)
         for i in range(len(bins) - 1):
             bin = f'{bins[i]},{bins[i+1]}'
-            entry = self.get_entry(lep, vary, variation, fitter, bin)
+            entry = self.get_entry(lep, vary, variation, fitter, bin, unscale_width=True)
             h.SetBinContent(i + 1, entry['val'])
             h.SetBinError(i + 1, (entry['err_up'] + entry['err_down']) / 2)
             # I don't think ResonanceFinder can handle a TGraphAsymmErrors so we have to
