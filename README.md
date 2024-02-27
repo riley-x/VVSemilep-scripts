@@ -4,7 +4,19 @@ This repository contains many post-scripts related to the VV Semileptonic analys
 
 ## Setup
 
-On Tier 3 systems, the below should setup all the necessary python packages. 
+To install, simple call
+```sh
+git clone --recursive git@github.com:riley-x/VVSemilep-scripts.git
+```
+Note that this submodules the private [ResonanceFinder](https://gitlab.cern.ch/atlas-phys/exot/dbl/ResonanceFinder) repo. If you don't have access, simple init the `plotting` submodule manually instead of using the `--recursive` flag above.
+
+If you have access to ResonanceFinder, you can simply set it up with
+```sh
+cd ResonanceFinder
+. setup_RF.sh
+```
+which includes all the necessary python packages, and also compiles ResonanceFinder. 
+Otherwise, if you're on Tier 3 systems, the below should setup all the necessary python packages. 
 ```sh
 setupATLAS
 lsetup "root recommended"

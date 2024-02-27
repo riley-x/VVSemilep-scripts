@@ -3,19 +3,19 @@
 set -e
 set -u
 
-mode="$1"
-ws_path="$2"
+ws_path="$1"
+mode="$2"
 
-if [ "$1" = "fits" ]; then
+if [ "$mode" = "fits" ]; then
     cd ResonanceFinder/NPCheck
     ./runFitCrossCheck.py "$wsNPPath"
     cd ../..
-elif [ "$1" = "pulls" ]; then
+elif [ "$mode" = "pulls" ]; then
     # this requires the fits to be run first, uses default path fccs/FitCrossChecks.root
     cd ResonanceFinder/NPCheck
     root drawPullPlot.C
     cd ../..
 else
-    echo "$0 unknown mode: $1"
+    echo "$0 unknown mode: $mode"
     exit 1
 fi

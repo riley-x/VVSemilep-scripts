@@ -387,6 +387,7 @@ def run_channel(
             # really important this import is here otherwise segfaults occur, due to
             # the `from ROOT import RF` line I think.
             import rf_plu 
+            import subprocess
             ws_path = rf_plu.run(
                 lepton_channel=lepton_channel,
                 variable=var,
@@ -398,6 +399,8 @@ def run_channel(
                 mu_ttbar=ttbar_fitter.mu_ttbar_nom,
             )
             ws_path = os.path.abspath(ws_path)
+            res = subprocess.run(['./npcheck.sh', ws_path, 'fits']) # the './' is necessary!
+            res.check_returncode()
         except Exception as e:
             plot.warning(str(e))
         
