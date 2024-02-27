@@ -263,6 +263,37 @@ def run_gpr(
     return config, mu_diboson_corrs
     
 
+def save_rebinned_histograms(
+        file_manager : utils.FileManager, 
+        lepton_channel : int,
+        output_dir : str,
+        variables : list[utils.Variable],
+    ):
+
+    output_files = {}
+    def file(sample):
+        if sample not in output_files:
+            output_files[sample] = ROOT.TFile(f'{output_dir}/{lepton_channel}lep_{sample}_rebin.root', 'RECREATE')
+        return output_files[sample]
+
+
+    for variable in variables:
+        bins = utils.get_bins(lepton_channel, variable)
+        bins = np.array(bins, dtype=float)
+        for variation in utils.variations_hist:
+            hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lepton_channel).name
+            hist_name = utils.hist_name_variation(hist_name, variation)
+
+            hists = file_manager.get_hist_all_samples(lepton_channel, hist_name)
+            for sample,hist in hists.items():
+                hist = plot.rebin(hist, bins)
+                hist.SetName(hist_name.format(sample=sample))
+
+                f = file(sample)
+                f.cd()
+                hist.Write()
+            
+
 def run_channel(
         file_manager : utils.FileManager, 
         lepton_channel : int,
@@ -282,6 +313,11 @@ def run_channel(
         lepton_channel=lepton_channel,
         output=f'{output_dir}/response_matrix',
         vars=vars,
+    )
+
+    ### Rebin reco histograms ###
+    save_rebinned_histograms(
+        output_dir=output_dir,
     )
 
     ### Run GPR fit ###
