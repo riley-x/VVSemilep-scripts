@@ -8,7 +8,12 @@ mode="$2"
 
 if [ "$mode" = "fits" ]; then
     cd ResonanceFinder/NPCheck
-    ./runFitCrossCheck.py "$wsNPPath"
+    ./runFitCrossCheck.py "$ws_path"
+    cd ../..
+elif [ "$mode" = "drawFit" ]; then
+    # this requires the fits to be run first, uses default path fccs/FitCrossChecks.root
+    cd ResonanceFinder/NPCheck
+    ./runDrawFit.py "$ws_path" --mu 1 --doPostfit
     cd ../..
 elif [ "$mode" = "pulls" ]; then
     # this requires the fits to be run first, uses default path fccs/FitCrossChecks.root

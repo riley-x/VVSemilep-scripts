@@ -384,10 +384,14 @@ def run_channel(
         ### Profile likelihood unfolding fit ###
         os.makedirs(f'{output_dir}/rf', exist_ok=True)
         try:
-            # really important this import is here otherwise segfaults occur, due to
-            # the `from ROOT import RF` line I think.
+            ### Create RF workspace ###
+            # Really important this import is here otherwise segfaults occur, due to the
+            # `from ROOT import RF` line I think. But somehow hiding it here is fine.
             import rf_plu 
             import subprocess
+            import shutil
+
+            plot.notice(f'{log_base} creating ResonanceFinder workspace')
             ws_path = rf_plu.run(
                 lepton_channel=lepton_channel,
                 variable=var,
@@ -399,8 +403,29 @@ def run_channel(
                 mu_ttbar=ttbar_fitter.mu_ttbar_nom,
             )
             ws_path = os.path.abspath(ws_path)
-            res = subprocess.run(['./npcheck.sh', ws_path, 'fits']) # the './' is necessary!
+
+            ### Run fits ###
+            plot.notice(f'{log_base} running PLU fits')
+            npcheck_dir = 'ResonanceFinder/NPCheck'
+            res = subprocess.run(['./runFitCrossCheck.py', ws_path], cwd=npcheck_dir) # the './' is necessary!
             res.check_returncode()
+
+            ### Draw fit ###
+            plot.notice(f'{log_base} drawing PLU fits')
+            res = subprocess.run(
+                ['./runDrawFit.py', ws_path, 
+                    '--mu', '1', 
+                    '--fccs', 'fccs/FitCrossChecks.root'
+                ], 
+                cwd=npcheck_dir
+            )
+            res.check_returncode()
+            npcheck_output_path = f'{npcheck_dir}/Plots/PostFit/summary_postfit_doAsimov0_doCondtional0_mu1.pdf'
+            target_path = f'{output_dir}/rf/postfit.pdf'
+            shutil.copyfile(npcheck_output_path, target_path)
+
+            print(res.stdout)
+
         except Exception as e:
             plot.warning(str(e))
         
