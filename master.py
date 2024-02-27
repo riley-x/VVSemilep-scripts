@@ -182,6 +182,87 @@ def plot_diboson_yield(h_fit, h_mc, **plot_opts):
         **plot_opts,
     )
 
+
+def plot_pre_plu_fit(
+        file_manager : utils.FileManager, 
+        lepton_channel : int,
+        variable : utils.Variable,
+        mu_stop : tuple[float, float],
+        mu_ttbar : tuple[float, float],
+        output_dir : str,
+        **plot_opts,
+    ):
+    ### Get hists ###
+    f_gpr = ROOT.TFile(f'{output_dir}/gpr/gpr_{lepton_channel}lep_vjets_yield.root')
+    h_gpr = f_gpr.Get('Vjets_SR_' + variable.name)
+        
+    hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lepton_channel).name
+    h_ttbar = file_manager.get_hist(lepton_channel, utils.Sample.ttbar, hist_name)
+    h_stop = file_manager.get_hist(lepton_channel, utils.Sample.stop, hist_name)
+    h_data = file_manager.get_hist(lepton_channel, utils.Sample.data, hist_name)
+
+    bins = utils.get_bins(lepton_channel, variable)
+    h_ttbar = plot.rebin(h_ttbar, bins)
+    h_stop = plot.rebin(h_stop, bins)
+    h_data = plot.rebin(h_data, bins)
+
+    h_stop.Scale(mu_stop[0])
+    h_ttbar.Scale(mu_ttbar[0])
+
+    h_sum = h_gpr.Clone()
+    h_sum.Add(h_ttbar)
+    h_sum.Add(h_stop)
+
+    h_ratio = h_data.Clone()
+    h_ratio.Divide(h_sum)
+
+    ### Plot ###
+    pads = plot.RatioPads(**plot_opts)
+    plotter1 = pads.make_plotter1(
+        ytitle='Events / GeV',
+        **plot_opts,
+    )
+    plotter1.add(
+        objs=[h_gpr, h_stop, h_ttbar], 
+        legend=['GPR MMLE (V+jets)', 'Single top', 't#bar{t}'],
+        stack=True,
+        opts='HIST',
+        fillcolor=plot.colors.pastel,
+        linewidth=1,
+    )
+    plotter1.add(
+        objs=[h_sum],
+        fillcolor=plot.colors.gray,
+        fillstyle=3145,
+        linewidth=0,
+        markerstyle=0,
+        opts='E2',
+        legend_opts='F',
+        legend=['GPR err + MC stat'],
+    )
+    plotter1.add(
+        objs=[h_data],
+        legend=['Data'],
+        opts='PE',
+        legend_opts='PEL',
+    )
+    plotter1.draw()
+
+    ### Subplot ###
+    plotter2 = pads.make_plotter2(
+        ytitle='Data / Fit',
+        xtitle='m(J) [GeV]',
+    )
+    plotter2.add(
+        objs=[h_ratio],
+        opts='PE',
+        legend=None,
+    )
+    plotter2.draw()
+    plotter2.draw_hline(1, ROOT.kDashed)
+
+    plot.save_canvas(pads.c, f'{output_dir}/{lepton_channel}lep_{variable}_plu_prefit')
+
 ##########################################################################################
 ###                                         RUN                                        ###
 ##########################################################################################
@@ -380,6 +461,16 @@ def run_channel(
             ],
             xtitle=f'{var:title}',
         )
+    
+        ### Prefit plot (pre-PLU but using GPR) ###
+        plot_pre_plu_fit(
+            file_manager=file_manager,
+            lepton_channel=lepton_channel,
+            variable=var,
+            mu_stop=mu_stop,
+            mu_ttbar=ttbar_fitter.mu_ttbar_nom,
+            output_dir=output_dir,
+        )
 
         ### Profile likelihood unfolding fit ###
         os.makedirs(f'{output_dir}/rf', exist_ok=True)
@@ -417,7 +508,7 @@ def run_channel(
                     '--mu', '1', 
                     '--fccs', 'fccs/FitCrossChecks.root'
                 ], 
-                cwd=npcheck_dir
+                cwd=npcheck_dir,
             )
             res.check_returncode()
             npcheck_output_path = f'{npcheck_dir}/Plots/PostFit/summary_postfit_doAsimov0_doCondtional0_mu1.pdf'

@@ -1,4 +1,5 @@
 #!/bin/bash
+# Run commands for NPCheck postscripts. 
 
 set -e
 set -u
@@ -13,7 +14,7 @@ if [ "$mode" = "fits" ]; then
 elif [ "$mode" = "drawFit" ]; then
     # this requires the fits to be run first, uses default path fccs/FitCrossChecks.root
     cd ResonanceFinder/NPCheck
-    ./runDrawFit.py "$ws_path" --mu 1 --doPostfit
+    ./runDrawFit.py "$ws_path" --mu 1 --fccs 'fccs/FitCrossChecks.root'
     cd ../..
 elif [ "$mode" = "pulls" ]; then
     # this requires the fits to be run first, uses default path fccs/FitCrossChecks.root
