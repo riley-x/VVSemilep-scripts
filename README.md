@@ -10,13 +10,18 @@ git clone --recursive git@github.com:riley-x/VVSemilep-scripts.git
 ```
 Note that this submodules the private [ResonanceFinder](https://gitlab.cern.ch/atlas-phys/exot/dbl/ResonanceFinder) repo. If you don't have access, simple init the `plotting` submodule manually instead of using the `--recursive` flag above.
 
-If you have access to ResonanceFinder, you can simply set it up with
+Setup using
+```sh
+. setup.sh
+```
+This does one of two things: if you have access to ResonanceFinder, it sets it up via 
 ```sh
 cd ResonanceFinder
 . setup_RF.sh
+cd ..
 ```
-which includes all the necessary python packages, and also compiles ResonanceFinder. 
-Otherwise, if you're on Tier 3 systems, the below should setup all the necessary python packages. 
+which includes all the necessary python packages, and also compiles (initially) ResonanceFinder. 
+Otherwise (assuming you're on Tier 3 systems), it will call 
 ```sh
 setupATLAS
 lsetup "root recommended"
