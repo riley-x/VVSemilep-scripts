@@ -1,25 +1,29 @@
 #!/usr/bin/env python
 import ROOT
-from ROOT import RF
 
 import numpy as np
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+import shutil
+import sys
 
 import utils
+from plotting import plot
 
 def run(
-        file_manager : utils.FileManager,
         lepton_channel : int,
         variable : utils.Variable,
-        bins : list[float],
+        nbins : int,
         response_matrix_path : str,
         output_dir : str,
+        hist_file_format : str,
         mu_stop : tuple[float, float],
         mu_ttbar : tuple[float, float],
     ):
+    from ROOT import RF
+
     ### Config ###
     analysis = 'VVUnfold'
-    outputWSTag = 'test'
+    outputWSTag = 'feb24'
     lumi_uncert = 0.017
   
     ### Define the workspace ###
@@ -40,13 +44,11 @@ def run(
     # WARNING this assumes each sample is in separate files!
 
     ### Add data ###
-    file_names = file_manager.get_file_names(lepton_channel, utils.Sample.data)
-    VVUnfold.channel(region).addData('data', file_names)
+    VVUnfold.channel(region).addData('data', hist_file_format.format(sample='data'))
     VVUnfold.channel(region).data().setSearchStrings(hist_name)
 
     ### Add ttbar ###
-    file_names = file_manager.get_file_names(lepton_channel, utils.Sample.ttbar)
-    VVUnfold.channel(region).addSample('ttbar', file_names)
+    VVUnfold.channel(region).addSample('ttbar', hist_file_format.format(sample='data'))
     sample = VVUnfold.channel(region).sample('ttbar')
     sample.setSearchStrings(hist_name)
     sample.multiplyBy('mu-ttbar', mu_ttbar[0], mu_ttbar[0] - mu_ttbar[1], mu_ttbar[0] + mu_ttbar[1], RF.MultiplicativeFactor.GAUSSIAN)
@@ -56,8 +58,7 @@ def run(
         sample.addVariation(variation)
 
     ### Add stop ###
-    file_names = file_manager.get_file_names(lepton_channel, utils.Sample.stop)
-    VVUnfold.channel(region).addSample('stop', file_names)
+    VVUnfold.channel(region).addSample('stop', hist_file_format.format(sample='stop'))
     sample = VVUnfold.channel(region).sample('stop')
     sample.setSearchStrings(hist_name)
     sample.multiplyBy('mu-stop', mu_stop[0], mu_stop[0] - mu_stop[1], mu_stop[0] + mu_stop[1], RF.MultiplicativeFactor.GAUSSIAN)
@@ -78,7 +79,7 @@ def run(
         sample.addVariation(variation)
 
     ### Add signals ###
-    for i in range(1, len(bins)):
+    for i in range(1, nbins + 1):
         i_str = str(i).rjust(2, '0')
         sigName = "bin" + i_str
         poiName = "mu_" + i_str
@@ -94,6 +95,19 @@ def run(
     VVUnfold.debugPlots(True)
     VVUnfold.produceWS()
 
+    ### Copy back ###
+    rf_output_path = f'{output_dir}/rf/ws/VVUnfold_'
+    for i in range(1, nbins + 1):
+        if i > 1:
+            rf_output_path += '-'
+        rf_output_path += 'bin' + str(i).rjust(2, '0')
+    rf_output_path += f'_{outputWSTag}.root'
+
+    target_path = f'{output_dir}/rf/plu_ws.root'
+    shutil.copyfile(rf_output_path, target_path)
+    plot.success(f'Created PLU workspace at {target_path}')
+    return target_path
+
 ##########################################################################################
 ###                                        MAIN                                        ###
 ##########################################################################################
@@ -103,41 +117,25 @@ def parse_args():
         description="", 
         formatter_class=ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('filepaths', nargs='+')
     parser.add_argument("--lepton", required=True, type=int, choices=[0, 1, 2])
     parser.add_argument("--var", required=True, help='Variable to fit against; this must be present in the utils.py module.')
     parser.add_argument('-o', '--output', default='./output')
     return parser.parse_args()
 
 
-def get_files(filepaths):
-    file_manager = utils.FileManager(
-        samples=[
-            utils.Sample.wjets,
-            utils.Sample.zjets,
-            utils.Sample.ttbar,
-            utils.Sample.stop,
-            utils.Sample.diboson,
-            utils.Sample.data,
-        ],
-        file_path_formats=filepaths,
-    )
-    return file_manager
-
 def main():
     '''
     See file header.
     '''
     args = parse_args()
-    file_manager = get_files(args.filepaths)
     var = getattr(utils.Variable, args.var)
     run(
-        file_manager=file_manager,
         lepton_channel=args.lepton,
         variable=var,
         bins=utils.get_bins(args.lepton, var),
         response_matrix_path=f'{args.output}/response_matrix/diboson_{args.lepton}lep_rf_histograms.root',
         output_dir=args.output,
+        hist_file_format=f'{args.output}/{args.lepton}lep_{{sample}}_rebin.root',
         mu_stop=(1, 0.2),
         mu_ttbar=(0.72, 0.03),
     )

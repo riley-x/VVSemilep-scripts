@@ -14,7 +14,7 @@ SETUP
     lsetup "python centos7-3.9"
 
 Note that this can't be setup at the same time with AnalysisBase or else you get a lot of
-conflicts :(
+conflicts :(. Alternatively, you can just setup ResonanceFinder.
 
 ------------------------------------------------------------------------------------------
 CONFIG
@@ -43,8 +43,10 @@ See [utils.FileManager] for details.
 '''
 
 import ROOT
+
 import numpy as np
 import os
+import sys
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from plotting import plot
@@ -193,7 +195,7 @@ def run_gpr(
         mu_stop : tuple[float, float],
         ttbar_fitter: ttbar_fit.TtbarSysFitter,
         from_csv_only : bool,
-    ) -> gpr.FitConfig:
+    ) -> tuple[gpr.FitResults, list[float]]:
     ### Config ###
     config_base = {
         'lepton_channel': lepton_channel,
@@ -260,7 +262,7 @@ def run_gpr(
     ### Create histograms for ResonanceFinder ###
     
 
-    return config, mu_diboson_corrs
+    return config.fit_results, mu_diboson_corrs
     
 
 def save_rebinned_histograms(
@@ -293,7 +295,9 @@ def save_rebinned_histograms(
                 f.cd()
                 hist.Write()
     
-    plot.success(f'Saved rebinned histograms to {output_dir}/' + '{lep}lep_{sample}_rebin.root')
+    file_format = f'{output_dir}/{lepton_channel}lep_{{sample}}_rebin.root'
+    plot.success(f'Saved rebinned histograms to {file_format}')
+    return file_format
 
 
 def run_channel(
@@ -319,17 +323,21 @@ def run_channel(
 
     ### Rebin reco histograms ###
     plot.notice(f'{log_base} saving rebinned histograms')
-    save_rebinned_histograms(
+    rebinned_histogram_path = save_rebinned_histograms(
         file_manager=file_manager,
         lepton_channel=lepton_channel,
         output_dir=output_dir,
         variables=vars,
     )
 
-    ### Run GPR fit ###
+    ### Iterate per variable ###
     for var in vars:
+        ### Bins ###
+        bins = utils.get_bins(lepton_channel, var)
+
+        ### GPR fit ###
         plot.notice(f'{log_base} running GPR fits for {var}')
-        gpr_config, gpr_mu_corr = run_gpr(
+        fit_results, gpr_mu_corr = run_gpr(
             file_manager=file_manager,
             lepton_channel=lepton_channel,
             var=var,
@@ -342,13 +350,12 @@ def run_channel(
         ### Diboson yield ###
         # So this will be superceded by the profile likelihood fit, which will use the
         # GPR fit results directly, but this is a nice check.
-        bins = gpr_config.bins_y
         h_diboson_fit = ROOT.TH1F('h_diboson', 'Diboson', len(bins) - 1, np.array(bins, dtype=float))
         h_diboson_mc = ROOT.TH1F('h_diboson', 'Diboson', len(bins) - 1, np.array(bins, dtype=float))
         for i in range(len(bins) - 1):
             res = diboson_fit.run_fit(
                 file_manager=file_manager,
-                gpr_results=gpr_config.fit_results,
+                gpr_results=fit_results,
                 ttbar_fitter=ttbar_fitter,
                 lepton_channel=lepton_channel,
                 variable=var,
@@ -375,6 +382,24 @@ def run_channel(
         )
 
         ### Profile likelihood unfolding fit ###
+        os.makedirs(f'{output_dir}/rf', exist_ok=True)
+        try:
+            # really important this import is here otherwise segfaults occur, due to
+            # the `from ROOT import RF` line I think.
+            import rf_plu 
+            ws_path = rf_plu.run(
+                lepton_channel=lepton_channel,
+                variable=var,
+                nbins=len(bins) - 1,
+                response_matrix_path=response_matrix_filepath,
+                output_dir=output_dir,
+                hist_file_format=rebinned_histogram_path,
+                mu_stop=mu_stop,
+                mu_ttbar=ttbar_fitter.mu_ttbar_nom,
+            )
+            ws_path = os.path.abspath(ws_path)
+        except Exception as e:
+            plot.warning(str(e))
         
 
 
