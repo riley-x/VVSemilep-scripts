@@ -185,10 +185,11 @@ def run_fit(
         out[var] = (res.x[i], errs[i])
     
     ### Printout ###
-    notice_msg = f'\n    Fit results:\n    ' + '-' * 50
+    max_key_length = max(len(k) for k in out.keys())
+    notice_msg = f'\n    Fit results:\n    ' + '-' * (21 + max_key_length)
     for k,v in out.items():
         if 'cov' in k: continue
-        notice_msg += f'\n    {k:20}: {v[0]:7.4f} +- {v[1]:.4f}'
+        notice_msg += f'\n    {k:{max_key_length}}: {v[0]:8.4f} +- {v[1]:7.4f}'
     notice_msg += f'\n    cov:'
     for i in range(len(errs)):
         notice_msg += f'\n        '

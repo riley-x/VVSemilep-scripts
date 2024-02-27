@@ -275,12 +275,12 @@ def save_rebinned_histograms(
         if sample not in output_files:
             output_files[sample] = ROOT.TFile(f'{output_dir}/{lepton_channel}lep_{sample}_rebin.root', 'RECREATE')
         return output_files[sample]
-
-
+    
+    variations = [utils.variation_nom] + utils.variations_hist
     for variable in variables:
         bins = utils.get_bins(lepton_channel, variable)
         bins = np.array(bins, dtype=float)
-        for variation in utils.variations_hist:
+        for variation in variations:
             hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lepton_channel).name
             hist_name = utils.hist_name_variation(hist_name, variation)
 
@@ -292,7 +292,9 @@ def save_rebinned_histograms(
                 f = file(sample)
                 f.cd()
                 hist.Write()
-            
+    
+    plot.success(f'Saved rebinned histograms to {output_dir}/' + '{lep}lep_{sample}_rebin.root')
+
 
 def run_channel(
         file_manager : utils.FileManager, 
@@ -316,8 +318,12 @@ def run_channel(
     )
 
     ### Rebin reco histograms ###
+    plot.notice(f'{log_base} saving rebinned histograms')
     save_rebinned_histograms(
+        file_manager=file_manager,
+        lepton_channel=lepton_channel,
         output_dir=output_dir,
+        variables=vars,
     )
 
     ### Run GPR fit ###
