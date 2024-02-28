@@ -15,6 +15,7 @@ from plotting import plot
 import utils
 import ttbar_fit
 import gpr
+import master
 
 
 
@@ -24,13 +25,9 @@ import gpr
 
 
 def run_fit(
-        file_manager : utils.FileManager, 
-        gpr_results : gpr.FitResults,
-        ttbar_fitter : ttbar_fit.TtbarSysFitter,
-        lepton_channel : int, 
+        config : master.ChannelConfig,
         variable : utils.Variable,
         bin : tuple[float, float],
-        mu_stop : tuple[float, float],
         gpr_mu_corr : float,
     ):
     '''
@@ -38,13 +35,13 @@ def run_fit(
     from scipy import optimize, stats
 
     ### Setup ###
-    hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lepton_channel).name
+    hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
     variations = [
         'mu-ttbar',
         'mu-stop',
     ]
     gpr_csv_args = dict(
-        lep=lepton_channel,
+        lep=config.lepton_channel,
         vary=variable.name,
         fitter='rbf_marg_post',
         bin=bin,
@@ -54,22 +51,22 @@ def run_fit(
     ### Get nominal yields ###
     def _subr_get_nominal(asimov : bool):
         nom_name = utils.hist_name_variation(hist_name, 'nominal')
-        hists = file_manager.get_hist_all_samples(lepton_channel, nom_name)
+        hists = config.file_manager.get_hist_all_samples(config.lepton_channel, nom_name)
         
         ### Data and diboson ###
         n_data_nom = plot.integral_user(hists['data'], bin)
         n_diboson_nom = plot.integral_user(hists['diboson'], bin, return_error=True)
         
         ### MC top backgrounds (sum) ###
-        mu_ttbar_nom = ttbar_fitter.mu_ttbar_nom
+        mu_ttbar_nom = config.ttbar_fitter.mu_ttbar_nom
         n_ttbar_nom = plot.integral_user(hists['ttbar'], bin, return_error=True)
         n_stop_nom = plot.integral_user(hists['stop'], bin, return_error=True)
-        val = mu_ttbar_nom[0] * n_ttbar_nom[0] + mu_stop[0] * n_stop_nom[0]
-        err = ((mu_ttbar_nom[0] * n_ttbar_nom[1])**2 + (mu_stop[0] * n_stop_nom[1])**2)**0.5
+        val = mu_ttbar_nom[0] * n_ttbar_nom[0] + config.mu_stop[0] * n_stop_nom[0]
+        err = ((mu_ttbar_nom[0] * n_ttbar_nom[1])**2 + (config.mu_stop[0] * n_stop_nom[1])**2)**0.5
         n_mc_nom = (val, err)
 
         ### GPR ###
-        n_gpr_nom = gpr_results.get_entry(**gpr_csv_args, variation='nominal')
+        n_gpr_nom = config.gpr_results.get_entry(**gpr_csv_args, variation='nominal')
         n_gpr_nom = (n_gpr_nom[0], (n_gpr_nom[1] + n_gpr_nom[2]) / 2)
 
         ### Nominal signal strength ###
@@ -109,27 +106,27 @@ def run_fit(
 
             ### Get MC background total (ttbar + stop) ###
             var_name = utils.hist_name_variation(hist_name, variation_updown)
-            h_ttbar = file_manager.get_hist(lepton_channel, utils.Sample.ttbar, var_name)
-            h_stop = file_manager.get_hist(lepton_channel, utils.Sample.stop, var_name)
+            h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, var_name)
+            h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, var_name)
             n_ttbar = plot.integral_user(h_ttbar, bin)
             n_stop = plot.integral_user(h_stop, bin)
 
             ### Get signal strengths ###
-            mu_ttbar = ttbar_fitter.get_var(variation_updown)
+            mu_ttbar = config.ttbar_fitter.get_var(variation_updown)
             if variation_base == 'mu-stop':
                 if updown == 'up':
-                    mu_stop_1 = mu_stop[0] + mu_stop[1]
+                    mu_stop_1 = config.mu_stop[0] + config.mu_stop[1]
                 else:
-                    mu_stop_1 = mu_stop[0] - mu_stop[1]
+                    mu_stop_1 = config.mu_stop[0] - config.mu_stop[1]
             else:
-                mu_stop_1 = mu_stop[0]
+                mu_stop_1 = config.mu_stop[0]
 
             ### Get diff ###
             val = n_ttbar * mu_ttbar + n_stop * mu_stop_1
             mc_err += (val - n_mc_nom[0]) * (1 if updown == 'up' else -1)
 
             ### Get GPR err ###
-            val = gpr_results.get_entry(
+            val = config.gpr_results.get_entry(
                 variation=variation_updown,
                 **gpr_csv_args,
             )[0]

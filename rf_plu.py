@@ -13,7 +13,6 @@ from plotting import plot
 def run(
         lepton_channel : int,
         variable : utils.Variable,
-        nbins : int,
         response_matrix_path : str,
         output_dir : str,
         hist_file_format : str,
@@ -50,6 +49,8 @@ def run(
     ### Add ttbar ###
     VVUnfold.channel(region).addSample('ttbar', hist_file_format.format(sample='ttbar'), hist_name)
     sample = VVUnfold.channel(region).sample('ttbar')
+    # ResonanceFinder has a major bug when using mean != 1 GAUSSIAN constraints. So hack
+    # fix by scaling by the mean as a constant first (which works fine).
     sample.multiplyBy('mu-ttbar_nom', mu_ttbar[0])
     sample.multiplyBy('mu-ttbar', 1, 1 - mu_ttbar[1] / mu_ttbar[0], 1 + mu_ttbar[1] / mu_ttbar[0], RF.MultiplicativeFactor.GAUSSIAN)
     sample.multiplyBy('lumiNP', 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
@@ -60,8 +61,10 @@ def run(
     ### Add stop ###
     VVUnfold.channel(region).addSample('stop', hist_file_format.format(sample='stop'), hist_name)
     sample = VVUnfold.channel(region).sample('stop')
-    # sample.multiplyBy('mu-stop', mu_stop[0])
-    sample.multiplyBy('mu-stop', mu_stop[0], mu_stop[0] - mu_stop[1], mu_stop[0] + mu_stop[1], RF.MultiplicativeFactor.GAUSSIAN)
+    # ResonanceFinder has a major bug when using mean != 1 GAUSSIAN constraints. So hack
+    # fix by scaling by the mean as a constant first (which works fine).
+    sample.multiplyBy('mu-stop_nom', mu_stop[0])
+    sample.multiplyBy('mu-stop', 1, 1 - mu_stop[1] / mu_stop[0], 1 + mu_stop[1] / mu_stop[0], RF.MultiplicativeFactor.GAUSSIAN)
     sample.multiplyBy('lumiNP',  1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
     sample.setUseStatError(True)
     for variation in utils.variations_hist:
@@ -77,6 +80,8 @@ def run(
         sample.addVariation(variation)
 
     ### Add signals ###
+    bins = utils.get_bins(lepton_channel, variable)
+    nbins = len(bins) - 1
     for i in range(1, nbins + 1):
         i_str = str(i).rjust(2, '0')
         sigName = "bin" + i_str
@@ -91,7 +96,7 @@ def run(
     #VVUnfold.reuseHist(True) # What is this for?
     VVUnfold.linearizeRegion(region) # What is this for?
     VVUnfold.debugPlots(True)
-    with plot.redirect(f'{output_dir}/rf/log.txt'):
+    with plot.redirect(f'{output_dir}/rf/log.rf.txt'):
         VVUnfold.produceWS()
 
     ### Copy back ###
@@ -131,7 +136,6 @@ def main():
     run(
         lepton_channel=args.lepton,
         variable=var,
-        bins=utils.get_bins(args.lepton, var),
         response_matrix_path=f'{args.output}/response_matrix/diboson_{args.lepton}lep_rf_histograms.root',
         output_dir=args.output,
         hist_file_format=f'{args.output}/{args.lepton}lep_{{sample}}_rebin.root',
