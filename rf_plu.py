@@ -1,14 +1,13 @@
 #!/usr/bin/env python
-import ROOT
 
-import numpy as np
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import shutil
-import sys
-import os
 
 import utils
 from plotting import plot
+
+def ws_path(output_dir, lep, var):
+    return f'{output_dir}/rf/{lep}lep_{var}.plu_ws.root'
 
 def run(
         lepton_channel : int,
@@ -96,7 +95,7 @@ def run(
     #VVUnfold.reuseHist(True) # What is this for?
     VVUnfold.linearizeRegion(region) # What is this for?
     VVUnfold.debugPlots(True)
-    with plot.redirect(f'{output_dir}/rf/log.rf.txt'):
+    with plot.redirect(f'{output_dir}/rf/log.{lepton_channel}lep_{variable}.rf.txt'):
         VVUnfold.produceWS()
 
     ### Copy back ###
@@ -107,7 +106,7 @@ def run(
         rf_output_path += 'bin' + str(i).rjust(2, '0')
     rf_output_path += f'_{outputWSTag}.root'
 
-    target_path = f'{output_dir}/rf/plu_ws.root'
+    target_path = ws_path(output_dir, lepton_channel, variable)
     shutil.copyfile(rf_output_path, target_path)
     plot.success(f'Created PLU workspace at {target_path}')
     return target_path
