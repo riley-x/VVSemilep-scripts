@@ -2,6 +2,7 @@
     "files.associations": {
         "*.condor": "submit_file",
         "*.mcmeta": "json",
-        "drawPostFit.C": "cpp"
+        "drawPostFit.C": "cpp",
+        "drawPullPlot.C": "cpp"
     }
 }

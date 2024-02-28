@@ -440,6 +440,49 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
     plot.save_canvas(pads.c, f'{config.output_dir}/plots/{config.lepton_channel}lep_{variable}.plu_postfit')
 
 
+def plot_pulls(config : ChannelConfig, fit_results : dict[str, tuple[float, float]], filename : str):
+    all_vars = utils.variations_custom + utils.variations_hist
+    nvars = len(all_vars)
+    h = ROOT.TH1F('h_pulls', '', nvars, 0, nvars)
+    for i,var in enumerate(all_vars):
+        alpha = fit_results[f'alpha_{var}']
+        h.SetBinContent(i + 1, alpha[0])
+        h.SetBinError(i + 1, alpha[1])
+        h.GetXaxis().SetBinLabel(i + 1, var)
+    h.GetXaxis().LabelsOption('u')
+
+    ROOT.gStyle.SetErrorX(0)
+    ROOT.gStyle.SetEndErrorSize(5)
+    c = ROOT.TCanvas('c1', 'c1', 1000, 800)
+
+    ### Plotter ###
+    plotter = plot.Plotter(
+        pad=c,
+        _frame=h,
+        subtitle=[
+            '#sqrt{s}=13 TeV, 140 fb^{-1}',
+            f'{config.lepton_channel}-lepton channel PLU pulls',
+        ],
+        ytitle='(#theta_{fit} - #theta_{0}) / #sigma_{#theta}',
+        y_range=(-5, 5),
+        bottom_margin=0.3,
+    )
+
+    ### Plot objects ###
+    b1 = ROOT.TBox(0, -1, nvars, 1)
+    b2 = ROOT.TBox(0, -2, nvars, 2)
+    b1.SetFillColor(plot.colors.pastel_green)
+    b2.SetFillColor(plot.colors.pastel_yellow)
+    plotter.add_primitives([b2, b1])
+    plotter.add([h], opts='E1', markersize=2, markerstyle=ROOT.kFullSquare)
+    plotter.draw()
+
+    plot.save_canvas(c, filename)
+    ROOT.gStyle.SetErrorX()
+    ROOT.gStyle.SetEndErrorSize(0)
+
+
+
 ##########################################################################################
 ###                                       CONFIG                                       ###
 ##########################################################################################
@@ -706,7 +749,7 @@ def run_plu(config : ChannelConfig, var : utils.Variable):
     ### Draw fit ###
     plot_plu_fit(config, var, plu_fit_results)
 
-    ### Draw comparison ###
+    ### Draw yield vs MC ###
     bins = np.array(utils.get_bins(config.lepton_channel, var), dtype=float)
     h_fit = ROOT.TH1F('h_fit', '', len(bins) - 1, bins)
     for i in range(1, len(bins)):
@@ -727,6 +770,11 @@ def run_plu(config : ChannelConfig, var : utils.Variable):
         ],
         xtitle=f'{var:title}',
     )
+
+    ### Draw pulls ###
+    plot_pulls(config, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_pulls')
+
+    ### Draw covariances ###
 
 
 def run_channel(config : ChannelConfig):
