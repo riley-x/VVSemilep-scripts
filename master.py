@@ -440,9 +440,11 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
     plot.save_canvas(pads.c, f'{config.output_dir}/plots/{config.lepton_channel}lep_{variable}.plu_postfit')
 
 
-def plot_pulls(config : ChannelConfig, fit_results : dict[str, tuple[float, float]], filename : str):
-    all_vars = utils.variations_custom + utils.variations_hist
+def plot_pulls(config : ChannelConfig, variable : utils.Variable, fit_results : dict[str, tuple[float, float]], filename : str):
+    all_vars = [utils.variation_lumi] + utils.variations_custom + utils.variations_hist
     nvars = len(all_vars)
+
+    ### Create hist ###
     h = ROOT.TH1F('h_pulls', '', nvars, 0, nvars)
     for i,var in enumerate(all_vars):
         alpha = fit_results[f'alpha_{var}']
@@ -451,17 +453,17 @@ def plot_pulls(config : ChannelConfig, fit_results : dict[str, tuple[float, floa
         h.GetXaxis().SetBinLabel(i + 1, var)
     h.GetXaxis().LabelsOption('u')
 
+    ### Plotter ###
     ROOT.gStyle.SetErrorX(0)
     ROOT.gStyle.SetEndErrorSize(5)
     c = ROOT.TCanvas('c1', 'c1', 1000, 800)
-
-    ### Plotter ###
+    
     plotter = plot.Plotter(
         pad=c,
         _frame=h,
         subtitle=[
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{config.lepton_channel}-lepton channel PLU pulls',
+            f'{config.lepton_channel}-lepton channel {variable} pulls',
         ],
         ytitle='(#theta_{fit} - #theta_{0}) / #sigma_{#theta}',
         y_range=(-5, 5),
@@ -480,6 +482,46 @@ def plot_pulls(config : ChannelConfig, fit_results : dict[str, tuple[float, floa
     plot.save_canvas(c, filename)
     ROOT.gStyle.SetErrorX()
     ROOT.gStyle.SetEndErrorSize(0)
+
+
+def plot_covariances(config : ChannelConfig, variable : utils.Variable, roofit_results, filename : str):
+    ### Create hist ###
+    bins = utils.get_bins(config.lepton_channel, variable)
+    alphas = [utils.variation_lumi] + utils.variations_custom + utils.variations_hist
+    mus = [f'mu_{x:02}' for x in range(1, len(bins))]
+    pars = [f'alpha_{x}' for x in alphas] + mus
+
+    n = len(pars)
+    h = ROOT.TH2F('h_cov', '', n, 0, n, n, 0, n)
+    for i in range(n):
+        h.GetXaxis().SetBinLabel(i + 1, pars[i].replace('alpha_', ''))
+        h.GetYaxis().SetBinLabel(n - i, pars[i].replace('alpha_', ''))
+        for j in range(n):
+            h.SetBinContent(n - i, j + 1, roofit_results.correlation(pars[i], pars[j]))
+    h.GetXaxis().LabelsOption('v')
+
+    ### Plot ###
+    plot.create_gradient(np.array([
+        [0.0,  0.0, 0.2, 1.0],
+        [0.1,  0.0, 0.5, 1.0],
+        [0.45, 1.0, 1.0, 1.0],
+        [0.55, 1.0, 1.0, 1.0],
+        [0.9,  1.0, 0.5, 0.0],
+        [1.0,  1.0, 0.2, 0.0],
+    ]))
+    plot.plot(
+        filename=filename,
+        text_pos='topright',
+        subtitle=[
+            '#sqrt{s}=13 TeV, 140 fb^{-1}',
+            f'{config.lepton_channel}-lepton channel {variable} fit',
+        ],
+        objs=[h],
+        opts='COLZ',
+        z_range=[-1, 1],
+        left_margin=0.3,
+        bottom_margin=0.3,
+    )
 
 
 
@@ -772,9 +814,10 @@ def run_plu(config : ChannelConfig, var : utils.Variable):
     )
 
     ### Draw pulls ###
-    plot_pulls(config, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_pulls')
+    plot_pulls(config, var, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_pulls')
 
     ### Draw covariances ###
+    plot_covariances(config, var, roofit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_cov')
 
 
 def run_channel(config : ChannelConfig):

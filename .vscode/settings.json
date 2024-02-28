@@ -3,6 +3,7 @@
         "*.condor": "submit_file",
         "*.mcmeta": "json",
         "drawPostFit.C": "cpp",
-        "drawPullPlot.C": "cpp"
+        "drawPullPlot.C": "cpp",
+        "drawCorrMatrix.C": "cpp"
     }
 }

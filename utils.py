@@ -172,6 +172,7 @@ def get_bins(lepton_channel : int, var: Variable):
 #########################################################################################
 
 variation_nom = 'nominal'
+variation_lumi = 'lumiNP'
 variations_custom = [
     'mu-ttbar',
     'mu-stop',
