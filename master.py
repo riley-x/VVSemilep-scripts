@@ -186,6 +186,10 @@ def plot_diboson_yield(h_fit, h_mc, **plot_opts):
 
 
 def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
+    '''
+    Plots a stack plot comparing data to backgrounds prior to the PLU fit but using the
+    GPR background estimate.
+    '''
     ### Get hists ###
     f_gpr = ROOT.TFile(f'{config.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
     h_gpr = f_gpr.Get('Vjets_SR_' + variable.name)
@@ -214,7 +218,6 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     h_errs = h_sum.Clone()
     h_ratio.Divide(h_sum)
     h_errs.Divide(h_sum)
-
 
     ### Plot ###
     pads = plot.RatioPads()
@@ -313,15 +316,47 @@ class ChannelConfig:
         ### Set by save_rebinned_histograms ###
         self.rebinned_hists_filepath = None
 
-        
-
 
 ##########################################################################################
 ###                                         RUN                                        ###
 ##########################################################################################
 
 
+def save_rebinned_histograms(config : ChannelConfig):
+    '''
+    Rebins the CxAODReader histograms to match the response matrix/gpr.
+    '''
+    output_files = {}
+    def file(sample):
+        if sample not in output_files:
+            output_files[sample] = ROOT.TFile(f'{config.output_dir}/{config.lepton_channel}lep_{sample}_rebin.root', 'RECREATE')
+        return output_files[sample]
+    
+    variations = [utils.variation_nom] + utils.variations_hist
+    for variable in config.variables:
+        bins = utils.get_bins(config.lepton_channel, variable)
+        bins = np.array(bins, dtype=float)
+        for variation in variations:
+            hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
+            hist_name = utils.hist_name_variation(hist_name, variation)
+
+            hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name)
+            for sample,hist in hists.items():
+                hist = plot.rebin(hist, bins)
+                hist.SetName(hist_name.format(sample=sample))
+
+                f = file(sample)
+                f.cd()
+                hist.Write()
+    
+    config.rebinned_hists_filepath = f'{config.output_dir}/{config.lepton_channel}lep_{{sample}}_rebin.root'
+    plot.success(f'Saved rebinned histograms to {config.rebinned_hists_filepath}')
+
+
 def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
+    '''
+    Runs the GPR fit for every variation.
+    '''
     plot.notice(f'{channel_config.log_base} running GPR fits for {var}')
     
     ### Config ###
@@ -388,38 +423,11 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     channel_config.gpr_results = fit_config.fit_results
     
 
-def save_rebinned_histograms(config : ChannelConfig):
-    output_files = {}
-    def file(sample):
-        if sample not in output_files:
-            output_files[sample] = ROOT.TFile(f'{config.output_dir}/{config.lepton_channel}lep_{sample}_rebin.root', 'RECREATE')
-        return output_files[sample]
-    
-    variations = [utils.variation_nom] + utils.variations_hist
-    for variable in config.variables:
-        bins = utils.get_bins(config.lepton_channel, variable)
-        bins = np.array(bins, dtype=float)
-        for variation in variations:
-            hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
-            hist_name = utils.hist_name_variation(hist_name, variation)
-
-            hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name)
-            for sample,hist in hists.items():
-                hist = plot.rebin(hist, bins)
-                hist.SetName(hist_name.format(sample=sample))
-
-                f = file(sample)
-                f.cd()
-                hist.Write()
-    
-    config.rebinned_hists_filepath = f'{config.output_dir}/{config.lepton_channel}lep_{{sample}}_rebin.root'
-    plot.success(f'Saved rebinned histograms to {config.rebinned_hists_filepath}')
-
-
 def run_direct_fit(config : ChannelConfig, var : utils.Variable):
     '''
-    So this will be superceded by the profile likelihood fit, which will use the
-    GPR fit results directly, but this is a nice check.
+    Test fit where we fit the detector-level diboson signal strength to each bin directly.
+
+    This will be superceded by the profile likelihood fit, but is a nice check.
     '''
     bins = utils.get_bins(config.lepton_channel, var)
     h_diboson_fit = ROOT.TH1F('h_diboson', 'Diboson', len(bins) - 1, np.array(bins, dtype=float))
@@ -451,6 +459,10 @@ def run_direct_fit(config : ChannelConfig, var : utils.Variable):
 
 
 def run_plu(config : ChannelConfig, var : utils.Variable):
+    '''
+    Runs the profile likelihood unfolding fit using ResonanceFinder. Assumes the
+    GPR/response matrices have been created already.
+    '''
     # Really important this import is here otherwise segfaults occur, due to the
     # `from ROOT import RF` line I think. But somehow hiding it here is fine.
     import rf_plu 
@@ -500,7 +512,9 @@ def run_plu(config : ChannelConfig, var : utils.Variable):
 
 
 def run_channel(config : ChannelConfig):
-
+    '''
+    Main run function for a single lepton channel.
+    '''
     ### Generate response matricies ###
     plot.notice(f'{config.log_base} creating response matrix')
     config.response_matrix_filepath = unfolding.main(
@@ -526,7 +540,7 @@ def run_channel(config : ChannelConfig):
         plot_pre_plu_fit(config, var)
 
         ### Profile likelihood unfolding fit ###
-        try:
+        try: # This requires ResonanceFinder!
             run_plu(config, var)
         except Exception as e:
             plot.warning(str(e))
