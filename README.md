@@ -29,18 +29,17 @@ lsetup "python centos7-3.9"
 ```
 Note that this can't be setup at the same time with AnalysisBase because it is stuck on python2 still. If you're running locally, you'll need to `pip install` any dependencies. 
 
-## Master Run Script
+## Run
 
 A master run script [master.py](master.py) runs the full workflow. See the docstring of that file for more information. It takes care of the following tasks, which can all be called individually too (see below).
 
 1. Fitting the ttbar signal strength to 1lep TCR.
 2. Fitting the GPR to the event-subtracted MCR.
 3. Repeating the above for every systematic variation.
-4. Performing the likelihood fit to extract the diboson yield.
-5. Creating response matrices.
+4. Creating response matrices.
+5. Performing the profile likelihood unfolding fit.
 
 The script relies on systematic histogram naming. See the docstring of the file and [utils.py](utils.py) for more info.
-
 
 
 ### Unfolding
@@ -101,8 +100,5 @@ The script will generate a plot named `gpr_{lep}_{var}_summary` in both png and 
 
 Use [ttbar_fit.py](ttbar_fit.py) to run the ttbar fit to the one-lep TCR. This constrains the ttbar signal strength. See the docstring for more info.
 
-## ResonanceFinder
-
-Use the scripts above to generate the response matrix histograms and the V+jets background estimate for use in ResonanceFinder. 
 
 
