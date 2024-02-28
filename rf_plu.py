@@ -137,7 +137,7 @@ def main():
         variable=var,
         response_matrix_path=f'{args.output}/response_matrix/diboson_{args.lepton}lep_rf_histograms.root',
         output_dir=args.output,
-        hist_file_format=f'{args.output}/{args.lepton}lep_{{sample}}_rebin.root',
+        hist_file_format=f'{args.output}/rebin/{args.lepton}lep_{{sample}}_rebin.root',
         mu_stop=(1, 0.2),
         mu_ttbar=(0.72, 0.03),
     )

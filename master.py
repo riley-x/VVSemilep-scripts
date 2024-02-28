@@ -298,7 +298,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     plotter2.draw()
     plotter2.draw_hline(1, ROOT.kDashed)
 
-    plot.save_canvas(pads.c, f'{config.output_dir}/{config.lepton_channel}lep_{variable}_plu_prefit')
+    plot.save_canvas(pads.c, f'{config.output_dir}/plots/{config.lepton_channel}lep_{variable}.plu_prefit')
 
 
 def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results : dict[str, tuple[float, float]]):
@@ -356,12 +356,12 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
 
     ### Main pad options ###
     plotter1 = pads.make_plotter1(
-        text_pos='topleft',
+        text_pos='top',
         subtitle=[
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
             f'{config.lepton_channel}-lepton channel post-PLU',
         ],
-        legend_columns=4,
+        legend_columns=2,
         legend_vertical_order=True,
         ytitle='Events',
         logy=True,
@@ -437,7 +437,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
     plotter2.draw()
     plotter2.draw_hline(1, ROOT.kDashed)
 
-    plot.save_canvas(pads.c, f'{config.output_dir}/{config.lepton_channel}lep_{variable}_plu_postfit')
+    plot.save_canvas(pads.c, f'{config.output_dir}/plots/{config.lepton_channel}lep_{variable}.plu_postfit')
 
 
 ##########################################################################################
@@ -491,10 +491,13 @@ def save_rebinned_histograms(config : ChannelConfig):
     '''
     Rebins the CxAODReader histograms to match the response matrix/gpr.
     '''
+    os.makedirs(f'{config.output_dir}/rebin', exist_ok=True)
+    config.rebinned_hists_filepath = f'{config.output_dir}/rebin/{config.lepton_channel}lep_{{sample}}_rebin.root'
+
     output_files = {}
     def file(sample):
         if sample not in output_files:
-            output_files[sample] = ROOT.TFile(f'{config.output_dir}/{config.lepton_channel}lep_{sample}_rebin.root', 'RECREATE')
+            output_files[sample] = ROOT.TFile(config.rebinned_hists_filepath.format(sample=sample), 'RECREATE')
         return output_files[sample]
     
     variations = [utils.variation_nom] + utils.variations_hist
@@ -514,7 +517,6 @@ def save_rebinned_histograms(config : ChannelConfig):
                 f.cd()
                 hist.Write()
     
-    config.rebinned_hists_filepath = f'{config.output_dir}/{config.lepton_channel}lep_{{sample}}_rebin.root'
     plot.success(f'Saved rebinned histograms to {config.rebinned_hists_filepath}')
 
 
@@ -555,7 +557,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
         config=fit_config, 
         yields=mu_diboson_points,
-        filename=f'{channel_config.output_dir}/{fit_config.lepton_channel}lep/{fit_config.var}/gpr_diboson_mu_scan',
+        filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
     )
 
     ### ttbar signal strength variations ###
@@ -583,7 +585,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
         **config_base,
     )
     run(fit_config)
-    plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/{fit_config.lepton_channel}lep/{fit_config.var}/gpr_ttbar_stop_mu_scan')
+    plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
 
     # TODO syst variations
 
@@ -616,7 +618,7 @@ def run_direct_fit(config : ChannelConfig, var : utils.Variable):
     plot_yield_comparison(
         h_fit=h_diboson_fit, 
         h_mc=h_diboson_mc,
-        filename=f'{config.output_dir}/{config.lepton_channel}lep_{var}_yields',
+        filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.directfit_yields',
         subtitle=[
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
             f'{config.lepton_channel}-lepton channel prefit',
@@ -704,6 +706,28 @@ def run_plu(config : ChannelConfig, var : utils.Variable):
     ### Draw fit ###
     plot_plu_fit(config, var, plu_fit_results)
 
+    ### Draw comparison ###
+    bins = np.array(utils.get_bins(config.lepton_channel, var), dtype=float)
+    h_fit = ROOT.TH1F('h_fit', '', len(bins) - 1, bins)
+    for i in range(1, len(bins)):
+        mu = plu_fit_results[f'mu_{i:02}']
+        h_fit.SetBinContent(i, mu[0])
+        h_fit.SetBinError(i, mu[1])
+    h_mc = config.file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, '{sample}_VV{lep}Lep_Merg_unfoldingMtx_' + var.name)
+    h_mc = h_mc.ProjectionX()
+    h_mc = plot.rebin(h_mc, bins)
+    plot_yield_comparison(
+        h_fit=h_fit, 
+        h_mc=h_mc,
+        filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_yields',
+        text_pos='topright',
+        subtitle=[
+            '#sqrt{s}=13 TeV, 140 fb^{-1}',
+            f'{config.lepton_channel}-lepton channel fiducial region',
+        ],
+        xtitle=f'{var:title}',
+    )
+
 
 def run_channel(config : ChannelConfig):
     '''
@@ -777,6 +801,7 @@ def get_files(filepaths):
 def main():
     args = parse_args()
     file_manager = get_files(args.filepaths)
+    os.makedirs(f'{args.output}/plots', exist_ok=True)
 
     plot.save_transparent_png = False
     plot.file_formats = ['png', 'pdf']
