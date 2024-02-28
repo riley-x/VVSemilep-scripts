@@ -519,7 +519,7 @@ def run_channel(
             ### Run fits ###
             plot.notice(f'{log_base} running PLU fits')
             npcheck_dir = 'ResonanceFinder/NPCheck'
-            res = subprocess.run(['./runFitCrossCheck.py', ws_path], cwd=npcheck_dir) # the './' is necessary!
+            res = subprocess.run(['./runFitCrossCheck.py', ws_path], cwd=npcheck_dir, capture_output=True) # the './' is necessary!
             res.check_returncode()
 
             ### Draw fit ###
@@ -530,10 +530,12 @@ def run_channel(
                     '--fccs', 'fccs/FitCrossChecks.root'
                 ], 
                 cwd=npcheck_dir,
+                capture_output=True,
+                text=True,
             )
             res.check_returncode()
             npcheck_output_path = f'{npcheck_dir}/Plots/PostFit/summary_postfit_doAsimov0_doCondtional0_mu1.pdf'
-            target_path = f'{output_dir}/rf/postfit.pdf'
+            target_path = f'{output_dir}/rf/plu_postfit.pdf'
             shutil.copyfile(npcheck_output_path, target_path)
 
             print(res.stdout)

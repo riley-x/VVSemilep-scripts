@@ -5,6 +5,7 @@ import numpy as np
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import shutil
 import sys
+import os
 
 import utils
 from plotting import plot
@@ -44,23 +45,22 @@ def run(
     # WARNING this assumes each sample is in separate files!
 
     ### Add data ###
-    VVUnfold.channel(region).addData('data', hist_file_format.format(sample='data'))
-    VVUnfold.channel(region).data().setSearchStrings(hist_name)
+    VVUnfold.channel(region).addData('data', hist_file_format.format(sample='data'), hist_name)
 
     ### Add ttbar ###
-    VVUnfold.channel(region).addSample('ttbar', hist_file_format.format(sample='data'))
+    VVUnfold.channel(region).addSample('ttbar', hist_file_format.format(sample='ttbar'), hist_name)
     sample = VVUnfold.channel(region).sample('ttbar')
-    sample.setSearchStrings(hist_name)
-    sample.multiplyBy('mu-ttbar', mu_ttbar[0], mu_ttbar[0] - mu_ttbar[1], mu_ttbar[0] + mu_ttbar[1], RF.MultiplicativeFactor.GAUSSIAN)
-    sample.multiplyBy('lumiNP',  1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
+    sample.multiplyBy('mu-ttbar_nom', mu_ttbar[0])
+    sample.multiplyBy('mu-ttbar', 1, 1 - mu_ttbar[1] / mu_ttbar[0], 1 + mu_ttbar[1] / mu_ttbar[0], RF.MultiplicativeFactor.GAUSSIAN)
+    sample.multiplyBy('lumiNP', 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
     sample.setUseStatError(True)
     for variation in utils.variations_hist:
         sample.addVariation(variation)
 
     ### Add stop ###
-    VVUnfold.channel(region).addSample('stop', hist_file_format.format(sample='stop'))
+    VVUnfold.channel(region).addSample('stop', hist_file_format.format(sample='stop'), hist_name)
     sample = VVUnfold.channel(region).sample('stop')
-    sample.setSearchStrings(hist_name)
+    # sample.multiplyBy('mu-stop', mu_stop[0])
     sample.multiplyBy('mu-stop', mu_stop[0], mu_stop[0] - mu_stop[1], mu_stop[0] + mu_stop[1], RF.MultiplicativeFactor.GAUSSIAN)
     sample.multiplyBy('lumiNP',  1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
     sample.setUseStatError(True)
@@ -68,11 +68,9 @@ def run(
         sample.addVariation(variation)
 
     ### Add GPR ###
-    VVUnfold.channel(region).addSample('vjets', output_dir + f'/gpr/gpr_{lepton_channel}lep_vjets_yield.root')
+    VVUnfold.channel(region).addSample('vjets', f'{output_dir}/gpr/gpr_{lepton_channel}lep_vjets_yield.root', 'Vjets_SR_' + variable.name)
     sample = VVUnfold.channel(region).sample('vjets')
-    sample.setSearchStrings('Vjets_SR_' + variable.name)
     sample.setUseStatError(True)
-
     for variation in utils.variations_custom:
         sample.addVariation(variation)
     for variation in utils.variations_hist:
@@ -85,7 +83,7 @@ def run(
         poiName = "mu_" + i_str
 
         VVUnfold.channel(region).addSample(sigName, response_matrix_path, f'ResponseMatrix_{variable}_fid{i_str}')
-        VVUnfold.channel(region).sample(sigName).multiplyBy(poiName, 0, 0, 1e6)
+        VVUnfold.channel(region).sample(sigName).multiplyBy(poiName, 100, 0, 1e6)
         VVUnfold.defineSignal(VVUnfold.channel(region).sample(sigName), 'Unfold')
         VVUnfold.addPOI(poiName)
 
@@ -93,7 +91,8 @@ def run(
     #VVUnfold.reuseHist(True) # What is this for?
     VVUnfold.linearizeRegion(region) # What is this for?
     VVUnfold.debugPlots(True)
-    VVUnfold.produceWS()
+    with plot.redirect(f'{output_dir}/rf/log.txt'):
+        VVUnfold.produceWS()
 
     ### Copy back ###
     rf_output_path = f'{output_dir}/rf/ws/VVUnfold_'
