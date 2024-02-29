@@ -484,7 +484,7 @@ def plot_pulls(config : ChannelConfig, variable : utils.Variable, fit_results : 
     ROOT.gStyle.SetEndErrorSize(0)
 
 
-def plot_covariances(config : ChannelConfig, variable : utils.Variable, roofit_results, filename : str):
+def plot_correlations(config : ChannelConfig, variable : utils.Variable, roofit_results, filename : str):
     ### Create hist ###
     bins = utils.get_bins(config.lepton_channel, variable)
     alphas = [utils.variation_lumi] + utils.variations_custom + utils.variations_hist
@@ -816,8 +816,8 @@ def run_plu(config : ChannelConfig, var : utils.Variable):
     ### Draw pulls ###
     plot_pulls(config, var, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_pulls')
 
-    ### Draw covariances ###
-    plot_covariances(config, var, roofit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_cov')
+    ### Draw correlation matrix ###
+    plot_correlations(config, var, roofit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_corr')
 
 
 def run_channel(config : ChannelConfig):
