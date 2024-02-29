@@ -64,11 +64,16 @@ def main():
 
     for lepton_channel in [0, 1, 2]:
         f_template = file_manager.files[(lepton_channel, utils.Sample.diboson.name)][0]
-        f_out = ROOT.TFile(args.output.format(lep=lepton_channel), 'CREATE')
+        f_out = ROOT.TFile(args.output.format(lep=lepton_channel), 'RECREATE')
         for key in f_template.GetListOfKeys():
             name = key.GetName()
-            name.replace(utils.Sample.diboson.reader_keys[0], '{sample}')
-            
+            if 'MergHP_Inclusive' not in name and \
+                '__v__fatjet_m' not in name and \
+                'unfoldingMtx' not in name:
+                continue
+            name = name.replace(utils.Sample.diboson.hist_keys[0], '{sample}')
+            print(name)
+
             hists = file_manager.get_hist_all_samples(lepton_channel, name)
             h_data = None
             for _,h in hists.items():

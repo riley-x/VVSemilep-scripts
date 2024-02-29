@@ -104,11 +104,11 @@ class Sample:
     diboson : Sample = None
     data : Sample =  None
 
-    def __init__(self, name : str, title : str, file_stubs : list[str], reader_keys : list[str]):
+    def __init__(self, name : str, title : str, file_stubs : list[str], hist_keys : list[str]):
         self.name = name
         self.title = title
         self.file_stubs = file_stubs
-        self.hist_keys = reader_keys
+        self.hist_keys = hist_keys
     
     def __format__(self, __format_spec: str) -> str:
         if __format_spec:
