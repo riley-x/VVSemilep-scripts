@@ -127,7 +127,7 @@ def run_fit(
         mc_error = mc_error**0.5
 
         pred = mu_ttbar * n_ttbar[0] + mu_stop * n_stop[0] + n_else[0] + gamma_mc * mc_error
-        out = -stats.poisson.logpmf(n_data[0], pred) \
+        out = -stats.poisson.logpmf(round(n_data[0]), pred) \
             - stats.norm.logpdf(mu_stop, loc=mu_stop_0[0], scale=mu_stop_0[1]) \
             - stats.norm.logpdf(gamma_mc)
         return out

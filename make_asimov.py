@@ -74,6 +74,7 @@ def main():
             name = name.replace(utils.Sample.diboson.hist_keys[0], '{sample}')
             print(name)
 
+            ### Sum hists ###
             hists = file_manager.get_hist_all_samples(lepton_channel, name)
             h_data = None
             for _,h in hists.items():
@@ -82,7 +83,14 @@ def main():
                 else:
                     h_data.Add(h)
             h_data.SetName(name.format(sample='data'))
+
+            ### Fix bins ###
+            for i in range(len(h_data)):
+                # Probably don't want to round here, because will mess up at high mass with sparse binnings
+                if h_data[i] < 0: h_data[i] = 0
+                h_data.SetBinError(i, h_data[i] ** 0.5)
             h_data.Write()
+            
         f_out.Close()
     
 

@@ -872,6 +872,7 @@ def parse_args():
     parser.add_argument('-o', '--output', default='./output')
     parser.add_argument('--skip-fits', action='store_true', help="Don't do the GPR or PLU fits. For the former, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
+    parser.add_argument('--asimov', action='store_true', help="Use asimov data instead. Will look for files using [data-asimov] as the key instead of [data]. Create asimov data easily using make_asimov.py")
     return parser.parse_args()
 
 
@@ -892,6 +893,10 @@ def get_files(filepaths):
 
 def main():
     args = parse_args()
+    if args.asimov:
+        utils.Sample.data.file_stubs = ['data-asimov']
+        args.output += '/asimov'
+
     file_manager = get_files(args.filepaths)
     os.makedirs(f'{args.output}/plots', exist_ok=True)
 

@@ -54,7 +54,7 @@ def run_fit(
         hists = config.file_manager.get_hist_all_samples(config.lepton_channel, nom_name)
         
         ### Data and diboson ###
-        n_data_nom = plot.integral_user(hists['data'], bin)
+        n_data_nom = round(plot.integral_user(hists['data'], bin)) # must be int for poisson
         n_diboson_nom = plot.integral_user(hists['diboson'], bin, return_error=True)
         
         ### MC top backgrounds (sum) ###
