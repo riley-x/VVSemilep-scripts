@@ -49,7 +49,8 @@ def run_fit(
         hists = config.file_manager.get_hist_all_samples(config.lepton_channel, nom_name)
         
         ### Data and diboson ###
-        n_data_nom = round(plot.integral_user(hists['data'], bin)) # must be int for poisson
+        n_data_nom = plot.integral_user(hists['data'], bin)
+        n_data_nom = round(n_data_nom) # must be int for poisson
         n_diboson_nom = plot.integral_user(hists['diboson'], bin, return_error=True)
         
         ### MC top backgrounds (sum) ###
@@ -59,6 +60,10 @@ def run_fit(
         val = mu_ttbar_nom[0] * n_ttbar_nom[0] + config.mu_stop[0] * n_stop_nom[0]
         err = ((mu_ttbar_nom[0] * n_ttbar_nom[1])**2 + (config.mu_stop[0] * n_stop_nom[1])**2)**0.5
         n_mc_nom = (val, err)
+
+        ### MC V+jets for comparison ###
+        # n_wjets_nom = plot.integral_user(hists['wjets'], bin, return_error=True)
+        # n_zjets_nom = plot.integral_user(hists['zjets'], bin, return_error=True)
 
         ### GPR ###
         n_gpr_nom = config.gpr_results.get_entry(**gpr_csv_args, variation='nominal')
@@ -74,7 +79,23 @@ def run_fit(
         mu_diboson_val = numerator / n_diboson_nom[0]
         mu_diboson_nom = (mu_diboson_val, mu_diboson_val * mu_diboson_err**0.5)
 
-        print(f'diboson_fit.py::run_fit({variable}, {bin}) inputs:')
+        print(f'diboson_fit.py::run_fit({variable}, {bin}):')
+        print(f'    Nominal:')
+        print('    ' + '-' * 33)
+        print(f'    {"Data":10}: {n_data_nom:10.2f}')
+        print('    ' + '-' * 33)
+        print(f'    {"ttbar":10}: {mu_ttbar_nom[0] * n_ttbar_nom[0]:10.2f} {mu_ttbar_nom[0] * n_ttbar_nom[1]:10.2f}')
+        print(f'    {"stop":10}: {config.mu_stop[0] * n_stop_nom[0]:10.2f} {config.mu_stop[0] * n_stop_nom[1]:10.2f}')
+        print(f'    {"gpr":10}: {n_gpr_nom[0]:10.2f} {n_gpr_nom[1]:10.2f}')
+        # print(f'    {"wjets":10}: {n_wjets_nom[0]:10.2f} {n_wjets_nom[1]:10.2f}')
+        # print(f'    {"zjets":10}: {n_zjets_nom[0]:10.2f} {n_zjets_nom[1]:10.2f}')
+        print('    ' + '-' * 33)
+        print(f'    {"diff":10}: {numerator:10.2f} {numerator_err**0.5:10.2f}')
+        print(f'    {"diboson":10}: {n_diboson_nom[0]:10.2f} {n_diboson_nom[1]:10.2f}')
+        print('    ' + '-' * 33)
+        print(f'    {"mu":10}: {mu_diboson_nom[0]:10.2f} {mu_diboson_nom[1]:10.2f}')
+
+        print('\n')
         print(f'    {"Variation":20}: {"top MCs":>10} {"GPR":>10}')
         print('    ' + '-' * 43)
         print(f'    {"nominal_val":20}: {n_mc_nom[0]:10.2f} {n_gpr_nom[0]:10.2f}')
@@ -187,6 +208,6 @@ def run_fit(
         notice_msg += f'\n        '
         for j in range(len(errs)):
             notice_msg += f'{cov_norm[i][j]:7.4f}  '
-    print(notice_msg)
+    print(notice_msg, '\n')
 
     return out

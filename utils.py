@@ -223,7 +223,7 @@ def get_hists_sum(tfile, hist_names):
         if not h2 or h2.ClassName() == 'TObject':
             plot.warning(f"Couldn't retrieve histogram {name} from {tfile}.")
         elif h_sum is None:
-            h_sum = h2
+            h_sum = h2.Clone()
         else:
             h_sum.Add(h2)
     if h_sum is None:
@@ -299,9 +299,9 @@ class FileManager:
             for file in files:
                 h = file.Get(name)
                 if not h or h.ClassName() == 'TObject':
-                    pass
+                    continue
                 elif h_out is None:
-                    h_out = h
+                    h_out = h.Clone()
                 else:
                     h_out.Add(h)
         return h_out
