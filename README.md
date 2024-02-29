@@ -31,7 +31,16 @@ Note that this can't be setup at the same time with AnalysisBase because it is s
 
 ## Run
 
-A master run script [master.py](master.py) runs the full workflow. See the docstring of that file for more information. It takes care of the following tasks, which can all be called individually too (see below).
+A master run script [master.py](master.py) runs the full workflow. It can be called by simply supplying the file format of the histogram files. See the docstring of the file and [utils.py](utils.py) for more info.
+
+```sh
+master.py hists/{lep}lep_{sample}.hists.root \
+    [--output ./output] \
+    [--skip-fits] \
+    [--skip-gpr]
+```
+
+This script takes care of the following tasks, which can all be called individually too (see below).
 
 1. Fitting the ttbar signal strength to 1lep TCR.
 2. Fitting the GPR to the event-subtracted MCR.
@@ -39,7 +48,11 @@ A master run script [master.py](master.py) runs the full workflow. See the docst
 4. Creating response matrices.
 5. Performing the profile likelihood unfolding fit.
 
-The script relies on systematic histogram naming. See the docstring of the file and [utils.py](utils.py) for more info.
+Outputs are stored to the output directory, which defaults to `./output`. Most importantly are the plots in the `plots` subdirectory. GPR results, which take the longest runtime, are stored in `gpr/gpr_fit_results.csv`. By passing `--skip-gpr` you can skip running the GPR and just read the CSV instead. Similarly, `--skip-fits` also skips the PLU fit in addition, and will use the stored fit results in `rf/{lep}lep_{var}.fcc.root`.
+
+### Config
+
+Check [utils.py](utils.py) for some hard coded configuration, especially the binning of each variable and the naming of variables/samples/systematics/histograms.
 
 
 ### Unfolding

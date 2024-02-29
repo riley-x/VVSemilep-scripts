@@ -182,11 +182,13 @@ variations_hist = [
 ]
 
 def is_histo_syst(x):
-    if x == variation_nom: return False
+    if variation_nom in x: return False
+    if variation_lumi in x: return False
     if 'mu-diboson' in x: return False
     for var in variations_custom:
         if var in x: return False
     return True
+
 
 def hist_name_variation(hist_name, variation):
     if not is_histo_syst(variation):
@@ -261,15 +263,15 @@ class FileManager:
 
     def _get_sample_files(self, lep : int, sample : Sample, file_path_formats: list[str]) -> list[ROOT.TFile]:
         files = []
+        ROOT.gSystem.RedirectOutput("/dev/null") # mute TFile error messages
         for path in file_path_formats:
             for stub in sample.file_stubs:
                 formatted_path = path.format(lep=lep, sample=stub)
-                ROOT.gSystem.RedirectOutput("/dev/null") # mute TFile error messages
                 try:
                     files.append(ROOT.TFile(formatted_path))
                 except OSError as e:
                     pass
-                ROOT.gSystem.RedirectOutput(_null_char_p, _null_char_p)
+        ROOT.gSystem.RedirectOutput(_null_char_p, _null_char_p)
         
         if not files:
             plot.warning(f'FileManager() unable to find files for {sample} in the {lep}-lep channel.')

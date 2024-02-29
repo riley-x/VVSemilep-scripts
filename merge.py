@@ -20,20 +20,27 @@ samples = [
     'Zjets_Sherpa2211',
 ]
 
-def hadd(target, *sources):
-    print('hadd', target, *sources)
+processes = []
 
+def msg(x):
+    '''Prints a green message to the terminal.'''
+    print('\033[92m' + x + '\033[0m')
+
+def hadd(target, *sources):
     src = []
     for source in sources:
         src.extend(glob.glob(source))
-    args = ['hadd', '-k', target, *src]
+    args = ['hadd', '-k', target, *src] # the -k skips empty/corrupt files
 
-    res = subprocess.run(args) 
-    res.check_returncode()
+    res = subprocess.Popen(args)
+    res.target = target
+
+    msg('Launched ' + ' '.join(['hadd', target, *sources]))
+    processes.append(res)
 
 
 for lep in [1]:
-    for campaign in ['a']:
+    for campaign in ['d', 'e']:
         if campaign == 'a':
             campaign_samples = samples + ['data15', 'data16']
         elif campaign == 'd':
@@ -45,18 +52,13 @@ for lep in [1]:
             sources = f'{base_dir}/mc16{campaign}/{lep_dirs[lep]}/{sample}/*/*'
             hadd(f'hists/{lep}lep_{sample}_{campaign}.{stub_name}.hists', sources)
 
-
-            # args = ['hadd', '-k', f'{out_base}.root', f'{out_base}_*.root'] 
-
-
             # dir_contents = os.scandir(hist_dir)
-
             # out_base = f'{lep}lep_{sample}_{campaign}.{stub_name}.hists'
             # for i,f in enumerate(dir_contents):
             #     args = ['hadd', '-k', f'{out_base}_{i}.root', f'{f.path}/*'] # the -k skips empty/corrupt files
-            #     print(args)
-            #     # res = subprocess.run(args) 
-            #     # res.check_returncode()
-            
             # args = ['hadd', '-k', f'{out_base}.root', f'{out_base}_*.root'] 
-            # print(args)
+
+
+for x in processes:
+    x.wait()
+    msg(f'Completed {x.target}')

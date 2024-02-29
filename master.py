@@ -509,6 +509,7 @@ def plot_correlations(config : ChannelConfig, variable : utils.Variable, roofit_
         [0.9,  1.0, 0.5, 0.0],
         [1.0,  1.0, 0.2, 0.0],
     ]))
+    ROOT.gStyle.SetNumberContours(101)
     plot.plot(
         filename=filename,
         text_pos='topright',
