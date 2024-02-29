@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+'''
+@file master.py 
+@author Riley Xu - riley.xu@gmail.com, riley.xu@cern.ch 
+@date February 29, 2024 
+@brief Quick script to merge CxAODReader output histograms in the shared eos space.
+'''
 
 import subprocess
 import os

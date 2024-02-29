@@ -97,12 +97,12 @@ class Sample:
     '''
     ### Static members ###
     # List here for linting, initialized later below
-    wjets = None
-    zjets = None
-    ttbar = None
-    stop = None
-    diboson = None
-    data =  None
+    wjets : Sample = None
+    zjets : Sample = None
+    ttbar : Sample = None
+    stop : Sample = None
+    diboson : Sample = None
+    data : Sample =  None
 
     def __init__(self, name : str, title : str, file_stubs : list[str], reader_keys : list[str]):
         self.name = name
