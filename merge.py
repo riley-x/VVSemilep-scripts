@@ -2,6 +2,7 @@
 
 import subprocess
 import os
+import glob
 
 stub_name='Feb22_ANN'
 base_dir=f'/eos/atlas/atlascerngroupdisk/phys-hdbs/dbl/VVsemilep2nd/Histograms_{stub_name}'
@@ -20,8 +21,13 @@ samples = [
 ]
 
 def hadd(target, *sources):
-    args = ['hadd', '-k', target, *sources]
-    print(args)
+    print('hadd', target, *sources)
+
+    src = []
+    for source in sources:
+        src.extend(glob.glob(source))
+    args = ['hadd', '-k', target, *src]
+
     res = subprocess.run(args) 
     res.check_returncode()
 
