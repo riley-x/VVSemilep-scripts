@@ -3,7 +3,7 @@
 @file diboson_fit.py 
 @author Riley Xu - riley.xu@gmail.com, riley.xu@cern.ch 
 @date February 22, 2024 
-@brief Functions for fitting the diboson yield using saved GPR fit results
+@brief Functions for fitting the diboson yield directly, bin-by-bin
 '''
 
 import ROOT
@@ -30,16 +30,11 @@ def run_fit(
         bin : tuple[float, float],
         gpr_mu_corr : float,
     ):
-    '''
-    '''
     from scipy import optimize, stats
 
     ### Setup ###
     hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
-    variations = [
-        'mu-ttbar',
-        'mu-stop',
-    ]
+    variations = utils.variations_custom + utils.variations_hist
     gpr_csv_args = dict(
         lep=config.lepton_channel,
         vary=variable.name,

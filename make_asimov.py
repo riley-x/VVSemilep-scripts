@@ -10,7 +10,7 @@ RUN
 ------------------------------------------------------------------------------------------
 
     make_asimov.py filepath/formatter_1.root [...] \
-        --output {lep}lep_data-asimov.hists.root
+        [--output {lep}lep_data-asimov.hists.root]
 
 This will fetch histogram files using the naming convention supplied in the arguments.
 These arguments can include python formatters (using curly braces) for 'lep', which will
@@ -90,7 +90,7 @@ def main():
                 if h_data[i] < 0: h_data[i] = 0
                 h_data.SetBinError(i, h_data[i] ** 0.5)
             h_data.Write()
-            
+
         f_out.Close()
     
 

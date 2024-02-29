@@ -707,7 +707,8 @@ def run_direct_fit(config : ChannelConfig, var : utils.Variable):
         filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.directfit_yields',
         subtitle=[
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{config.lepton_channel}-lepton channel prefit',
+            f'{config.lepton_channel}-lepton channel'
+            'Direct bin-by-bin fit',
         ],
         xtitle=f'{var:title}',
     )
