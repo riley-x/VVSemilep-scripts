@@ -247,6 +247,9 @@ def optimize_binning(
     return bin_edges
 
 
+def output_path(output_dir, sample, lepton_channel):
+    return f'{output_dir}/{sample}_{lepton_channel}lep_rf_histograms.root'
+
 
 ##############################################################################
 ###                                PLOTTING                                ###
@@ -354,7 +357,7 @@ def main(
     output_basename = f'{output}/{sample}_{lepton_channel}lep'
 
     ### Files ###    
-    rf_output_path = f'{output_basename}_rf_histograms.root'
+    rf_output_path = output_path(output, sample, lepton_channel)
     rf_output_file = ROOT.TFile(rf_output_path, 'RECREATE')
 
     ### Run ###

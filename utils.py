@@ -103,6 +103,8 @@ class Sample:
     stop : Sample = None
     diboson : Sample = None
     data : Sample =  None
+    cw_lin : Sample = None
+    cw_quad : Sample = None
 
     def __init__(self, name : str, title : str, file_stubs : list[str], hist_keys : list[str]):
         self.name = name
@@ -135,6 +137,10 @@ Sample.ttbar = Sample('ttbar', 't#bar{t}', ['ttbar'], ['ttbar'])
 Sample.stop = Sample('stop', 'single top', ['stop'], ['stop'])
 Sample.diboson = Sample('diboson', 'diboson', ['diboson_Sherpa2211', 'Diboson_Sh2211'], ['SMVV'])
 Sample.data = Sample('data', 'data', ['data', 'data15', 'data16', 'data17', 'data18'], ['data'])
+
+Sample.cw_lin = Sample('cw_lin', 'c_{W}', ['EFT'], [f'VV{x}qq_NPSQeq1_cW_1' for x in ['vv', 'lv', 'll']])
+Sample.cw_quad = Sample('cw_quad', 'c_{W}^{2}', ['EFT'], [f'VV{x}qq_NPeq1_cW_1' for x in ['vv', 'lv', 'll']])
+
 
 #########################################################################################
 ###                                      Binning                                      ###

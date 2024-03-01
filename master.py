@@ -177,33 +177,92 @@ def plot_gpr_ttbar_and_stop_correlations(config : gpr.FitConfig, filename : str)
     )
 
 
-def plot_yield_comparison(h_fit, h_mc, **plot_opts):
+def plot_yield_comparison(h_fit, h_mc, h_eft=None, eft_legend=None, **plot_opts):
     '''
     Plots a 1D comparison between a fit and MC. The fit is shown as data points while the
     MC is shown as a filled blue band. Includes a fit/MC ratio.
     '''
     h_mc.SetMarkerSize(0)
     h_mc.SetLineColor(plot.colors.blue)
-
     h_mc_err = h_mc.Clone()
     h_mc_err.SetFillColorAlpha(plot.colors.blue, 0.3)
+
+    if h_eft:
+        h_eft.SetMarkerSize(0)
+        h_eft.SetLineColor(plot.colors.orange)
+        h_eft_err = h_eft.Clone()
+        h_eft_err.SetFillColorAlpha(plot.colors.orange, 0.3)
 
     ratio = h_fit.Clone()
     ratio.Divide(h_mc)
 
+    if h_eft:
+        objs = [h_mc, h_mc_err, h_eft, h_eft_err, h_fit]
+        legend = ['', 'SM', '', f'SM + {eft_legend}', 'Fit']
+        opts = ['HIST', 'E2', 'HIST', 'E2', 'PE']
+        legend_opts = ['', 'FL', '', 'FL', 'PEL']
+    else:
+        objs = [h_mc, h_mc_err, h_fit]
+        legend = ['', 'MC', 'Fit']
+        opts = ['HIST', 'E2', 'PE']
+        legend_opts = ['', 'FL', 'PEL']
+
+    ROOT.gStyle.SetErrorX(0)
     plot.plot_ratio(
-        objs1=[h_mc, h_mc_err, h_fit],
+        objs1=objs,
         objs2=[ratio],
-        legend=['', 'MC (stat only)', 'Fit'],
-        opts=['HIST', 'E2', 'PE'],
-        legend_opts=['', 'FL', 'PEL'],
+        legend=legend,
+        opts=opts,
+        legend_opts=legend_opts,
         opts2='PE',
         ytitle='Events',
-        ytitle2='Fit / MC',
+        ytitle2='Fit / SM' if h_eft else 'Fit / MC',
         hline=1,
         y_range2=(0.5, 1.5),
         **plot_opts,
     )
+    ROOT.gStyle.SetErrorX()
+
+
+def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_results, filename : str):
+    bins = np.array(utils.get_bins(config.lepton_channel, variable), dtype=float)
+    
+    ### Fit ###
+    h_fit = ROOT.TH1F('h_fit', '', len(bins) - 1, bins)
+    for i in range(1, len(bins)):
+        mu = plu_fit_results[f'mu_{i:02}']
+        h_fit.SetBinContent(i, mu[0])
+        h_fit.SetBinError(i, mu[1])
+
+    ### MC ###
+    def get(sample):
+        h = config.file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}Lep_Merg_unfoldingMtx_' + variable.name)
+        return plot.rebin(h.ProjectionX(), bins)
+    h_mc = get(utils.Sample.diboson)
+
+    ### EFT ###
+    cw = 0.12
+    h_cw_quad = get(utils.Sample.cw_quad)
+    h_cw_lin = get(utils.Sample.cw_lin)
+    h_cw_quad.Scale(cw**2)
+    h_cw_lin.Scale(cw)
+    h_cw_quad.Add(h_cw_lin)
+    h_cw_quad.Add(h_mc)
+
+    ### Plot ###
+    yield_args = dict(
+        h_fit=h_fit, 
+        h_mc=h_mc,
+        text_pos='topright',
+        subtitle=[
+            '#sqrt{s}=13 TeV, 140 fb^{-1}',
+            f'{config.lepton_channel}-lepton channel fiducial region',
+            'MC errors are stat only',
+        ],
+        xtitle=f'{variable:title}',
+    )
+    plot_yield_comparison(**yield_args, filename=filename)   
+    plot_yield_comparison(**yield_args, h_eft=h_cw_quad, eft_legend='c_{W}^{quad}=' + f'{cw:.2f}', filename=filename + '_cw')   
 
 
 def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
@@ -799,56 +858,41 @@ def run_plu(config : ChannelConfig, var : utils.Variable):
     ### Draw fit ###
     plot_plu_fit(config, var, plu_fit_results)
 
-    ### Draw yield vs MC ###
-    bins = np.array(utils.get_bins(config.lepton_channel, var), dtype=float)
-    h_fit = ROOT.TH1F('h_fit', '', len(bins) - 1, bins)
-    for i in range(1, len(bins)):
-        mu = plu_fit_results[f'mu_{i:02}']
-        h_fit.SetBinContent(i, mu[0])
-        h_fit.SetBinError(i, mu[1])
-    h_mc = config.file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, '{sample}_VV{lep}Lep_Merg_unfoldingMtx_' + var.name)
-    h_mc = h_mc.ProjectionX()
-    h_mc = plot.rebin(h_mc, bins)
-    plot_yield_comparison(
-        h_fit=h_fit, 
-        h_mc=h_mc,
-        filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_yields',
-        text_pos='topright',
-        subtitle=[
-            '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{config.lepton_channel}-lepton channel fiducial region',
-        ],
-        xtitle=f'{var:title}',
-    )
-
     ### Draw pulls ###
     plot_pulls(config, var, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_pulls')
 
     ### Draw correlation matrix ###
     plot_correlations(config, var, roofit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_corr')
 
+    ### Draw yield vs MC ###
+    plot_plu_yields(config, var, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_yields')
+    
 
 def run_channel(config : ChannelConfig):
     '''
     Main run function for a single lepton channel.
     '''
-    ### Generate response matricies ###
-    plot.notice(f'{config.log_base} creating response matrix')
-    config.response_matrix_filepath = unfolding.main(
-        file_manager=config.file_manager,
-        sample=utils.Sample.diboson,
-        lepton_channel=config.lepton_channel,
-        output=f'{config.output_dir}/response_matrix',
-        vars=config.variables,
-    )
+    if not config.skip_fits and not config.skip_gpr:
+        ### Generate response matricies ###
+        plot.notice(f'{config.log_base} creating response matrix')
+        config.response_matrix_filepath = unfolding.main(
+            file_manager=config.file_manager,
+            sample=utils.Sample.diboson,
+            lepton_channel=config.lepton_channel,
+            output=f'{config.output_dir}/response_matrix',
+            vars=config.variables,
+        )
 
-    ### Rebin reco histograms ###
-    save_rebinned_histograms(config)
+        ### Rebin reco histograms ###
+        save_rebinned_histograms(config)
+    else:
+        config.response_matrix_filepath = unfolding.output_path(f'{config.output_dir}/response_matrix', utils.Sample.diboson, config.lepton_channel)
+        config.rebinned_hists_filepath = f'{config.output_dir}/rebin/{config.lepton_channel}lep_{{sample}}_rebin.root'
 
     ### Iterate per variable ###
     for var in config.variables:
         ### GPR fit ###
-        run_gpr(config, var)
+        run_gpr(config, var) # When skip_gpr, still generates the summary plots
 
         ### Diboson yield ###
         if not config.skip_fits:
@@ -892,6 +936,8 @@ def get_files(filepaths):
             utils.Sample.stop,
             utils.Sample.diboson,
             utils.Sample.data,
+            utils.Sample.cw_lin,
+            utils.Sample.cw_quad,
         ],
         file_path_formats=filepaths,
     )
