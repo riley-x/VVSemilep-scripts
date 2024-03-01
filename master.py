@@ -215,7 +215,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     f_gpr = ROOT.TFile(f'{config.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
     h_gpr = f_gpr.Get('Vjets_SR_' + variable.name)
         
-    hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
+    hist_name = '{sample}_VV{lep}Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
     h_diboson = config.file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name)
     h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
     h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name)
@@ -326,7 +326,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
         h_signals.append(h)
         
     ### MC + data ###
-    hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
+    hist_name = '{sample}_VV{lep}Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
     h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
     h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name)
     h_data = config.file_manager.get_hist(config.lepton_channel, utils.Sample.data, hist_name)
@@ -593,13 +593,14 @@ def save_rebinned_histograms(config : ChannelConfig):
         bins = utils.get_bins(config.lepton_channel, variable)
         bins = np.array(bins, dtype=float)
         for variation in variations:
-            hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
+            hist_name = '{sample}_VV{lep}Lep_MergHP_Inclusive_SR_'
+            hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
             hist_name = utils.hist_name_variation(hist_name, variation)
 
             hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name)
             for sample,hist in hists.items():
                 hist = plot.rebin(hist, bins)
-                hist.SetName(hist_name.format(sample=sample))
+                hist.SetName(hist_name.format(lep=config.lepton_channel, sample=sample))
 
                 f = file(sample)
                 f.cd()

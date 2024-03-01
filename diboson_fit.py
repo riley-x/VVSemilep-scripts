@@ -33,7 +33,7 @@ def run_fit(
     from scipy import optimize, stats
 
     ### Setup ###
-    hist_name = '{sample}_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
+    hist_name = '{sample}_VV{lep}Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
     variations = utils.variations_custom + utils.variations_hist
     gpr_csv_args = dict(
         lep=config.lepton_channel,

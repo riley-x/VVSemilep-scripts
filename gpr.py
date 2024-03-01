@@ -1877,6 +1877,7 @@ def run(
         _, h_cr = get_sr_cr(h_vjets_bin, config.sr_window)
 
         ### Run fit ###
+        plot.notice(f'gpr.py::run() Running {config.lepton_channel}lep ({config.variation}) {config.var}=[{binstr}]')
         contour_scanner = gpr_likelihood_contours(
             h_cr=h_cr, 
             h_data_sr=h_vjets_diboson_bin, 

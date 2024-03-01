@@ -39,7 +39,7 @@ def run(
     VVUnfold.channel(region).setStatErrorThreshold(0.05) # 0.05 means that errors < 5% will be ignored
 
     ### Get hists ###
-    hist_name = '*_VV1Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lepton_channel).name
+    hist_name = f'*_VV{lepton_channel}Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lepton_channel).name
     # WARNING this assumes each sample is in separate files!
 
     ### Add data ###
