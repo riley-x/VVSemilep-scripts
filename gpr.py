@@ -1182,9 +1182,6 @@ class GPR:
         scaler = preprocessing.StandardScaler().fit(self.y_train.reshape(-1, 1))
 
         alpha = (self.e_train / scaler.scale_)**2
-        # alpha = (self.e_train / scaler.scale_)
-        # mean_alpha = np.median(alpha)
-        # alpha = 2 / (1/alpha + 1/mean_alpha)
         alpha_max = 0.2
         alpha[alpha > alpha_max] = 2 / (1/alpha[alpha > alpha_max] + 1/alpha_max) # Harmonic mean
 

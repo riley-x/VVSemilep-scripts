@@ -83,6 +83,10 @@ def main():
                 else:
                     h_data.Add(h)
             h_data.SetName(name.format(sample='data'))
+
+            ### Set sqrt(N) errors ###
+            for i in range(len(h_data)):
+                h_data.SetBinError(i, abs(h_data[i]) ** 0.5)
             h_data.Write()
 
         f_out.Close()
