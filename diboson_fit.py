@@ -62,8 +62,8 @@ def run_fit(
         n_mc_nom = (val, err)
 
         ### MC V+jets for comparison ###
-        # n_wjets_nom = plot.integral_user(hists['wjets'], bin, return_error=True)
-        # n_zjets_nom = plot.integral_user(hists['zjets'], bin, return_error=True)
+        n_wjets_nom = plot.integral_user(hists['wjets'], bin, return_error=True)
+        n_zjets_nom = plot.integral_user(hists['zjets'], bin, return_error=True)
 
         ### GPR ###
         n_gpr_nom = config.gpr_results.get_entry(**gpr_csv_args, variation='nominal')
@@ -87,8 +87,8 @@ def run_fit(
         print(f'    {"ttbar":10}: {mu_ttbar_nom[0] * n_ttbar_nom[0]:10.2f} {mu_ttbar_nom[0] * n_ttbar_nom[1]:10.2f}')
         print(f'    {"stop":10}: {config.mu_stop[0] * n_stop_nom[0]:10.2f} {config.mu_stop[0] * n_stop_nom[1]:10.2f}')
         print(f'    {"gpr":10}: {n_gpr_nom[0]:10.2f} {n_gpr_nom[1]:10.2f}')
-        # print(f'    {"wjets":10}: {n_wjets_nom[0]:10.2f} {n_wjets_nom[1]:10.2f}')
-        # print(f'    {"zjets":10}: {n_zjets_nom[0]:10.2f} {n_zjets_nom[1]:10.2f}')
+        print(f'    {"wjets":10}: {n_wjets_nom[0]:10.2f} {n_wjets_nom[1]:10.2f}')
+        print(f'    {"zjets":10}: {n_zjets_nom[0]:10.2f} {n_zjets_nom[1]:10.2f}')
         print('    ' + '-' * 33)
         print(f'    {"diff":10}: {numerator:10.2f} {numerator_err**0.5:10.2f}')
         print(f'    {"diboson":10}: {n_diboson_nom[0]:10.2f} {n_diboson_nom[1]:10.2f}')

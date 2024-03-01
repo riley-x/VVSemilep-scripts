@@ -83,12 +83,6 @@ def main():
                 else:
                     h_data.Add(h)
             h_data.SetName(name.format(sample='data'))
-
-            ### Fix bins ###
-            for i in range(len(h_data)):
-                # Probably don't want to round here, because will mess up at high mass with sparse binnings
-                if h_data[i] < 0: h_data[i] = 0
-                h_data.SetBinError(i, h_data[i] ** 0.5)
             h_data.Write()
 
         f_out.Close()

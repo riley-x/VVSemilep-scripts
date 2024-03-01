@@ -201,6 +201,7 @@ def plot_yield_comparison(h_fit, h_mc, **plot_opts):
         ytitle='Events',
         ytitle2='Fit / MC',
         hline=1,
+        y_range2=(0.5, 1.5),
         **plot_opts,
     )
 
@@ -280,6 +281,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
         ytitle='Data / Bkgs',
         xtitle='m(J) [GeV]',
         ignore_outliers_y=False,
+        y_range=(0.5, 1.5),
     )
     plotter2.add(
         objs=[h_errs],
@@ -707,7 +709,7 @@ def run_direct_fit(config : ChannelConfig, var : utils.Variable):
         filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.directfit_yields',
         subtitle=[
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{config.lepton_channel}-lepton channel'
+            f'{config.lepton_channel}-lepton channel',
             'Direct bin-by-bin fit',
         ],
         xtitle=f'{var:title}',
@@ -909,7 +911,7 @@ def main():
     ttbar_fitter = ttbar_fit.TtbarSysFitter(file_manager, mu_stop_0=mu_stop)
 
     ### Loop over all channels ###
-    for lepton_channel in [1]:
+    for lepton_channel in [0]:
         config = ChannelConfig(
             lepton_channel=lepton_channel,
             file_manager=file_manager,
