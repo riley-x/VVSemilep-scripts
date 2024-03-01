@@ -164,7 +164,8 @@ def get_response_matrix(h):
 def optimize_binning(
         h, fid_range,
         threshold_diag=0.7,
-        max_mc_frac_err=0.4,
+        max_mc_frac_err=0.2,
+        min_reco_count=10,
         monotonic_bin_sizes=False,
     ):
     '''
@@ -173,7 +174,9 @@ def optimize_binning(
         1. The diagonal entries have at least [thresold_diag] fraction of the events.
         2. The fractional MC stat error of the fiducial distribution < [max_mc_frac_err]
            in each bin.
-        3. The reco event count in the bin 
+        3. The reco event count in the bin is >= [min_reco_count]
+        4. If [montonic_bin_sizes], bins at higher m/pT must be larger than the ones at
+           smaller m/pT.
 
     @param h
         Input 2d histogram of fid vs reco. The y axis should be the reco distribution of a
@@ -198,16 +201,19 @@ def optimize_binning(
 
     ### Loop once per NEW (merged) bin ###
     while i < i_end:
-        ### Find size of this bin ###
         n_tot = 0
         n_diag = 0
         n_reco = 0
         err_tot = 0
         merge_size = 0
+        
+        ### Each loop here adds one fine bin into the merged bin ###
         while (n_diag <= 0
                or n_diag / n_tot < threshold_diag
                or (monotonic_bin_sizes and merge_size < last_merge_size)
-               or err_tot**0.5 / n_tot > max_mc_frac_err):
+               or err_tot**0.5 / n_tot > max_mc_frac_err
+               or n_reco < min_reco_count
+            ):
             
             ### Last bin incomplete ###
             if i + merge_size >= i_end:

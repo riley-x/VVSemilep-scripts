@@ -144,20 +144,22 @@ Sample.data = Sample('data', 'data', ['data', 'data15', 'data16', 'data17', 'dat
 def get_bins(lepton_channel : int, var: Variable):
     if var.name == "vv_m":
         if lepton_channel == 0:
-            # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
-            return [500, 740, 930, 1160, 1440, 1800, 2230, 3000]
+            # below, but matched to 1lep custom since they're pretty similar
+            return [700, 810, 940, 1090, 1260, 1500, 2000, 3000]
+            # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
+            return [700, 790, 930, 1090, 1260, 1440, 1650, 1880, 3000]
         elif lepton_channel == 1:
             # below, but with custom fixes
             return [700, 810, 940, 1090, 1260, 1500, 2000, 3000]
             # optimized binning with threshold_diag=0.6, threshold_err=0.4, monotonic_bin_sizes=False, 
             return [500, 690, 810, 940, 1090, 1260, 1450, 1640, 1850, 2090, 2390, 3000]
-            # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
-            return [500, 740, 920, 1140, 1410, 1700, 2080, 3000]
+            # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
+            return [700, 790, 920, 1070, 1240, 1420, 1610, 1820, 3000]
             # old binning
             return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
         elif lepton_channel == 2:
-            # optimized binning with threshold_diag=0.8, threshold_err=0.1, monotonic_bin_sizes=False
-            return [500, 580, 680, 780, 900, 1050, 1220, 1410, 1680, 1910, 2210, 3000]
+            # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
+            return [700, 750, 830, 910, 1010, 1110, 1220, 1380, 3000]
     elif var.name == "vhad_pt":
         if lepton_channel == 1:
             # optimized binning with threshold_diag=0.8, threshold_err=0.4, monotonic_bin_sizes=True
