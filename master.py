@@ -543,6 +543,7 @@ class ChannelConfig:
             output_dir : str,
             skip_fits : bool,
             skip_gpr : bool,
+            is_asimov : bool,
         ):
         self.lepton_channel = lepton_channel
         self.file_manager = file_manager
@@ -551,6 +552,7 @@ class ChannelConfig:
         self.output_dir = output_dir
         self.skip_fits = skip_fits
         self.skip_gpr = skip_gpr
+        self.is_asimov = is_asimov
 
         self.log_base = f'master.py::run_channel({lepton_channel}lep)'
         self.variables = [utils.Variable.vv_m]
@@ -620,6 +622,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
         'lepton_channel': channel_config.lepton_channel,
         'var': var,
         'output_dir': channel_config.output_dir + '/gpr',
+        'use_vjets_mc': channel_config.is_asimov,
     }
     def run(config):
         gpr.run(channel_config.file_manager, config, channel_config.skip_fits or channel_config.skip_gpr)
@@ -921,6 +924,7 @@ def main():
             output_dir=args.output,
             skip_fits=args.skip_fits,
             skip_gpr=args.skip_gpr,
+            is_asimov=args.asimov,
         )
         run_channel(config)
     
