@@ -1,7 +1,3 @@
 [submodule "plotting"]
 	path = plotting
     url = https://github.com/riley-x/ROOT_Plotting_Tools.git
-[submodule "ResonanceFinder"]
-	path = ResonanceFinder
-    url = https://gitlab.cern.ch/atlas-phys/exot/dbl/ResonanceFinder.git
-	ignore = dirty
