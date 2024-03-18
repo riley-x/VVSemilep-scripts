@@ -131,7 +131,7 @@ def plot_MC_backgrounds_per_region(file_manager : utils.FileManager, output_dir 
                 legend = []
                 for sample in file_manager.samples.values():
                     if 'data' in sample.name: continue
-                    h = file_manager.get_hist(lep, sample.name, f'{{sample}}_VV{lep}Lep_{region}_{var}')
+                    h = file_manager.get_hist(lep, sample.name, f'{{sample}}_VV{lep}_{region}_{var}')
                     if h is None: continue
                     h = plot.rebin(h, var.rebin)
                     hists.append(h)
@@ -173,8 +173,8 @@ def plot_MC_backgrounds_for_fatjet_m(file_manager : utils.FileManager, output_di
         legend = []
         for sample in file_manager.samples.values():
             if 'data' in sample.name: continue
-            h_sr = file_manager.get_hist(lep, sample.name, f'{{sample}}_VV{lep}Lep_MergHP_Inclusive_SR_{var}')
-            h_cr = file_manager.get_hist(lep, sample.name, f'{{sample}}_VV{lep}Lep_MergHP_Inclusive_MCR_{var}')
+            h_sr = file_manager.get_hist(lep, sample.name, f'{{sample}}_VV{lep}_MergHP_Inclusive_SR_{var}')
+            h_cr = file_manager.get_hist(lep, sample.name, f'{{sample}}_VV{lep}_MergHP_Inclusive_MCR_{var}')
             if h_sr is None or h_cr is None: continue
             h_sr.Add(h_cr)
             h = plot.rebin(h_sr, var.rebin)

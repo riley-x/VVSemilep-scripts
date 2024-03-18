@@ -1,6 +1,6 @@
 # VVSemileptonic Postscripts
 
-This repository contains many post-scripts related to the VV Semileptonic analysis, mostly related to the unfolding analysis. It takes as input the histograms produced by the CxAODReader.
+This repository contains many post-scripts related to the VV Semileptonic analysis, mostly related to the unfolding analysis. It takes as input the histograms produced by the CxAODReader. In general, see the docstrings of the individual files for more (and usually more up-to-date) info.
 
 ## Setup
 
@@ -34,7 +34,7 @@ Note that this can't be setup at the same time with AnalysisBase because it is s
 A master run script [master.py](master.py) runs the full workflow. It can be called by simply supplying the file format of the histogram files. See the docstring of the file and [utils.py](utils.py) for more info.
 
 ```sh
-master.py hists/{lep}lep_{sample}.hists.root \
+master.py hists/{lep}_{sample}.hists.root \
     [--output ./output] \
     [--skip-fits] \
     [--skip-gpr]

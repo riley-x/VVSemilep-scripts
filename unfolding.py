@@ -366,7 +366,7 @@ def main(
         mtx = file_manager.get_hist(
             lep=lepton_channel, 
             sample=sample.name, 
-            hist_name_format='{sample}_VV{lep}Lep_Merg_unfoldingMtx_' + f'{var}'
+            hist_name_format='{sample}_VV{lep}_Merg_unfoldingMtx_' + f'{var}'
         )
 
         ### Rebin ###

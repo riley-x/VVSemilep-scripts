@@ -1814,7 +1814,7 @@ def run(
         return
     
     ### Retrieve histograms ###
-    hist_name = f'{{sample}}_VV{{lep}}Lep_Merg_{config.var}__v__fatjet_m'
+    hist_name = f'{{sample}}_VV{{lep}}_Merg_{config.var}__v__fatjet_m'
     hist_name = utils.hist_name_variation(hist_name, config.variation)
     h_diboson = file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name)
     if config.use_vjets_mc:

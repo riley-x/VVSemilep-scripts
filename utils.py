@@ -252,14 +252,21 @@ class FileManager:
     data!
     '''
 
+    lepton_channel_names = {
+        0: ['0lep', '0Lep', 'HIGG5D1'],
+        1: ['1lep', '1Lep', 'HIGG5D2'],
+        2: ['2lep', '2Lep', 'HIGG2D4'],
+    }
+
     def __init__(self, samples : list[Sample], file_path_formats : list[str], lepton_channels = [0, 1, 2]) -> None:
         '''
         Tries to open every file given a set of samples and path formats. 
 
         @param file_path_formats
             Pass any number file paths that can optionally contain fields "{lep}" which
-            will be replaced with each channel in [lepton_channels] and "{sample}" which
-            will be replaced with [Sample.file_stubs] for each sample.
+            will be replaced with each channel in [lepton_channels] using
+            [lepton_channel_names] and "{sample}" which will be replaced with
+            [Sample.file_stubs] for each sample.
         '''
         self.samples = { sample.name : sample for sample in samples }
         self.files = { 
@@ -274,11 +281,12 @@ class FileManager:
         ROOT.gSystem.RedirectOutput("/dev/null") # mute TFile error messages
         for path in file_path_formats:
             for stub in sample.file_stubs:
-                formatted_path = path.format(lep=lep, sample=stub)
-                try:
-                    files.append(ROOT.TFile(formatted_path))
-                except OSError as e:
-                    pass
+                for lep_name in self.lepton_channel_names[lep]:
+                    formatted_path = path.format(lep=lep_name, sample=stub)
+                    try:
+                        files.append(ROOT.TFile(formatted_path))
+                    except OSError as e:
+                        pass
         ROOT.gSystem.RedirectOutput(_null_char_p, _null_char_p)
         
         if not files:
@@ -303,15 +311,18 @@ class FileManager:
 
         h_out = None
         for key in sample.hist_keys:
-            name = hist_name_format.format(lep=lep, sample=key)
-            for file in files:
-                h = file.Get(name)
-                if not h or h.ClassName() == 'TObject':
-                    continue
-                elif h_out is None:
-                    h_out = h.Clone()
-                else:
-                    h_out.Add(h)
+            for lep_name in self.lepton_channel_names[lep]:
+                name = hist_name_format.format(lep=lep_name, sample=key)
+                for file in files:
+                    h = file.Get(name)
+                    if not h or h.ClassName() == 'TObject':
+                        continue
+                    elif h_out is None:
+                        h_out = h.Clone()
+                    else:
+                        h_out.Add(h)
+        if h_out is None:
+            plot.warning(f'FileManager() unable to find histgoram {hist_name_format} for {sample} in the {lep}-lep channel.')
         return h_out
     
     def get_file_names(self, lep : int, sample : Union[str, Sample]) -> list[str]:

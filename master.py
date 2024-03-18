@@ -34,10 +34,10 @@ RUN
 
 This will fetch histogram files using the naming convention supplied in the arguments.
 These arguments can include python formatters (using curly braces) for 'lep', which will
-be replaced with the lepton channel number, and 'sample', which uses
+be replaced with the lepton channel name, and 'sample', which uses
 [utils.Sample.file_stubs]. For example,
 
-    hists/{lep}lep/{sample}.root
+    hists/{lep}/{sample}.root
     
 See [utils.FileManager] for details.
 '''
@@ -219,6 +219,7 @@ def plot_yield_comparison(h_fit, h_mc, h_eft=None, eft_legend=None, **plot_opts)
         ytitle2='Fit / SM' if h_eft else 'Fit / MC',
         hline=1,
         y_range2=(0.5, 1.5),
+        logy=True,
         **plot_opts,
     )
     ROOT.gStyle.SetErrorX()
@@ -236,7 +237,7 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
 
     ### MC ###
     def get(sample):
-        h = config.file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}Lep_Merg_unfoldingMtx_' + variable.name)
+        h = config.file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + variable.name)
         return plot.rebin(h.ProjectionX(), bins)
     h_mc = get(utils.Sample.diboson)
 
@@ -274,7 +275,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     f_gpr = ROOT.TFile(f'{config.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
     h_gpr = f_gpr.Get('Vjets_SR_' + variable.name)
         
-    hist_name = '{sample}_VV{lep}Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
+    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
     h_diboson = config.file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name)
     h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
     h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name)
@@ -385,7 +386,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
         h_signals.append(h)
         
     ### MC + data ###
-    hist_name = '{sample}_VV{lep}Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
+    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
     h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
     h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name)
     h_data = config.file_manager.get_hist(config.lepton_channel, utils.Sample.data, hist_name)
@@ -654,7 +655,7 @@ def save_rebinned_histograms(config : ChannelConfig):
         bins = utils.get_bins(config.lepton_channel, variable)
         bins = np.array(bins, dtype=float)
         for variation in variations:
-            hist_name = '{sample}_VV{lep}Lep_MergHP_Inclusive_SR_'
+            hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_'
             hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
             hist_name = utils.hist_name_variation(hist_name, variation)
 
@@ -924,6 +925,8 @@ def parse_args():
     parser.add_argument('--skip-fits', action='store_true', help="Don't do the GPR or PLU fits. For the former, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--asimov', action='store_true', help="Use asimov data instead. Will look for files using [data-asimov] as the key instead of [data]. Create asimov data easily using make_asimov.py")
+    parser.add_argument('--mu-stop', default='1,0.2', help="The stop signal strength. Should be a comma-separated pair val,err.")
+    parser.add_argument('--channels', default='0,1,2', help="The lepton channels to run over, separated by commas.")
     return parser.parse_args()
 
 
@@ -945,23 +948,27 @@ def get_files(filepaths):
 
 
 def main():
+    ### Args ###
     args = parse_args()
     if args.asimov:
         utils.Sample.data.file_stubs = ['data-asimov']
         args.output += '/asimov'
+    mu_stop = [float(x) for x in args.mu_stop.split(',')]
+    channels = [int(x) for x in args.channels.split(',')]
 
+    ### Input files ###
     file_manager = get_files(args.filepaths)
+    
+    ### Output files ###
     os.makedirs(f'{args.output}/plots', exist_ok=True)
-
     plot.save_transparent_png = False
     plot.file_formats = ['png', 'pdf']
 
     ### ttbar fitter ###
-    mu_stop = (1, 0.2)
     ttbar_fitter = ttbar_fit.TtbarSysFitter(file_manager, mu_stop_0=mu_stop)
 
     ### Loop over all channels ###
-    for lepton_channel in [0]:
+    for lepton_channel in channels:
         config = ChannelConfig(
             lepton_channel=lepton_channel,
             file_manager=file_manager,
