@@ -1,7 +1,7 @@
 [submodule "plotting"]
 	path = plotting
-	url = git@github.com:riley-x/ROOT_Plotting_Tools.git
+    url = https://github.com/riley-x/ROOT_Plotting_Tools.git
 [submodule "ResonanceFinder"]
 	path = ResonanceFinder
-	url = ssh://git@gitlab.cern.ch:7999/atlas-phys/exot/dbl/ResonanceFinder.git
+    url = https://gitlab.cern.ch/atlas-phys/exot/dbl/ResonanceFinder.git
 	ignore = dirty
