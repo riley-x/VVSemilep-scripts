@@ -1815,11 +1815,10 @@ def run(
     
     ### Retrieve histograms ###
     hist_name = f'{{sample}}_VV{{lep}}_Merg_{config.var}__v__fatjet_m'
-    hist_name = utils.hist_name_variation(hist_name, config.variation)
-    h_diboson = file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name)
+    h_diboson = file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name, config.variation)
     if config.use_vjets_mc:
-        h_wjets = file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name)
-        h_zjets = file_manager.get_hist(config.lepton_channel, utils.Sample.zjets, hist_name)
+        h_wjets = file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name, config.variation)
+        h_zjets = file_manager.get_hist(config.lepton_channel, utils.Sample.zjets, hist_name, config.variation)
 
         h_vjets = h_wjets.Clone()
         h_vjets.Add(h_zjets)
@@ -1829,9 +1828,9 @@ def run(
         
         h_data = None
     else:
-        h_data  = file_manager.get_hist(config.lepton_channel, utils.Sample.data,  hist_name)
-        h_ttbar = file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
-        h_stop  = file_manager.get_hist(config.lepton_channel, utils.Sample.stop,  hist_name)
+        h_data  = file_manager.get_hist(config.lepton_channel, utils.Sample.data,  hist_name, config.variation)
+        h_ttbar = file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name, config.variation)
+        h_stop  = file_manager.get_hist(config.lepton_channel, utils.Sample.stop,  hist_name, config.variation)
 
         h_ttbar = h_ttbar.Clone() # This clone is really important! Or else the next call will be double scaled, etc.
         h_stop = h_stop.Clone() # This clone is really important! Or else the next call will be double scaled, etc.

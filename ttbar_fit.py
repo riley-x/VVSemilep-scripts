@@ -105,8 +105,7 @@ def run_fit(
     from scipy import optimize, stats
 
     ### Get hists ###
-    hist_name = utils.hist_name_variation('{sample}_VV1Lep_MergHP_Inclusive_TCR_lvJ_m', variation)
-    hists = file_manager.get_hist_all_samples(1, hist_name)
+    hists = file_manager.get_hist_all_samples(1, '{sample}_VV1Lep_MergHP_Inclusive_TCR_lvJ_m', variation)
 
     n_data = plot.integral_user(hists['data'], return_error=True)
     n_ttbar = plot.integral_user(hists['ttbar'], return_error=True)
@@ -182,16 +181,16 @@ class TtbarSysFitter:
         self.vars = {}
 
         results_nom = run_fit(file_manager, mu_stop_0=(mu_stop_0[0], 1e-5))
-        results_stop_up = run_fit(file_manager, mu_stop_0=(mu_stop_0[0] + mu_stop_0[1], 1e-5), variation='mu-stop_up')
-        results_stop_down = run_fit(file_manager, mu_stop_0=(mu_stop_0[0] - mu_stop_0[1], 1e-5), variation='mu-stop_down')
+        results_stop_up = run_fit(file_manager, mu_stop_0=(mu_stop_0[0] + mu_stop_0[1], 1e-5), variation=utils.variation_mu_stop + utils.variation_up_key)
+        results_stop_down = run_fit(file_manager, mu_stop_0=(mu_stop_0[0] - mu_stop_0[1], 1e-5), variation=utils.variation_mu_stop + utils.variation_down_key)
 
         self._mu_stop_nom = (mu_stop_0[0], 1e-5)
         self.mu_ttbar_nom = results_nom['mu_ttbar']
-        self.vars['nominal'] = self.mu_ttbar_nom[0]
-        self.vars['mu-ttbar_up'] = self.mu_ttbar_nom[0] + self.mu_ttbar_nom[1]
-        self.vars['mu-ttbar_down'] = self.mu_ttbar_nom[0] - self.mu_ttbar_nom[1]
-        self.vars['mu-stop_up'] = results_stop_up['mu_ttbar'][0]
-        self.vars['mu-stop_down'] = results_stop_down['mu_ttbar'][0]
+        self.vars[utils.variation_nom] = self.mu_ttbar_nom[0]
+        self.vars[utils.variation_mu_ttbar + utils.variation_up_key] = self.mu_ttbar_nom[0] + self.mu_ttbar_nom[1]
+        self.vars[utils.variation_mu_ttbar + utils.variation_down_key] = self.mu_ttbar_nom[0] - self.mu_ttbar_nom[1]
+        self.vars[utils.variation_mu_stop + utils.variation_up_key] = results_stop_up['mu_ttbar'][0]
+        self.vars[utils.variation_mu_stop + utils.variation_down_key] = results_stop_down['mu_ttbar'][0]
 
     def get_var(self, variation):
         out = self.vars.get(variation)

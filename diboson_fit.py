@@ -45,8 +45,7 @@ def run_fit(
 
     ### Get nominal yields ###
     def _subr_get_nominal(asimov : bool):
-        nom_name = utils.hist_name_variation(hist_name, 'nominal')
-        hists = config.file_manager.get_hist_all_samples(config.lepton_channel, nom_name)
+        hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name, utils.variation_nom)
         
         ### Data and diboson ###
         n_data_nom = plot.integral_user(hists['data'], bin)
@@ -117,13 +116,13 @@ def run_fit(
     for variation_base in variations:
         mc_err = 0
         gpr_err = 0
-        for updown in ['up', 'down']:
-            variation_updown = f'{variation_base}_{updown}'
+        for updown in ['1up', '1down']:
+            variation_updown = f'{variation_base}__{updown}'
 
             ### Get MC background total (ttbar + stop) ###
             var_name = utils.hist_name_variation(hist_name, variation_updown)
-            h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, var_name)
-            h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, var_name)
+            h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, var_name, variation_updown)
+            h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, var_name, variation_updown)
             n_ttbar = plot.integral_user(h_ttbar, bin)
             n_stop = plot.integral_user(h_stop, bin)
 

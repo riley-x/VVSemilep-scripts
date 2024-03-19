@@ -644,22 +644,28 @@ def save_rebinned_histograms(config : ChannelConfig):
     os.makedirs(f'{config.output_dir}/rebin', exist_ok=True)
     config.rebinned_hists_filepath = f'{config.output_dir}/rebin/{config.lepton_channel}lep_{{sample}}_rebin.root'
 
+    ### Output ###
     output_files = {}
     def file(sample):
         if sample not in output_files:
             output_files[sample] = ROOT.TFile(config.rebinned_hists_filepath.format(sample=sample), 'RECREATE')
         return output_files[sample]
     
-    variations = [utils.variation_nom] + utils.variations_hist
+    ### All histo variations ###
+    variations = [utils.variation_nom]
+    for x in utils.variations_hist:
+        variations.append(x + '__1up')
+        variations.append(x + '__1down')
+    
+    ### Loop per variable ###
     for variable in config.variables:
         bins = utils.get_bins(config.lepton_channel, variable)
         bins = np.array(bins, dtype=float)
         for variation in variations:
             hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_'
             hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
-            hist_name = utils.hist_name_variation(hist_name, variation)
 
-            hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name)
+            hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name, variation)
             for sample,hist in hists.items():
                 hist = plot.rebin(hist, bins)
                 hist.SetName(hist_name.format(lep=config.lepton_channel, sample=sample))
@@ -713,7 +719,8 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     )
 
     ### ttbar signal strength variations ###
-    for variation in ['mu-ttbar_up', 'mu-ttbar_down']:
+    for updown in [utils.variation_up_key, utils.variation_down_key]:
+        variation = utils.variation_mu_ttbar + updown
         fit_config = gpr.FitConfig(
             variation=variation,
             mu_stop=channel_config.mu_stop[0],
@@ -723,23 +730,35 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
         run(fit_config)
 
     ### Single top signal strength variations ###
+    variation = utils.variation_mu_stop + utils.variation_up_key
     fit_config = gpr.FitConfig(
-        variation='mu-stop_up',
+        variation=variation,
         mu_stop=channel_config.mu_stop[0] + channel_config.mu_stop[1],
-        mu_ttbar=channel_config.ttbar_fitter.get_var('mu-stop_up'),
+        mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
         **config_base,
     )
     run(fit_config)
+    variation = utils.variation_mu_stop + utils.variation_down_key
     fit_config = gpr.FitConfig(
-        variation=f'mu-stop_down',
+        variation=variation,
         mu_stop=channel_config.mu_stop[0] - channel_config.mu_stop[1],
-        mu_ttbar=channel_config.ttbar_fitter.get_var('mu-stop_down'),
+        mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
         **config_base,
     )
     run(fit_config)
     plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
 
-    # TODO syst variations
+    ### Syst variations ###
+    for variation_base in utils.variations_hist:
+        for updown in [utils.variation_up_key, utils.variation_down_key]:
+            variation = variation_base + updown
+            fit_config = gpr.FitConfig(
+                variation=variation,
+                mu_stop=channel_config.mu_stop[0],
+                mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
+                **config_base,
+            )
+            run(fit_config)
 
     channel_config.gpr_results = fit_config.fit_results
     

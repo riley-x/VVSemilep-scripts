@@ -179,14 +179,180 @@ def get_bins(lepton_channel : int, var: Variable):
 ###                                    Variations                                     ###
 #########################################################################################
 
+variation_up_key = '__1up'
+variation_down_key = '__1down'
+
 variation_nom = 'nominal'
 variation_lumi = 'lumiNP'
-variations_custom = [
-    'mu-ttbar',
-    'mu-stop',
-]
-variations_hist = [
 
+variation_mu_ttbar = 'mu-ttbar'
+variation_mu_stop = 'mu-stop'
+variations_custom = [
+    variation_mu_ttbar, 
+    variation_mu_stop,
+]
+
+variations_hist = [
+    'SysEG_RESOLUTION_ALL',
+    'SysEG_SCALE_ALL',
+    'SysEL_EFF_ID_TOTAL_1NPCOR_PLUS_UNCOR',
+    'SysEL_EFF_Iso_TOTAL_1NPCOR_PLUS_UNCOR',
+    'SysEL_EFF_Reco_TOTAL_1NPCOR_PLUS_UNCOR',
+    'SysEL_EFF_TriggerEff_TOTAL_1NPCOR_PLUS_UNCOR',
+    'SysEL_EFF_Trigger_TOTAL_1NPCOR_PLUS_UNCOR',
+    'SysFT_EFF_Eigen_B_0_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_0_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_1_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_1_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_2_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_2_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_3_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_3_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_4_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_4_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_5_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_5_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_6_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_6_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_7_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_B_8_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_C_0_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_C_0_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_C_1_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_C_1_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_C_2_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_C_2_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_C_3_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_C_3_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_Light_0_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_Light_0_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_Light_1_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_Light_1_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_Light_2_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_Light_2_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_Light_3_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_Eigen_Light_3_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_Light_4_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_Light_5_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_Eigen_Light_6_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_extrapolation_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_extrapolation_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysFT_EFF_extrapolation_from_charm_AntiKt4EMPFlowJets_BTagging201903',
+    'SysFT_EFF_extrapolation_from_charm_AntiKtVR30Rmax4Rmin02TrackJets_BTagging201903',
+    'SysJET_BJES_Response',
+    'SysJET_EffectiveNP_Detector1',
+    'SysJET_EffectiveNP_Detector2',
+    'SysJET_EffectiveNP_Mixed1',
+    'SysJET_EffectiveNP_Mixed2',
+    'SysJET_EffectiveNP_Mixed3',
+    'SysJET_EffectiveNP_Modelling1',
+    'SysJET_EffectiveNP_Modelling2',
+    'SysJET_EffectiveNP_Modelling3',
+    'SysJET_EffectiveNP_Modelling4',
+    'SysJET_EffectiveNP_R10_Detector1',
+    'SysJET_EffectiveNP_R10_Detector2',
+    'SysJET_EffectiveNP_R10_Mixed1',
+    'SysJET_EffectiveNP_R10_Mixed2',
+    'SysJET_EffectiveNP_R10_Mixed3',
+    'SysJET_EffectiveNP_R10_Mixed4',
+    'SysJET_EffectiveNP_R10_Modelling1',
+    'SysJET_EffectiveNP_R10_Modelling2',
+    'SysJET_EffectiveNP_R10_Modelling3',
+    'SysJET_EffectiveNP_R10_Modelling4',
+    'SysJET_EffectiveNP_R10_Modelling5',
+    'SysJET_EffectiveNP_R10_Modelling6',
+    'SysJET_EffectiveNP_R10_Modelling7',
+    'SysJET_EffectiveNP_R10_Statistical1',
+    'SysJET_EffectiveNP_R10_Statistical2',
+    'SysJET_EffectiveNP_R10_Statistical3',
+    'SysJET_EffectiveNP_R10_Statistical4',
+    'SysJET_EffectiveNP_R10_Statistical5',
+    'SysJET_EffectiveNP_R10_Statistical6',
+    'SysJET_EffectiveNP_R10_Statistical7',
+    'SysJET_EffectiveNP_R10_Statistical8',
+    'SysJET_EffectiveNP_Statistical1',
+    'SysJET_EffectiveNP_Statistical2',
+    'SysJET_EffectiveNP_Statistical3',
+    'SysJET_EffectiveNP_Statistical4',
+    'SysJET_EffectiveNP_Statistical5',
+    'SysJET_EffectiveNP_Statistical6',
+    'SysJET_EtaIntercalibration_Modelling',
+    'SysJET_EtaIntercalibration_R10_TotalStat',
+    'SysJET_EtaIntercalibration_TotalStat',
+    'SysJET_Flavor_Composition',
+    'SysJET_Flavor_Response',
+    'SysJET_JERMC_EffectiveNP_1',
+    'SysJET_JERMC_EffectiveNP_10',
+    'SysJET_JERMC_EffectiveNP_11',
+    'SysJET_JERMC_EffectiveNP_12restTerm',
+    'SysJET_JERMC_EffectiveNP_2',
+    'SysJET_JERMC_EffectiveNP_3',
+    'SysJET_JERMC_EffectiveNP_4',
+    'SysJET_JERMC_EffectiveNP_5',
+    'SysJET_JERMC_EffectiveNP_6',
+    'SysJET_JERMC_EffectiveNP_7',
+    'SysJET_JERMC_EffectiveNP_8',
+    'SysJET_JERMC_EffectiveNP_9',
+    'SysJET_JERPD_DataVsMC_MC16',
+    'SysJET_JERPD_EffectiveNP_10',
+    'SysJET_JERPD_EffectiveNP_11',
+    'SysJET_JERPD_EffectiveNP_2',
+    'SysJET_JERPD_EffectiveNP_3',
+    'SysJET_JERPD_EffectiveNP_4',
+    'SysJET_JERPD_EffectiveNP_5',
+    'SysJET_JERPD_EffectiveNP_6',
+    'SysJET_JERPD_EffectiveNP_7',
+    'SysJET_JERPD_EffectiveNP_8',
+    'SysJET_JERPD_EffectiveNP_9',
+    'SysJET_JMS_Topology_QCD',
+    'SysJET_JvtEfficiency',
+    'SysJET_LargeR_TopologyUncertainty_V',
+    'SysJET_LargeR_TopologyUncertainty_top',
+    'SysJET_Pileup_OffsetMu',
+    'SysJET_Pileup_OffsetNPV',
+    'SysJET_Pileup_PtTerm',
+    'SysJET_Pileup_RhoTopology',
+    'SysJET_Rtrk_Baseline_frozen_mass',
+    'SysJET_Rtrk_ExtraComp_Baseline_frozen_mass',
+    'SysJET_Rtrk_ExtraComp_Modelling_frozen_mass',
+    'SysJET_Rtrk_Modelling_frozen_mass',
+    'SysMET_SoftTrk_ResoPara',
+    'SysMET_SoftTrk_ResoPerp',
+    'SysMET_SoftTrk_Scale',
+    'SysMUON_EFF_ISO_STAT',
+    'SysMUON_EFF_ISO_SYS',
+    'SysMUON_EFF_RECO_STAT',
+    'SysMUON_EFF_RECO_STAT_LOWPT',
+    'SysMUON_EFF_RECO_SYS',
+    'SysMUON_EFF_RECO_SYS_LOWPT',
+    'SysMUON_EFF_TTVA_STAT',
+    'SysMUON_EFF_TTVA_SYS',
+    'SysMUON_EFF_TrigStatUncertainty',
+    'SysMUON_EFF_TrigSystUncertainty',
+    'SysMUON_ID',
+    'SysMUON_MS',
+    'SysMUON_SAGITTA_RESBIAS',
+    'SysMUON_SCALE',
+    'SysPRW_DATASF',
+    'SysTAUS_TRUEELECTRON_EFF_ELEBDT_STAT',
+    'SysTAUS_TRUEELECTRON_EFF_ELEBDT_SYST',
+    'SysTAUS_TRUEHADTAU_EFF_ELEOLR_TOTAL',
+    'SysTAUS_TRUEHADTAU_EFF_RECO_TOTAL',
+    'SysTAUS_TRUEHADTAU_EFF_RNNID_1PRONGSTATSYSTPT2025',
+    'SysTAUS_TRUEHADTAU_EFF_RNNID_1PRONGSTATSYSTPT2530',
+    'SysTAUS_TRUEHADTAU_EFF_RNNID_1PRONGSTATSYSTPT3040',
+    'SysTAUS_TRUEHADTAU_EFF_RNNID_1PRONGSTATSYSTPTGE40',
+    'SysTAUS_TRUEHADTAU_EFF_RNNID_3PRONGSTATSYSTPT2025',
+    'SysTAUS_TRUEHADTAU_EFF_RNNID_3PRONGSTATSYSTPT2530',
+    'SysTAUS_TRUEHADTAU_EFF_RNNID_3PRONGSTATSYSTPT3040',
+    'SysTAUS_TRUEHADTAU_EFF_RNNID_3PRONGSTATSYSTPTGE40',
+    'SysTAUS_TRUEHADTAU_EFF_RNNID_HIGHPT',
+    'SysTAUS_TRUEHADTAU_EFF_RNNID_SYST',
+    'SysTAUS_TRUEHADTAU_SME_TES_DETECTOR',
+    'SysTAUS_TRUEHADTAU_SME_TES_INSITUEXP',
+    'SysTAUS_TRUEHADTAU_SME_TES_INSITUFIT',
+    'SysTAUS_TRUEHADTAU_SME_TES_MODEL_CLOSURE',
+    'SysTAUS_TRUEHADTAU_SME_TES_PHYSICSLIST',
 ]
 
 def is_histo_syst(x):
@@ -201,8 +367,7 @@ def is_histo_syst(x):
 def hist_name_variation(hist_name, variation):
     if not is_histo_syst(variation):
         return hist_name
-    raise NotImplementedError('hist_name_variation')
-    return f'{hist_name}__'
+    return f'{hist_name}_{variation}'
 
 
 
@@ -294,7 +459,7 @@ class FileManager:
         return files
     
 
-    def get_hist(self, lep : int, sample : Union[str, Sample], hist_name_format : str) -> Union[ROOT.TH1F, None]:
+    def get_hist(self, lep : int, sample : Union[str, Sample], hist_name_format : str, variation : str = variation_nom) -> Union[ROOT.TH1F, None]:
         '''
         Retrieves a single histogram given a sample and name format. Histograms from every
         sample file in [self.files] using every key in [sample.hist_keys] will be fetched
@@ -313,6 +478,7 @@ class FileManager:
         for key in sample.hist_keys:
             for lep_name in self.lepton_channel_names[lep]:
                 name = hist_name_format.format(lep=lep_name, sample=key)
+                name = hist_name_variation(name, variation)
                 for file in files:
                     h = file.Get(name)
                     if not h or h.ClassName() == 'TObject':
@@ -321,6 +487,7 @@ class FileManager:
                         h_out = h.Clone()
                     else:
                         h_out.Add(h)
+
         if h_out is None:
             plot.warning(f'FileManager() unable to find histgoram {hist_name_format} for {sample} in the {lep}-lep channel.')
         return h_out
@@ -334,11 +501,11 @@ class FileManager:
         files = self.files[(lep, sample.name)]
         return [file.GetName() for file in files]
     
-    def get_hist_all_samples(self, lep : int, hist_name_format : str) -> dict[str, ROOT.TH1F]:
+    def get_hist_all_samples(self, lep : int, hist_name_format : str, variation : str = variation_nom) -> dict[str, ROOT.TH1F]:
         '''
         Like [get_hist] but returns a dict of all the histograms for each sample.
         '''
         out = {}
         for _,sample in self.samples.items():
-            out[sample.name] = self.get_hist(lep, sample, hist_name_format)
+            out[sample.name] = self.get_hist(lep, sample, hist_name_format, variation)
         return out
