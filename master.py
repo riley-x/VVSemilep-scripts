@@ -668,7 +668,7 @@ def save_rebinned_histograms(config : ChannelConfig):
             hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name, variation)
             for sample,hist in hists.items():
                 hist = plot.rebin(hist, bins)
-                hist.SetName(hist_name.format(lep=config.lepton_channel, sample=sample))
+                hist.SetName(hist_name.format(lep=f'{config.lepton_channel}Lep', sample=sample))
 
                 f = file(sample)
                 f.cd()
