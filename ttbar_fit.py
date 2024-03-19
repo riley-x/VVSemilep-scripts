@@ -132,7 +132,7 @@ def run_fit(
         return out
         
     ### Minimize ###
-    res = optimize.minimize(nll, [1, mu_stop_0[0], 0], bounds=[(1e-2, 2), (1e-2, 2), (-5, 5)], method='L-BFGS-B')#, options={'ftol': 1e-15, 'gtol': 1e-15})
+    res = optimize.minimize(nll, [1.0, mu_stop_0[0], 0], bounds=[(1e-2, 2), (1e-2, 2), (-5, 5)], method='L-BFGS-B', options={'eps':1e-10})#, options={'ftol': 1e-15, 'gtol': 1e-15})
     if not res.success:
         plot.error(f'ttbar_fit.py::run_fit() did not succeed:\n{res}')
         raise RuntimeError()

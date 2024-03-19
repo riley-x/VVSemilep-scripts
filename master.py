@@ -943,7 +943,8 @@ def parse_args():
     parser.add_argument('-o', '--output', default='./output')
     parser.add_argument('--skip-fits', action='store_true', help="Don't do the GPR or PLU fits. For the former, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
-    parser.add_argument('--asimov', action='store_true', help="Use asimov data instead. Will look for files using [data-asimov] as the key instead of [data]. Create asimov data easily using make_asimov.py")
+    parser.add_argument('--no-systs', action='store_true', help="Run without using the systematic variations.")
+    parser.add_argument('--asimov', action='store_true', help="Use asimov data instead. Will look for files using [data-asimov] as the naming key instead of [data]. Create asimov data easily using make_asimov.py")
     parser.add_argument('--mu-stop', default='1,0.2', help="The stop signal strength. Should be a comma-separated pair val,err.")
     parser.add_argument('--channels', default='0,1,2', help="The lepton channels to run over, separated by commas.")
     return parser.parse_args()
@@ -972,6 +973,8 @@ def main():
     if args.asimov:
         utils.Sample.data.file_stubs = ['data-asimov']
         args.output += '/asimov'
+    if args.no_systs:
+        utils.variations_hist.clear()
     mu_stop = [float(x) for x in args.mu_stop.split(',')]
     channels = [int(x) for x in args.channels.split(',')]
 
