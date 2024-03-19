@@ -44,7 +44,7 @@ See [utils.FileManager] for details.
 
 from __future__ import annotations
 
-import ROOT
+import ROOT # type: ignore
 
 import numpy as np
 import os

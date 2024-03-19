@@ -6,7 +6,7 @@
 @brief Functions for fitting the diboson yield directly, bin-by-bin
 '''
 
-import ROOT
+import ROOT # type: ignore
 import numpy as np
 import os
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter

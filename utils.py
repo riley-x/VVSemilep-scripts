@@ -10,7 +10,7 @@ import ctypes
 import numpy as np
 
 from plotting import plot
-import ROOT
+import ROOT # type: ignore
 
 #########################################################################################
 ###                                     Variables                                     ###

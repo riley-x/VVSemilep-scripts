@@ -20,7 +20,7 @@ For example,
 See [utils.FileManager] for details.
 '''
 
-import ROOT
+import ROOT # type: ignore
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 

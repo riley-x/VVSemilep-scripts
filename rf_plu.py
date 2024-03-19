@@ -18,7 +18,7 @@ def run(
         mu_stop : tuple[float, float],
         mu_ttbar : tuple[float, float],
     ):
-    from ROOT import RF
+    from ROOT import RF # type: ignore
 
     ### Config ###
     analysis = 'VVUnfold'

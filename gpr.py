@@ -94,7 +94,7 @@ from typing import Union
 
 # WARNING! The sklearn imports seem to cause segfaults with ROOT, even when they're not
 # used. However they don't always happen, so you can just rerun until it works.
-import ROOT
+import ROOT # type: ignore
 ROOT.gROOT.SetBatch(ROOT.kTRUE)
 ROOT.TH1.SetDefaultSumw2(ROOT.kTRUE)
 
