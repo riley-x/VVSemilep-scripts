@@ -49,6 +49,7 @@ import ROOT # type: ignore
 import numpy as np
 import os
 import sys
+import gc
 import subprocess
 import shutil
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -903,7 +904,7 @@ def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index 
         plot.notice(f'{config.log_base} running PLU fits')
         with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}.fcc.txt', 'w') as f:
             res = subprocess.run(
-                ['./runFitCrossCheck.py', config.plu_ws_filepath],  # the './' is necessary!
+                ['./runFitCrossCheck.py', ws_path],  # the './' is necessary!
                 cwd=config.npcheck_dir, 
                 stdout=f, 
                 stderr=f
@@ -915,7 +916,8 @@ def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index 
     fcc_file = ROOT.TFile(fcc_path)
     results_name = 'PlotsAfterGlobalFit/unconditionnal/fitResult'
     roofit_results = fcc_file.Get(results_name)
-    roofit_results.Print()
+    if not config.skip_fits:
+        roofit_results.Print()
 
     plu_fit_results = { v.GetName() : (v.getValV(), v.getError()) for v in roofit_results.floatParsFinal() }
     plu_fit_results['mu-stop'] = convert_alpha(plu_fit_results['alpha_mu-stop'], config.mu_stop)
@@ -944,30 +946,84 @@ def run_plu_val(config : ChannelConfig, variable : utils.Variable, results_nom :
     histograms (see [save_data_variation_histograms]) and running the PLU on each of them,
     generating a distribution of the output results.
     '''
-    # Really important this import is here otherwise segfaults occur, due to the
-    # `from ROOT import RF` line I think. But somehow hiding it here is fine.
-    import rf_plu 
-
-    os.makedirs(f'{config.output_dir}/rf', exist_ok=True)
     bins = utils.get_bins(config.lepton_channel, variable)
+    nbins = len(bins) - 1
 
     ### Create histograms ###
     hists = []
-    for i in range(1, len(bins)):
-        hists.append(ROOT.TH1F(f'h_i', '', 100, -5, 5))
+    for i in range(nbins):
+        hists.append(ROOT.TH1F(f'h_plu_validation_{i}', '', 20, -5, 5))
+    sums = np.zeros(nbins)
+    sum_squares = np.zeros(nbins)
 
     ### Run PLU multiple times ###
     for val_index in range(config.plu_validation_iters):
         results = run_plu(config, variable, val_index)
-        for i in range(1, len(bins)):
-            name = f'mu_{i:02}'
+        for i in range(nbins):
+            name = f'mu_{i + 1:02}'
             val_nom = results_nom[name]
             val = (results[name][0] - val_nom[0]) / val_nom[1]
-            hists[i - 1].Fill(val)
+
+            hists[i].Fill(val)
+            sums[i] += val
+            sum_squares[i] += val**2
+
+    ### Mean and std dev callback ###
+    means = sums / config.plu_validation_iters
+    std_devs = np.sqrt(sum_squares / config.plu_validation_iters - means**2)
+    def callback(plotter):
+        for i in range(nbins):
+            line = ROOT.TLine(means[i], i, means[i], i + 0.5)
+            line.SetLineColor(ROOT.kBlack)
+            line.SetLineWidth(2)
+            line.Draw()
+
+            line2 = ROOT.TLine(means[i] - std_devs[i], i, means[i] - std_devs[i], i + 0.5)
+            line2.SetLineColor(ROOT.kBlack)
+            line.SetLineWidth(2)
+            line2.SetLineStyle(ROOT.kDashed)
+            line2.Draw()
+
+            line3 = ROOT.TLine(means[i] + std_devs[i], i, means[i] + std_devs[i], i + 0.5)
+            line3.SetLineColor(ROOT.kBlack)
+            line.SetLineWidth(2)
+            line3.SetLineStyle(ROOT.kDashed)
+            line3.Draw()
+
+            plotter.cache.extend([line, line2, line3])
+
+    ### Legend for mean lines ###
+    line_mean = ROOT.TLine(0, 0, 1, 1)
+    line_mean.SetLineColor(ROOT.kBlack)
+    line_mean.SetLineWidth(2)
+
+    line_var = ROOT.TLine(0, 0, 1, 1)
+    line_var.SetLineColor(ROOT.kBlack)
+    line_var.SetLineWidth(2)
+    line_var.SetLineStyle(ROOT.kDashed)
+    legend = [
+        (line_mean, 'Mean', 'L'),
+        (line_var, '#pm1 std. dev.', 'L'),
+    ]
 
     ### Plot ###
     plot.plot_tiered(
         hists=[[h] for h in hists],
+        text_pos='top',
+        tier_labels=[f'Bin {i:02}' for i in range(1, len(bins))],
+        subtitle=[
+            '#sqrt{s}=13 TeV, 140 fb^{-1}',
+            f'{config.lepton_channel}-lepton channel',
+            'PLU fit results from Poisson varied data',
+        ],
+        legend=legend,
+        xtitle='Fitted Fiducial Events #frac{x - x_{nom}}{#sigma_{nom}}',
+        text_offset_top = 0.02,
+        y_pad_top=0.2,
+        title_offset_x=1.5,
+        bottom_margin=0.2,
+        fillcolor=plot.colors.pastel,
+        callback=callback,
         filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{variable}.plu_validation',
     )
     
@@ -996,12 +1052,15 @@ def run_channel(config : ChannelConfig):
     ### Iterate per variable ###
     for var in config.variables:
         ### GPR fit ###
+        gc.collect() # Get segfaults when generating plots sometimes
+        gc.disable() # https://root-forum.cern.ch/t/segfault-on-creating-canvases-and-pads-in-a-loop-with-pyroot/44729/13
         run_gpr(config, var) # When skip_gpr, still generates the summary plots
+        gc.enable()
 
         ### Diboson yield ###
         if not config.skip_fits:
             run_direct_fit(config, var)
-    
+
         ### Prefit plot (pre-PLU but using GPR) ###
         plot_pre_plu_fit(config, var)
 
@@ -1012,6 +1071,7 @@ def run_channel(config : ChannelConfig):
                 run_plu_val(config, var, plu_results)
         except Exception as e:
             plot.warning(str(e))
+            raise e
         
 
 
@@ -1093,7 +1153,6 @@ def main():
         )
         run_channel(config)
     
-
 
 if __name__ == "__main__":
     main()
