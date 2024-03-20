@@ -117,6 +117,12 @@ class Sample:
             return f'{self.title}'
         else:
             return self.name
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.name == other.name
+        else:
+            return False
     
     @staticmethod
     def list_predefined():
@@ -364,8 +370,10 @@ def is_histo_syst(x):
     return True
 
 
-def hist_name_variation(hist_name, variation):
+def hist_name_variation(hist_name, sample : Sample, variation):
     if not is_histo_syst(variation):
+        return hist_name
+    if sample == Sample.data:
         return hist_name
     return f'{hist_name}_{variation}'
 
@@ -478,7 +486,7 @@ class FileManager:
         for key in sample.hist_keys:
             for lep_name in self.lepton_channel_names[lep]:
                 name = hist_name_format.format(lep=lep_name, sample=key)
-                name = hist_name_variation(name, variation)
+                name = hist_name_variation(name, sample, variation)
                 for file in files:
                     h = file.Get(name)
                     if not h or h.ClassName() == 'TObject':

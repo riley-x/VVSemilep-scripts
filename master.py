@@ -601,18 +601,22 @@ class ChannelConfig:
             ttbar_fitter: ttbar_fit.TtbarSysFitter,
             mu_stop : tuple[float, float],
             output_dir : str,
+            skip_hist_gen : bool,
             skip_fits : bool,
             skip_gpr : bool,
             is_asimov : bool,
+            run_plu_val : bool,
         ):
         self.lepton_channel = lepton_channel
         self.file_manager = file_manager
         self.ttbar_fitter = ttbar_fitter
         self.mu_stop = mu_stop
         self.output_dir = output_dir
+        self.skip_hist_gen = skip_hist_gen
         self.skip_fits = skip_fits
         self.skip_gpr = skip_gpr
         self.is_asimov = is_asimov
+        self.plu_validation_iters = 100 if run_plu_val else 0
 
         self.log_base = f'master.py::run_channel({lepton_channel}lep)'
         self.variables = [utils.Variable.vv_m]
@@ -666,16 +670,52 @@ def save_rebinned_histograms(config : ChannelConfig):
             hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
 
             hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name, variation)
-            for sample,hist in hists.items():
-                hist = plot.rebin(hist, bins)
-                hist.SetName(hist_name.format(lep=f'{config.lepton_channel}Lep', sample=sample))
+            for sample_name,hist in hists.items():
+                if sample_name == utils.Sample.data.name: continue # Handled in [save_data_variation_histograms]
 
-                f = file(sample)
+                hist = plot.rebin(hist, bins)
+                hist.SetName(hist_name.format(lep=f'{config.lepton_channel}Lep', sample=sample_name))
+
+                f = file(sample_name)
                 f.cd()
                 hist.Write()
+
+    ### Data rebinned histograms for PLU stat test ###
+    save_data_variation_histograms(config, file(utils.Sample.data.name))
     
     plot.success(f'Saved rebinned histograms to {config.rebinned_hists_filepath}')
 
+
+def save_data_variation_histograms(config : ChannelConfig, f : ROOT.TFile):
+    '''
+    Saves several statistical variations of the data histograms 
+    '''
+    ### Loop per variable ###
+    for variable in config.variables:
+        ### Config ###
+        bins = utils.get_bins(config.lepton_channel, variable)
+        bins = np.array(bins, dtype=float)
+
+        hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_'
+        hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
+
+        ### Nominal hist ###
+        h_nom = config.file_manager.get_hist(config.lepton_channel, utils.Sample.data, hist_name)
+        h_nom = plot.rebin(h_nom, bins)
+        h_nom.SetName(hist_name.format(lep=f'{config.lepton_channel}Lep', sample='data'))
+
+        f.cd()
+        h_nom.Write()
+
+        ### Create variations ###
+        rng = np.random.default_rng()
+        for i in range(config.plu_validation_iters):
+            name = hist_name.format(lep=f'{config.lepton_channel}Lep', sample=f'data_var{i:03}')
+            h = ROOT.TH1F(name, name, len(bins) - 1, bins)
+            for x in range(1, h_nom.GetNbinsX() + 1):
+                h[x] = rng.poisson(h_nom[x])
+            h.Write()
+    
 
 def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     '''
@@ -824,7 +864,7 @@ def run_npcheck_drawfit(config : ChannelConfig, var : utils.Variable):
     shutil.copyfile(npcheck_output_path, target_path)
     
 
-def run_plu(config : ChannelConfig, var : utils.Variable):
+def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index : int = None):
     '''
     Runs the profile likelihood unfolding fit using ResonanceFinder. Assumes the
     GPR/response matrices have been created already.
@@ -846,13 +886,19 @@ def run_plu(config : ChannelConfig, var : utils.Variable):
             hist_file_format=config.rebinned_hists_filepath,
             mu_stop=config.mu_stop,
             mu_ttbar=config.ttbar_fitter.mu_ttbar_nom,
+            stat_validation_index=stat_validation_index,
         )
     else:
-        ws_path = rf_plu.ws_path(config.output_dir, config.lepton_channel, var)
-    config.plu_ws_filepath = os.path.abspath(ws_path)
+        ws_path = rf_plu.ws_path(config.output_dir, config.lepton_channel, var, stat_validation_index)
+    ws_path = os.path.abspath(ws_path)
+    if stat_validation_index is None:
+        config.plu_ws_filepath = ws_path
 
     ### Run fits ###
-    fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.fcc.root'
+    if stat_validation_index is None:
+        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.fcc.root'
+    else:
+        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.fcc_var{stat_validation_index:03}.root'
     if not config.skip_fits:
         plot.notice(f'{config.log_base} running PLU fits')
         with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}.fcc.txt', 'w') as f:
@@ -875,24 +921,62 @@ def run_plu(config : ChannelConfig, var : utils.Variable):
     plu_fit_results['mu-stop'] = convert_alpha(plu_fit_results['alpha_mu-stop'], config.mu_stop)
     plu_fit_results['mu-ttbar'] = convert_alpha(plu_fit_results['alpha_mu-ttbar'], config.ttbar_fitter.mu_ttbar_nom)
     
-    ### Draw fit ###
-    plot_plu_fit(config, var, plu_fit_results)
+    ### Plots ###
+    if stat_validation_index is None:
+        ### Draw fit ###
+        plot_plu_fit(config, var, plu_fit_results)
 
-    ### Draw pulls ###
-    plot_pulls(config, var, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_pulls')
+        ### Draw pulls ###
+        plot_pulls(config, var, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_pulls')
 
-    ### Draw correlation matrix ###
-    plot_correlations(config, var, roofit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_corr')
+        ### Draw correlation matrix ###
+        plot_correlations(config, var, roofit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_corr')
 
-    ### Draw yield vs MC ###
-    plot_plu_yields(config, var, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_yields')
+        ### Draw yield vs MC ###
+        plot_plu_yields(config, var, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_yields')
+    
+    return plu_fit_results
+    
+
+def run_plu_val(config : ChannelConfig, variable : utils.Variable, results_nom : dict[str, tuple[float, float]]):
+    '''
+    Runs a validation test for the PLU fit by creating statistical variations of the data
+    histograms (see [save_data_variation_histograms]) and running the PLU on each of them,
+    generating a distribution of the output results.
+    '''
+    # Really important this import is here otherwise segfaults occur, due to the
+    # `from ROOT import RF` line I think. But somehow hiding it here is fine.
+    import rf_plu 
+
+    os.makedirs(f'{config.output_dir}/rf', exist_ok=True)
+    bins = utils.get_bins(config.lepton_channel, variable)
+
+    ### Create histograms ###
+    hists = []
+    for i in range(1, len(bins)):
+        hists.append(ROOT.TH1F(f'h_i', '', 100, -5, 5))
+
+    ### Run PLU multiple times ###
+    for val_index in range(config.plu_validation_iters):
+        results = run_plu(config, variable, val_index)
+        for i in range(1, len(bins)):
+            name = f'mu_{i:02}'
+            val_nom = results_nom[name]
+            val = (results[name][0] - val_nom[0]) / val_nom[1]
+            hists[i - 1].Fill(val)
+
+    ### Plot ###
+    plot.plot_tiered(
+        hists=[[h] for h in hists],
+        filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{variable}.plu_validation',
+    )
     
 
 def run_channel(config : ChannelConfig):
     '''
     Main run function for a single lepton channel.
     '''
-    if not config.skip_fits and not config.skip_gpr:
+    if not config.skip_hist_gen and not config.skip_fits and not config.skip_gpr:
         ### Generate response matricies ###
         plot.notice(f'{config.log_base} creating response matrix')
         config.response_matrix_filepath = unfolding.main(
@@ -923,7 +1007,9 @@ def run_channel(config : ChannelConfig):
 
         ### Profile likelihood unfolding fit ###
         try: # This requires ResonanceFinder!
-            run_plu(config, var)
+            plu_results = run_plu(config, var)
+            if config.plu_validation_iters:
+                run_plu_val(config, var, plu_results)
         except Exception as e:
             plot.warning(str(e))
         
@@ -941,10 +1027,12 @@ def parse_args():
     )
     parser.add_argument('filepaths', nargs='+')
     parser.add_argument('-o', '--output', default='./output')
+    parser.add_argument('--skip-hist-gen', action='store_true', help="Skip generating the response matrix and rebinned histograms.")
     parser.add_argument('--skip-fits', action='store_true', help="Don't do the GPR or PLU fits. For the former, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--no-systs', action='store_true', help="Run without using the systematic variations.")
     parser.add_argument('--asimov', action='store_true', help="Use asimov data instead. Will look for files using [data-asimov] as the naming key instead of [data]. Create asimov data easily using make_asimov.py")
+    parser.add_argument('--run-plu-val', action='store_true', help="Runs a PLU validation test by varying the data histogram and performing the entire PLU fit multiple times.")
     parser.add_argument('--mu-stop', default='1,0.2', help="The stop signal strength. Should be a comma-separated pair val,err.")
     parser.add_argument('--channels', default='0,1,2', help="The lepton channels to run over, separated by commas.")
     return parser.parse_args()
@@ -997,9 +1085,11 @@ def main():
             ttbar_fitter=ttbar_fitter,
             mu_stop=mu_stop, 
             output_dir=args.output,
+            skip_hist_gen=args.skip_hist_gen,
             skip_fits=args.skip_fits,
             skip_gpr=args.skip_gpr,
             is_asimov=args.asimov,
+            run_plu_val=args.run_plu_val,
         )
         run_channel(config)
     

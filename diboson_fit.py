@@ -120,9 +120,8 @@ def run_fit(
             variation_updown = f'{variation_base}__{updown}'
 
             ### Get MC background total (ttbar + stop) ###
-            var_name = utils.hist_name_variation(hist_name, variation_updown)
-            h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, var_name, variation_updown)
-            h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, var_name, variation_updown)
+            h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name, variation_updown)
+            h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name, variation_updown)
             n_ttbar = plot.integral_user(h_ttbar, bin)
             n_stop = plot.integral_user(h_stop, bin)
 

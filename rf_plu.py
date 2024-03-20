@@ -6,8 +6,11 @@ import shutil
 import utils
 from plotting import plot
 
-def ws_path(output_dir, lep, var):
-    return f'{output_dir}/rf/{lep}lep_{var}.plu_ws.root'
+def ws_path(output_dir, lep, var, stat_validation_index=None):
+    if stat_validation_index is None:
+        return f'{output_dir}/rf/{lep}lep_{var}.plu_ws.root'
+    else:
+        return f'{output_dir}/rf/{lep}lep_{var}.plu_ws_var{stat_validation_index:03}.root'
 
 def run(
         lepton_channel : int,
@@ -17,6 +20,7 @@ def run(
         hist_file_format : str,
         mu_stop : tuple[float, float],
         mu_ttbar : tuple[float, float],
+        stat_validation_index : int = None,
     ):
     from ROOT import RF # type: ignore
 
@@ -24,6 +28,8 @@ def run(
     analysis = 'VVUnfold'
     outputWSTag = 'feb24'
     lumi_uncert = 0.017
+    if stat_validation_index is not None:
+        outputWSTag += f'_var{stat_validation_index:03}'
   
     ### Define the workspace ###
     VVUnfold = RF.DefaultAnalysisRunner(analysis)
@@ -43,7 +49,11 @@ def run(
     # WARNING this assumes each sample is in separate files!
 
     ### Add data ###
-    VVUnfold.channel(region).addData('data', hist_file_format.format(sample='data'), hist_name)
+    if stat_validation_index == None:
+        hist_name_data = 'data' + hist_name[1:]
+    else:
+        hist_name_data = f'data_var{stat_validation_index:03}' + hist_name[1:]
+    VVUnfold.channel(region).addData('data', hist_file_format.format(sample='data'), hist_name_data)
 
     ### Add ttbar ###
     VVUnfold.channel(region).addSample('ttbar', hist_file_format.format(sample='ttbar'), hist_name)
@@ -91,11 +101,17 @@ def run(
         VVUnfold.defineSignal(VVUnfold.channel(region).sample(sigName), 'Unfold')
         VVUnfold.addPOI(poiName)
 
-    ### Make workspace ###
+    ### Global options ###
     #VVUnfold.reuseHist(True) # What is this for?
     VVUnfold.linearizeRegion(region) # What is this for?
     VVUnfold.debugPlots(True)
-    with plot.redirect(f'{output_dir}/rf/log.{lepton_channel}lep_{variable}.rf.txt'):
+
+    ### Make workspace ###
+    if stat_validation_index is None:
+        log_name = f'{output_dir}/rf/log.{lepton_channel}lep_{variable}.rf.txt'
+    else:
+        log_name = f'{output_dir}/rf/log.{lepton_channel}lep_{variable}.rf_var{stat_validation_index:03}.txt'
+    with plot.redirect(log_name):
         VVUnfold.produceWS()
 
     ### Copy back ###
@@ -106,7 +122,7 @@ def run(
         rf_output_path += 'bin' + str(i).rjust(2, '0')
     rf_output_path += f'_{outputWSTag}.root'
 
-    target_path = ws_path(output_dir, lepton_channel, variable)
+    target_path = ws_path(output_dir, lepton_channel, variable, stat_validation_index)
     shutil.copyfile(rf_output_path, target_path)
     plot.success(f'Created PLU workspace at {target_path}')
     return target_path
