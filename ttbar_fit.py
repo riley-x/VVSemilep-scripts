@@ -40,9 +40,11 @@ See [utils.FileManager] for details.
 '''
 
 import ROOT # type: ignore
+
 import numpy as np
 import os
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from typing import Union
 
 from plotting import plot
 import utils
@@ -94,13 +96,12 @@ def hessian(f, x, delta):
 
 def run_fit(
         file_manager : utils.FileManager, 
-        mu_stop_0=(1, 0.2),
+        mu_stop_0 : Union[tuple[float, float], float] = (1, 0.2),
         variation='nominal',
     ):
     '''
     @param mu_stop_0
-        The stop signal strength constraint (mean, error). Set the error to like 1e-5 to
-        treat the stop as fixed.
+        The stop signal strength, or a tuple of a Gaussian constraint (mean, error). 
     '''
     from scipy import optimize, stats
 
@@ -117,22 +118,31 @@ def run_fit(
     n_else = plot.integral_user(h_else, return_error=True)
 
     ### Define NLL form ###
+    corr_stop = isinstance(mu_stop_0, tuple) or isinstance(mu_stop_0, list)
     def nll(params):
         mu_ttbar = params[0]
-        mu_stop = params[1]
-        gamma_mc = params[2]
+        gamma_mc = params[1]
+        if corr_stop:
+            mu_stop = params[2]
+        else:
+            mu_stop = mu_stop_0
 
         mc_error = (mu_ttbar * n_ttbar[1])**2 + (mu_stop * n_stop[1])**2 + n_else[1]**2
         mc_error = mc_error**0.5
 
         pred = mu_ttbar * n_ttbar[0] + mu_stop * n_stop[0] + n_else[0] + gamma_mc * mc_error
-        out = -stats.poisson.logpmf(round(n_data[0]), pred) \
-            - stats.norm.logpdf(mu_stop, loc=mu_stop_0[0], scale=mu_stop_0[1]) \
-            - stats.norm.logpdf(gamma_mc)
+        out = -stats.poisson.logpmf(round(n_data[0]), pred) - stats.norm.logpdf(gamma_mc)
+        if corr_stop:
+            out -= stats.norm.logpdf(mu_stop, loc=mu_stop_0[0], scale=mu_stop_0[1]) 
         return out
         
     ### Minimize ###
-    res = optimize.minimize(nll, [1.0, mu_stop_0[0], 0], bounds=[(1e-2, 2), (1e-2, 2), (-5, 5)], method='L-BFGS-B', options={'eps':1e-10})#, options={'ftol': 1e-15, 'gtol': 1e-15})
+    x0 = [1.0, 0.0]
+    bounds = [(1e-2, 2), (-5, 5)]
+    if corr_stop:
+        x0.append(mu_stop_0[0])
+        bounds.append((1e-2, 2))
+    res = optimize.minimize(nll, x0, bounds=bounds, method='L-BFGS-B', options={'eps':1e-8})#, options={'ftol': 1e-15, 'gtol': 1e-15})
     if not res.success:
         plot.error(f'ttbar_fit.py::run_fit() did not succeed:\n{res}')
         raise RuntimeError()
@@ -140,17 +150,18 @@ def run_fit(
     ### Covariances ###
     # Note we don't use the Scipy covariance which is not too accurate
     # cov = res.hess_inv.todense()
-    hess = hessian(nll, res.x, [0.001, 0.001, 0.001])
+    hess = hessian(nll, res.x, [0.001] * (3 if corr_stop else 2))
     cov = np.linalg.inv(hess)
     errs = np.diag(cov) ** 0.5
     cov_norm = cov / errs / errs[:, None]
     out = {
         'mu_ttbar': (res.x[0], errs[0]),
-        'mu_stop': (res.x[1], errs[1]),
-        'gamma_mc': (res.x[2], errs[2]),
+        'gamma_mc': (res.x[1], errs[1]),
         'cov': cov,
         'cov_norm': cov_norm,
     }
+    if corr_stop:
+        out['mu_stop'] = (res.x[2], errs[2])
     
     ### Printout ###
     notice_msg = f'ttbar_fit.py::run_fit({variation}) fit results:'
@@ -180,11 +191,11 @@ class TtbarSysFitter:
         self.file_manager = file_manager
         self.vars = {}
 
-        results_nom = run_fit(file_manager, mu_stop_0=(mu_stop_0[0], 1e-5))
-        results_stop_up = run_fit(file_manager, mu_stop_0=(mu_stop_0[0] + mu_stop_0[1], 1e-5), variation=utils.variation_mu_stop + utils.variation_up_key)
-        results_stop_down = run_fit(file_manager, mu_stop_0=(mu_stop_0[0] - mu_stop_0[1], 1e-5), variation=utils.variation_mu_stop + utils.variation_down_key)
+        results_nom = run_fit(file_manager, mu_stop_0=mu_stop_0[0])
+        results_stop_up = run_fit(file_manager, mu_stop_0=mu_stop_0[0] + mu_stop_0[1], variation=utils.variation_mu_stop + utils.variation_up_key)
+        results_stop_down = run_fit(file_manager, mu_stop_0=mu_stop_0[0] - mu_stop_0[1], variation=utils.variation_mu_stop + utils.variation_down_key)
 
-        self._mu_stop_nom = (mu_stop_0[0], 1e-5)
+        self._mu_stop_nom = mu_stop_0[0]
         self.mu_ttbar_nom = results_nom['mu_ttbar']
         self.vars[utils.variation_nom] = self.mu_ttbar_nom[0]
         self.vars[utils.variation_mu_ttbar + utils.variation_up_key] = self.mu_ttbar_nom[0] + self.mu_ttbar_nom[1]
