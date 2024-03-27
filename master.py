@@ -604,6 +604,7 @@ class ChannelConfig:
             output_dir : str,
             skip_hist_gen : bool,
             skip_fits : bool,
+            skip_direct_fit : bool,
             skip_gpr : bool,
             skip_gpr_if_present : bool,
             is_asimov : bool,
@@ -616,6 +617,7 @@ class ChannelConfig:
         self.output_dir = output_dir
         self.skip_hist_gen = skip_hist_gen
         self.skip_fits = skip_fits
+        self.skip_direct_fit = skip_direct_fit
         self.skip_gpr = skip_gpr
         self.skip_gpr_if_present = skip_gpr_if_present
         self.is_asimov = is_asimov
@@ -661,8 +663,8 @@ def save_rebinned_histograms(config : ChannelConfig):
     ### All histo variations ###
     variations = [utils.variation_nom]
     for x in utils.variations_hist:
-        variations.append(x + '__1up')
-        variations.append(x + '__1down')
+        variations.append(x + utils.variation_up_key)
+        variations.append(x + utils.variation_down_key)
 
     ### Loop per variable ###
     for variable in config.variables:
@@ -677,7 +679,9 @@ def save_rebinned_histograms(config : ChannelConfig):
                 if sample_name == utils.Sample.data.name: continue # Handled in [save_data_variation_histograms]
 
                 hist = plot.rebin(hist, bins)
-                hist.SetName(hist_name.format(lep=f'{config.lepton_channel}Lep', sample=sample_name))
+                new_name = hist_name.format(lep=f'{config.lepton_channel}Lep', sample=sample_name)
+                new_name = utils.hist_name_variation(new_name, config.file_manager.samples[sample_name], variation)
+                hist.SetName(new_name)
 
                 f = file(sample_name)
                 f.cd()
@@ -734,12 +738,15 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
         'use_vjets_mc': channel_config.is_asimov,
     }
     def run(config):
-        gpr.run(
-            file_manager=channel_config.file_manager, 
-            config=config, 
-            from_csv_only=channel_config.skip_fits or channel_config.skip_gpr,
-            skip_if_in_csv=channel_config.skip_gpr_if_present,
-        )
+        # Putting this catch here still runs the summary plots and generates 
+        # gpr_sigcontam_corrs
+        if not (channel_config.skip_fits or channel_config.skip_gpr): 
+            gpr.run(
+                file_manager=channel_config.file_manager, 
+                config=config, 
+                # from_csv_only=channel_config.skip_fits or channel_config.skip_gpr,
+                skip_if_in_csv=channel_config.skip_gpr_if_present,
+            )
 
     ### Nominal ###
     fit_config = gpr.FitConfig(
@@ -1065,7 +1072,7 @@ def run_channel(config : ChannelConfig):
         gc.enable()
 
         ### Diboson yield ###
-        if not config.skip_fits:
+        if not config.skip_fits and not config.skip_direct_fit:
             run_direct_fit(config, var)
 
         ### Prefit plot (pre-PLU but using GPR) ###
@@ -1096,6 +1103,7 @@ def parse_args():
     parser.add_argument('-o', '--output', default='./output')
     parser.add_argument('--skip-hist-gen', action='store_true', help="Skip generating the response matrix and rebinned histograms.")
     parser.add_argument('--skip-fits', action='store_true', help="Don't do the GPR or PLU fits. For the former, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
+    parser.add_argument('--skip-direct-fit', action='store_true', help="Don't do the direct diboson yield fit.")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-gpr-if-present', action='store_true', help="Will run the GPR fits but skip the ones that are present in the CSV already.")
     parser.add_argument('--no-systs', action='store_true', help="Run without using the systematic variations.")
@@ -1155,6 +1163,7 @@ def main():
             output_dir=args.output,
             skip_hist_gen=args.skip_hist_gen,
             skip_fits=args.skip_fits,
+            skip_direct_fit=args.skip_direct_fit,
             skip_gpr=args.skip_gpr,
             skip_gpr_if_present=args.skip_gpr_if_present,
             is_asimov=args.asimov,

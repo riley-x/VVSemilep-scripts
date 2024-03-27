@@ -122,7 +122,7 @@ class Sample:
         if isinstance(other, self.__class__):
             return self.name == other.name
         else:
-            return False
+            raise TypeError(f"Sample.__eq__({type(other)})")
 
     @staticmethod
     def list_predefined():
