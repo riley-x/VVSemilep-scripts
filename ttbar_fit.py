@@ -142,9 +142,14 @@ def run_fit(
     if corr_stop:
         x0.append(mu_stop_0[0])
         bounds.append((1e-2, 2))
-    res = optimize.minimize(nll, x0, bounds=bounds, method='L-BFGS-B', options={'eps':1e-8})#, options={'ftol': 1e-15, 'gtol': 1e-15})
-    if not res.success:
-        plot.error(f'ttbar_fit.py::run_fit() did not succeed:\n{res}')
+    for eps in [1e-8, 1e-10, 1e-5]:
+        res = optimize.minimize(nll, x0, bounds=bounds, method='L-BFGS-B', options={'eps':eps})#, options={'ftol': 1e-15, 'gtol': 1e-15})
+        if res.success: 
+            break
+        else:
+            plot.warning(f'ttbar_fit.py::run_fit() did not succeed with eps={eps}, will try with new eps.\n{res}')
+    else:
+        plot.error(f'ttbar_fit.py::run_fit() did not succeed.')
         raise RuntimeError()
 
     ### Covariances ###
