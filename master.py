@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 '''
-@file master.py 
-@author Riley Xu - riley.xu@gmail.com, riley.xu@cern.ch 
-@date February 20, 2024 
+@file master.py
+@author Riley Xu - riley.xu@gmail.com, riley.xu@cern.ch
+@date February 20, 2024
 @brief Master run script for doing the unfolded analysis for VVsemilep
 
 ------------------------------------------------------------------------------------------
 SETUP
 ------------------------------------------------------------------------------------------
 
-    setupATLAS 
-    lsetup "root recommended" 
+    setupATLAS
+    lsetup "root recommended"
     lsetup "python centos7-3.9"
 
 Note that this can't be setup at the same time with AnalysisBase or else you get a lot of
@@ -38,7 +38,7 @@ be replaced with the lepton channel name, and 'sample', which uses
 [utils.Sample.file_stubs]. For example,
 
     hists/{lep}/{sample}.root
-    
+
 See [utils.FileManager] for details.
 '''
 
@@ -68,7 +68,7 @@ import diboson_fit
 
 def convert_alpha(alpha : tuple[float, float], orig : tuple[float, float]) -> tuple[float, float]:
     '''
-    For a Gaussian constrained floating parameter in the PLU fit, given a result w/ error 
+    For a Gaussian constrained floating parameter in the PLU fit, given a result w/ error
     in terms of [alpha], returns the actual values.
     '''
     val = orig[0] + alpha[0] * orig[1]
@@ -90,9 +90,9 @@ def plot_gpr_mu_diboson_correlations(
     '''
     ### Get graphs ###
     csv_base_spec = {
-        'lep': config.lepton_channel, 
+        'lep': config.lepton_channel,
         'fitter': f'{config.gpr_version}_marg_post',
-        'vary': config.var.name, 
+        'vary': config.var.name,
         'bins': config.bins_y,
     }
     i_nom = len(yields) // 2
@@ -147,16 +147,16 @@ def plot_gpr_mu_diboson_correlations(
 
 def plot_gpr_ttbar_and_stop_correlations(config : gpr.FitConfig, filename : str):
     '''
-    This plots the change in yields as the ttbar and stop signal strengths are varied. 
+    This plots the change in yields as the ttbar and stop signal strengths are varied.
     '''
     ### Get graphs ###
     csv_base_spec = {
-        'lep': config.lepton_channel, 
+        'lep': config.lepton_channel,
         'fitter': f'{config.gpr_version}_marg_post',
-        'vary': config.var.name, 
+        'vary': config.var.name,
         'bins': config.bins_y,
     }
-    variations = ['nominal', 'mu-ttbar_up', 'mu-ttbar_down', 'mu-stop_up', 'mu-stop_down']
+    variations = ['nominal'] + [x + y for x in [utils.variation_mu_ttbar, utils.variation_mu_stop] for y in [utils.variation_up_key, utils.variation_down_key]]
     graphs = [config.fit_results.get_graph(**csv_base_spec, variation=x, unscale_width=True) for x in variations]
 
     gpr.plot_summary_distribution(
@@ -228,7 +228,7 @@ def plot_yield_comparison(h_fit, h_mc, h_eft=None, eft_legend=None, **plot_opts)
 
 def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_results, filename : str):
     bins = np.array(utils.get_bins(config.lepton_channel, variable), dtype=float)
-    
+
     ### Fit ###
     h_fit = ROOT.TH1F('h_fit', '', len(bins) - 1, bins)
     for i in range(1, len(bins)):
@@ -253,7 +253,7 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
 
     ### Plot ###
     yield_args = dict(
-        h_fit=h_fit, 
+        h_fit=h_fit,
         h_mc=h_mc,
         text_pos='topright',
         subtitle=[
@@ -263,8 +263,8 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
         ],
         xtitle=f'{variable:title}',
     )
-    plot_yield_comparison(**yield_args, filename=filename)   
-    plot_yield_comparison(**yield_args, h_eft=h_cw_quad, eft_legend='c_{W}^{quad}=' + f'{cw:.2f}', filename=filename + '_cw')   
+    plot_yield_comparison(**yield_args, filename=filename)
+    plot_yield_comparison(**yield_args, h_eft=h_cw_quad, eft_legend='c_{W}^{quad}=' + f'{cw:.2f}', filename=filename + '_cw')
 
 
 def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
@@ -275,7 +275,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     ### Get hists ###
     f_gpr = ROOT.TFile(f'{config.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
     h_gpr = f_gpr.Get('Vjets_SR_' + variable.name)
-        
+
     hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
     h_diboson = config.file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name)
     h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
@@ -312,7 +312,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
         ],
     )
     plotter1.add(
-        objs=[h_diboson, h_stop, h_ttbar, h_gpr], 
+        objs=[h_diboson, h_stop, h_ttbar, h_gpr],
         legend=['Diboson (#mu=1)', 'Single top', 't#bar{t}', 'GPR (V+jets)'],
         stack=True,
         opts='HIST',
@@ -373,7 +373,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
     ######################################################################################
     ### HISTS
     ######################################################################################
-    
+
     ### GPR ###
     f_gpr = ROOT.TFile(f'{config.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
     h_gpr = f_gpr.Get('Vjets_SR_' + variable.name)
@@ -385,7 +385,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
         h = f_response_mtx.Get(f'ResponseMatrix_{variable}_fid{i:02}')
         h.Scale(fit_results[f'mu_{i:02}'][0])
         h_signals.append(h)
-        
+
     ### MC + data ###
     hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
     h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
@@ -414,7 +414,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
     ######################################################################################
     ### PLOT
     ######################################################################################
-    
+
     pads = plot.RatioPads()
 
     ### Main pad options ###
@@ -440,14 +440,14 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
         else:
             mc_colors = [plot.colors.pastel_yellow, plot.colors.pastel_orange, plot.colors.pastel_red]
             return mc_colors[i - len(h_signals)]
-        
+
     ### Legend ###
     legend = [f'Bin {i}' for i in range(1, len(bins))][::-1]
     legend += ['top', 't#bar{t}', 'V+jets']
 
     ### Plot stack ###
     plotter1.add(
-        objs=h_signals[::-1] + [h_stop, h_ttbar, h_gpr], 
+        objs=h_signals[::-1] + [h_stop, h_ttbar, h_gpr],
         legend=legend,
         stack=True,
         opts='HIST',
@@ -520,7 +520,7 @@ def plot_pulls(config : ChannelConfig, variable : utils.Variable, fit_results : 
     ROOT.gStyle.SetErrorX(0)
     ROOT.gStyle.SetEndErrorSize(5)
     c = ROOT.TCanvas('c1', 'c1', 1000, 800)
-    
+
     plotter = plot.Plotter(
         pad=c,
         _frame=h,
@@ -596,15 +596,16 @@ def plot_correlations(config : ChannelConfig, variable : utils.Variable, roofit_
 class ChannelConfig:
 
     def __init__(
-            self, 
-            lepton_channel : int, 
-            file_manager : utils.FileManager, 
+            self,
+            lepton_channel : int,
+            file_manager : utils.FileManager,
             ttbar_fitter: ttbar_fit.TtbarSysFitter,
             mu_stop : tuple[float, float],
             output_dir : str,
             skip_hist_gen : bool,
             skip_fits : bool,
             skip_gpr : bool,
+            skip_gpr_if_present : bool,
             is_asimov : bool,
             run_plu_val : bool,
         ):
@@ -616,6 +617,7 @@ class ChannelConfig:
         self.skip_hist_gen = skip_hist_gen
         self.skip_fits = skip_fits
         self.skip_gpr = skip_gpr
+        self.skip_gpr_if_present = skip_gpr_if_present
         self.is_asimov = is_asimov
         self.plu_validation_iters = 100 if run_plu_val else 0
 
@@ -655,13 +657,13 @@ def save_rebinned_histograms(config : ChannelConfig):
         if sample not in output_files:
             output_files[sample] = ROOT.TFile(config.rebinned_hists_filepath.format(sample=sample), 'RECREATE')
         return output_files[sample]
-    
+
     ### All histo variations ###
     variations = [utils.variation_nom]
     for x in utils.variations_hist:
         variations.append(x + '__1up')
         variations.append(x + '__1down')
-    
+
     ### Loop per variable ###
     for variable in config.variables:
         bins = utils.get_bins(config.lepton_channel, variable)
@@ -683,13 +685,13 @@ def save_rebinned_histograms(config : ChannelConfig):
 
     ### Data rebinned histograms for PLU stat test ###
     save_data_variation_histograms(config, file(utils.Sample.data.name))
-    
+
     plot.success(f'Saved rebinned histograms to {config.rebinned_hists_filepath}')
 
 
 def save_data_variation_histograms(config : ChannelConfig, f : ROOT.TFile):
     '''
-    Saves several statistical variations of the data histograms 
+    Saves several statistical variations of the data histograms
     '''
     ### Loop per variable ###
     for variable in config.variables:
@@ -716,14 +718,14 @@ def save_data_variation_histograms(config : ChannelConfig, f : ROOT.TFile):
             for x in range(1, h_nom.GetNbinsX() + 1):
                 h[x] = rng.poisson(h_nom[x])
             h.Write()
-    
+
 
 def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     '''
     Runs the GPR fit for every variation.
     '''
     plot.notice(f'{channel_config.log_base} running GPR fits for {var}')
-    
+
     ### Config ###
     config_base = {
         'lepton_channel': channel_config.lepton_channel,
@@ -732,8 +734,13 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
         'use_vjets_mc': channel_config.is_asimov,
     }
     def run(config):
-        gpr.run(channel_config.file_manager, config, channel_config.skip_fits or channel_config.skip_gpr)
-    
+        gpr.run(
+            file_manager=channel_config.file_manager, 
+            config=config, 
+            from_csv_only=channel_config.skip_fits or channel_config.skip_gpr,
+            skip_if_in_csv=channel_config.skip_gpr_if_present,
+        )
+
     ### Nominal ###
     fit_config = gpr.FitConfig(
         variation='nominal',
@@ -754,7 +761,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
         )
         run(fit_config)
     channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
-        config=fit_config, 
+        config=fit_config,
         yields=mu_diboson_points,
         filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
     )
@@ -802,7 +809,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
             run(fit_config)
 
     channel_config.gpr_results = fit_config.fit_results
-    
+
 
 def run_direct_fit(config : ChannelConfig, var : utils.Variable):
     '''
@@ -828,7 +835,7 @@ def run_direct_fit(config : ChannelConfig, var : utils.Variable):
         h_diboson_mc.SetBinContent(i+1, diboson_yield[0])
         h_diboson_mc.SetBinError(i+1, diboson_yield[1])
     plot_yield_comparison(
-        h_fit=h_diboson_fit, 
+        h_fit=h_diboson_fit,
         h_mc=h_diboson_mc,
         filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.directfit_yields',
         subtitle=[
@@ -849,10 +856,10 @@ def run_npcheck_drawfit(config : ChannelConfig, var : utils.Variable):
     plot.notice(f'{config.log_base} drawing PLU fits using NPCheck')
     with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}.draw_fit.txt', 'w') as f:
         res = subprocess.run(
-            ['./runDrawFit.py', config.plu_ws_filepath, 
-                '--mu', '1', 
+            ['./runDrawFit.py', config.plu_ws_filepath,
+                '--mu', '1',
                 '--fccs', 'fccs/FitCrossChecks.root'
-            ], 
+            ],
             cwd=config.npcheck_dir,
             stdout=f,
             stderr=f,
@@ -863,7 +870,7 @@ def run_npcheck_drawfit(config : ChannelConfig, var : utils.Variable):
     npcheck_output_path = f'{config.npcheck_dir}/Plots/PostFit/summary_postfit_doAsimov0_doCondtional0_mu1.pdf'
     target_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.plu_postfit.pdf'
     shutil.copyfile(npcheck_output_path, target_path)
-    
+
 
 def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index : int = None):
     '''
@@ -872,7 +879,7 @@ def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index 
     '''
     # Really important this import is here otherwise segfaults occur, due to the
     # `from ROOT import RF` line I think. But somehow hiding it here is fine.
-    import rf_plu 
+    import rf_plu
 
     os.makedirs(f'{config.output_dir}/rf', exist_ok=True)
 
@@ -905,13 +912,13 @@ def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index 
         with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}.fcc.txt', 'w') as f:
             res = subprocess.run(
                 ['./runFitCrossCheck.py', ws_path],  # the './' is necessary!
-                cwd=config.npcheck_dir, 
-                stdout=f, 
+                cwd=config.npcheck_dir,
+                stdout=f,
                 stderr=f
-            ) 
+            )
         res.check_returncode()
         shutil.copyfile(f'{config.npcheck_dir}/fccs/FitCrossChecks.root', fcc_path)
-    
+
     ### Get fit result ###
     fcc_file = ROOT.TFile(fcc_path)
     results_name = 'PlotsAfterGlobalFit/unconditionnal/fitResult'
@@ -922,7 +929,7 @@ def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index 
     plu_fit_results = { v.GetName() : (v.getValV(), v.getError()) for v in roofit_results.floatParsFinal() }
     plu_fit_results['mu-stop'] = convert_alpha(plu_fit_results['alpha_mu-stop'], config.mu_stop)
     plu_fit_results['mu-ttbar'] = convert_alpha(plu_fit_results['alpha_mu-ttbar'], config.ttbar_fitter.mu_ttbar_nom)
-    
+
     ### Plots ###
     if stat_validation_index is None:
         ### Draw fit ###
@@ -936,9 +943,9 @@ def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index 
 
         ### Draw yield vs MC ###
         plot_plu_yields(config, var, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_yields')
-    
+
     return plu_fit_results
-    
+
 
 def run_plu_val(config : ChannelConfig, variable : utils.Variable, results_nom : dict[str, tuple[float, float]]):
     '''
@@ -1026,7 +1033,7 @@ def run_plu_val(config : ChannelConfig, variable : utils.Variable, results_nom :
         callback=callback,
         filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{variable}.plu_validation',
     )
-    
+
 
 def run_channel(config : ChannelConfig):
     '''
@@ -1072,7 +1079,7 @@ def run_channel(config : ChannelConfig):
         except Exception as e:
             plot.warning(str(e))
             raise e
-        
+
 
 
 
@@ -1082,7 +1089,7 @@ def run_channel(config : ChannelConfig):
 
 def parse_args():
     parser = ArgumentParser(
-        description="Master run script for doing the unfolded analysis for VVsemilep.", 
+        description="Master run script for doing the unfolded analysis for VVsemilep.",
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument('filepaths', nargs='+')
@@ -1090,6 +1097,7 @@ def parse_args():
     parser.add_argument('--skip-hist-gen', action='store_true', help="Skip generating the response matrix and rebinned histograms.")
     parser.add_argument('--skip-fits', action='store_true', help="Don't do the GPR or PLU fits. For the former, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
+    parser.add_argument('--skip-gpr-if-present', action='store_true', help="Will run the GPR fits but skip the ones that are present in the CSV already.")
     parser.add_argument('--no-systs', action='store_true', help="Run without using the systematic variations.")
     parser.add_argument('--asimov', action='store_true', help="Use asimov data instead. Will look for files using [data-asimov] as the naming key instead of [data]. Create asimov data easily using make_asimov.py")
     parser.add_argument('--run-plu-val', action='store_true', help="Runs a PLU validation test by varying the data histogram and performing the entire PLU fit multiple times.")
@@ -1128,7 +1136,7 @@ def main():
 
     ### Input files ###
     file_manager = get_files(args.filepaths)
-    
+
     ### Output files ###
     os.makedirs(f'{args.output}/plots', exist_ok=True)
     plot.save_transparent_png = False
@@ -1143,16 +1151,17 @@ def main():
             lepton_channel=lepton_channel,
             file_manager=file_manager,
             ttbar_fitter=ttbar_fitter,
-            mu_stop=mu_stop, 
+            mu_stop=mu_stop,
             output_dir=args.output,
             skip_hist_gen=args.skip_hist_gen,
             skip_fits=args.skip_fits,
             skip_gpr=args.skip_gpr,
+            skip_gpr_if_present=args.skip_gpr_if_present,
             is_asimov=args.asimov,
             run_plu_val=args.run_plu_val,
         )
         run_channel(config)
-    
+
 
 if __name__ == "__main__":
     main()

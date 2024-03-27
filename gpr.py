@@ -446,6 +446,9 @@ class FitResults:
     def filter(self, lep=slice(None), vary=slice(None), variation=slice(None), fitter=slice(None), bin=slice(None), **_):
         return self.df.loc[(lep, vary, variation, fitter, bin), :]
 
+    def contains(self, lep, vary, variation, fitter, bin, **_) -> bool:
+        return self.df.index.isin([(lep, vary, variation, fitter, bin)]).any()
+
     def get_entry(self, lep, vary, variation, fitter, bin, unscale_width=False, **_) -> tuple[float, float, float]:
         if not isinstance(bin, str):
             bin_edges = bin
@@ -1803,6 +1806,7 @@ def run(
         file_manager : utils.FileManager,
         config : FitConfig,
         from_csv_only : bool = False,
+        skip_if_in_csv : bool = False,
     ):
     '''
     This runs all the bin fits using the full contour scan (marginal posterior) for a
@@ -1852,6 +1856,10 @@ def run(
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
             f'{config.var.title} #in {bin_y} {config.var.unit}',
         ]
+
+        if skip_if_in_csv and config.fit_results.contains(config.lepton_channel, config.var.name, config.variation, f'{config.gpr_version}_marg_post', binstr):
+            plot.notice(f'gpr.py::run() Skipping {config.lepton_channel}lep ({config.variation}) {config.var}=[{binstr}]')
+            continue
 
         ### Histogram manipulation ###
         bins_x = config.get_bins_x(bin_y)

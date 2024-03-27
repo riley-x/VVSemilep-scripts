@@ -2,7 +2,7 @@
 @file variable.py
 @author Riley Xu - riley.xu@gmail.com, riley.xu@cern.ch
 @date February 7, 2024
-@brief Variable naming and other utilities 
+@brief Variable naming and other utilities
 '''
 from __future__ import annotations
 from typing import Union
@@ -18,12 +18,12 @@ import ROOT # type: ignore
 class Variable:
     '''
     @property name
-        The base name that uniquely identifies the variable. This should match the 
+        The base name that uniquely identifies the variable. This should match the
         histogram naming conventions.
     @property title
         A TLatex version of the variable that is used in title text.
     @property unit
-        The name of the unit of the variable. Again this should match the histogram 
+        The name of the unit of the variable. Again this should match the histogram
         outputs.
     @property rebin
         A default rebinning option, see [plot.rebin].
@@ -43,7 +43,7 @@ class Variable:
 
     def __repr__(self) -> str:
         return f'Variable({self.name})'
-    
+
     def __format__(self, __format_spec: str) -> str:
         if __format_spec:
             if self.unit:
@@ -52,13 +52,13 @@ class Variable:
                 return f'{self.title}'
         else:
             return self.name
-    
+
     def x_plot_opts(self):
         return {
             'xtitle': f'{self.title} [{self.unit}]',
             **self._plot_opts
         }
-    
+
 
 Variable.vv_m = Variable(name="vv_m", title="m(VV)", unit="GeV")
 Variable.vhad_pt = Variable(name="vhad_pt", title="p_{T}(J)", unit="GeV")
@@ -93,7 +93,7 @@ class Sample:
     @property file_stubs
         A list of the possible naming stubs used in the histogram files for this sample.
     @property hist_keys
-        A list of the naming stubs used in the histogram names for this sample. 
+        A list of the naming stubs used in the histogram names for this sample.
     '''
     ### Static members ###
     # List here for linting, initialized later below
@@ -111,7 +111,7 @@ class Sample:
         self.title = title
         self.file_stubs = file_stubs
         self.hist_keys = hist_keys
-    
+
     def __format__(self, __format_spec: str) -> str:
         if __format_spec:
             return f'{self.title}'
@@ -123,7 +123,7 @@ class Sample:
             return self.name == other.name
         else:
             return False
-    
+
     @staticmethod
     def list_predefined():
         return [Sample.wjets, Sample.zjets, Sample.ttbar, Sample.stop, Sample.diboson, Sample.data]
@@ -163,7 +163,7 @@ def get_bins(lepton_channel : int, var: Variable):
         elif lepton_channel == 1:
             # below, but with custom fixes
             return [700, 810, 940, 1090, 1260, 1500, 2000, 3000]
-            # optimized binning with threshold_diag=0.6, threshold_err=0.4, monotonic_bin_sizes=False, 
+            # optimized binning with threshold_diag=0.6, threshold_err=0.4, monotonic_bin_sizes=False,
             return [500, 690, 810, 940, 1090, 1260, 1450, 1640, 1850, 2090, 2390, 3000]
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
             return [700, 790, 920, 1070, 1240, 1420, 1610, 1820, 3000]
@@ -194,7 +194,7 @@ variation_lumi = 'lumiNP'
 variation_mu_ttbar = 'mu-ttbar'
 variation_mu_stop = 'mu-stop'
 variations_custom = [
-    variation_mu_ttbar, 
+    variation_mu_ttbar,
     variation_mu_stop,
 ]
 
@@ -287,10 +287,10 @@ variations_hist = [
     'SysJET_EtaIntercalibration_TotalStat',
     'SysJET_Flavor_Composition',
     'SysJET_Flavor_Response',
-    'SysJET_JERMC_EffectiveNP_1',
+    #'SysJET_JERMC_EffectiveNP_1', # Missing __1down histos in all files
     'SysJET_JERMC_EffectiveNP_10',
     'SysJET_JERMC_EffectiveNP_11',
-    'SysJET_JERMC_EffectiveNP_12restTerm',
+    #'SysJET_JERMC_EffectiveNP_12restTerm', # Missing __1down histos in all files
     'SysJET_JERMC_EffectiveNP_2',
     'SysJET_JERMC_EffectiveNP_3',
     'SysJET_JERMC_EffectiveNP_4',
@@ -299,7 +299,7 @@ variations_hist = [
     'SysJET_JERMC_EffectiveNP_7',
     'SysJET_JERMC_EffectiveNP_8',
     'SysJET_JERMC_EffectiveNP_9',
-    'SysJET_JERPD_DataVsMC_MC16',
+    #'SysJET_JERPD_DataVsMC_MC16', # Missing __1down histos in all files
     'SysJET_JERPD_EffectiveNP_10',
     'SysJET_JERPD_EffectiveNP_11',
     'SysJET_JERPD_EffectiveNP_2',
@@ -322,8 +322,8 @@ variations_hist = [
     'SysJET_Rtrk_ExtraComp_Baseline_frozen_mass',
     'SysJET_Rtrk_ExtraComp_Modelling_frozen_mass',
     'SysJET_Rtrk_Modelling_frozen_mass',
-    'SysMET_SoftTrk_ResoPara',
-    'SysMET_SoftTrk_ResoPerp',
+    #'SysMET_SoftTrk_ResoPara', # Missing __1down histos in all files
+    #'SysMET_SoftTrk_ResoPerp', # Missing __1down histos in all files
     'SysMET_SoftTrk_Scale',
     'SysMUON_EFF_ISO_STAT',
     'SysMUON_EFF_ISO_SYS',
@@ -396,7 +396,7 @@ def get_hist(tfile, hist_name):
 def get_hists_sum(tfile, hist_names):
     '''
     Retrieves the histograms specified in [hist_names] from [tfile] and returns their sum.
-    Will skip missing histograms. 
+    Will skip missing histograms.
     '''
     h_sum = None
     for name in hist_names:
@@ -410,18 +410,18 @@ def get_hists_sum(tfile, hist_names):
     if h_sum is None:
         raise RuntimeError(f"get_hists_sum() unable to retrieve histograms from {tfile}.")
     return h_sum
-    
+
 # If you just pass a python 0 to the ROOT char*, I think it gets interpreted as '0' or something.
 _null_char_p = ctypes.c_char_p(0)
 
 
 class FileManager:
     '''
-    This class helps manage retrieving histograms for many samples from a multitude of 
+    This class helps manage retrieving histograms for many samples from a multitude of
     files. In general, each sample may be split across multiple files and the histograms
     divided by subsamples. This class will take care of adding them all together.
 
-    Make sure though that there are not redundant files that accidentally duplicate the 
+    Make sure though that there are not redundant files that accidentally duplicate the
     data!
     '''
 
@@ -433,7 +433,7 @@ class FileManager:
 
     def __init__(self, samples : list[Sample], file_path_formats : list[str], lepton_channels = [0, 1, 2]) -> None:
         '''
-        Tries to open every file given a set of samples and path formats. 
+        Tries to open every file given a set of samples and path formats.
 
         @param file_path_formats
             Pass any number file paths that can optionally contain fields "{lep}" which
@@ -442,10 +442,10 @@ class FileManager:
             [Sample.file_stubs] for each sample.
         '''
         self.samples = { sample.name : sample for sample in samples }
-        self.files = { 
-            (lep, sample.name) : self._get_sample_files(lep, sample, file_path_formats) 
+        self.files = {
+            (lep, sample.name) : self._get_sample_files(lep, sample, file_path_formats)
             for lep in lepton_channels
-            for sample in samples 
+            for sample in samples
         }
 
 
@@ -461,11 +461,11 @@ class FileManager:
                     except OSError as e:
                         pass
         ROOT.gSystem.RedirectOutput(_null_char_p, _null_char_p)
-        
+
         if not files:
             plot.warning(f'FileManager() unable to find files for {sample} in the {lep}-lep channel.')
         return files
-    
+
 
     def get_hist(self, lep : int, sample : Union[str, Sample], hist_name_format : str, variation : str = variation_nom) -> Union[ROOT.TH1F, None]:
         '''
@@ -497,9 +497,12 @@ class FileManager:
                         h_out.Add(h)
 
         if h_out is None:
-            plot.warning(f'FileManager() unable to find histgoram {hist_name_format} for {sample} in the {lep}-lep channel.')
+            if variation != variation_nom:
+                plot.warning(f'FileManager() unable to find histgoram {hist_name_format} with variation {variation} for {sample} in the {lep}-lep channel.')
+            else:
+                plot.warning(f'FileManager() unable to find histgoram {hist_name_format} for {sample} in the {lep}-lep channel.')
         return h_out
-    
+
     def get_file_names(self, lep : int, sample : Union[str, Sample]) -> list[str]:
         '''
         Returns the list of files matching this (lep, sample).
@@ -508,7 +511,7 @@ class FileManager:
             sample = self.samples[sample]
         files = self.files[(lep, sample.name)]
         return [file.GetName() for file in files]
-    
+
     def get_hist_all_samples(self, lep : int, hist_name_format : str, variation : str = variation_nom) -> dict[str, ROOT.TH1F]:
         '''
         Like [get_hist] but returns a dict of all the histograms for each sample.
