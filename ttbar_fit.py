@@ -142,7 +142,8 @@ def run_fit(
     if corr_stop:
         x0.append(mu_stop_0[0])
         bounds.append((1e-2, 2))
-    for eps in [1e-8, 1e-10, 1e-5]:
+
+    for eps in [1e-8, 1e-10, 1e-12, 1e-5, 1e-3]:
         res = optimize.minimize(nll, x0, bounds=bounds, method='L-BFGS-B', options={'eps':eps})#, options={'ftol': 1e-15, 'gtol': 1e-15})
         if res.success: 
             break
