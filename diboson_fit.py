@@ -34,7 +34,6 @@ def run_fit(
 
     ### Setup ###
     hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
-    variations = utils.variations_custom + utils.variations_hist
     gpr_csv_args = dict(
         lep=config.lepton_channel,
         vary=variable.name,
@@ -42,6 +41,8 @@ def run_fit(
         bin=bin,
         unscale_width=True,
     )
+    variations = utils.variations_custom + utils.variations_hist
+    max_var_length = max(len(k) for k in variations)
 
     ### Get nominal yields ###
     def _subr_get_nominal(asimov : bool):
@@ -95,10 +96,10 @@ def run_fit(
         print(f'    {"mu":10}: {mu_diboson_nom[0]:10.2f} {mu_diboson_nom[1]:10.2f}')
 
         print('\n')
-        print(f'    {"Variation":20}: {"top MCs":>10} {"GPR":>10}')
-        print('    ' + '-' * 43)
-        print(f'    {"nominal_val":20}: {n_mc_nom[0]:10.2f} {n_gpr_nom[0]:10.2f}')
-        print(f'    {"nominal_err":20}: {n_mc_nom[1]:10.2f} {n_gpr_nom[1]:10.2f}')
+        print(f'    {"Variation":{max_var_length}}: {"top MCs":>10} {"GPR":>10}')
+        print('    ' + '-' * (max_var_length + 23))
+        print(f'    {"nominal_val":{max_var_length}}: {n_mc_nom[0]:10.2f} {n_gpr_nom[0]:10.2f}')
+        print(f'    {"nominal_err":{max_var_length}}: {n_mc_nom[1]:10.2f} {n_gpr_nom[1]:10.2f}')
 
         return n_data_nom, n_diboson_nom, n_mc_nom, n_gpr_nom, mu_diboson_nom
     n_data_nom, n_diboson_nom, n_mc_nom, n_gpr_nom, mu_diboson_nom = _subr_get_nominal(asimov=False)
@@ -116,8 +117,8 @@ def run_fit(
     for variation_base in variations:
         mc_err = 0
         gpr_err = 0
-        for updown in ['1up', '1down']:
-            variation_updown = f'{variation_base}__{updown}'
+        for updown in [utils.variation_up_key, utils.variation_down_key]:
+            variation_updown = variation_base + updown
 
             ### Get MC background total (ttbar + stop) ###
             h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name, variation_updown)
@@ -128,7 +129,7 @@ def run_fit(
             ### Get signal strengths ###
             mu_ttbar = config.ttbar_fitter.get_var(variation_updown)
             if variation_base == 'mu-stop':
-                if updown == 'up':
+                if updown == utils.variation_up_key:
                     mu_stop_1 = config.mu_stop[0] + config.mu_stop[1]
                 else:
                     mu_stop_1 = config.mu_stop[0] - config.mu_stop[1]
@@ -137,21 +138,21 @@ def run_fit(
 
             ### Get diff ###
             val = n_ttbar * mu_ttbar + n_stop * mu_stop_1
-            mc_err += (val - n_mc_nom[0]) * (1 if updown == 'up' else -1)
+            mc_err += (val - n_mc_nom[0]) * (1 if updown == utils.variation_up_key else -1)
 
             ### Get GPR err ###
             val = config.gpr_results.get_entry(
                 variation=variation_updown,
                 **gpr_csv_args,
             )[0]
-            gpr_err += (val - n_gpr_nom[0]) * (1 if updown == 'up' else -1)
+            gpr_err += (val - n_gpr_nom[0]) * (1 if updown == utils.variation_up_key else -1)
         
         mc_err /= 2
         gpr_err /= 2
-        var_sigmas[f'gamma_{variation_base}'] = mc_err + gpr_err
+        var_sigmas[f'gamma_{variation_base}'] = (mc_err**2 + gpr_err**2) ** 0.5
         var_index[f'gamma_{variation_base}'] = index
         index += 1
-        print(f'    {variation_base:20}: {mc_err:10.2f} {gpr_err:10.2f}')
+        print(f'    {variation_base:{max_var_length}}: {mc_err:10.2f} {gpr_err:10.2f}')
 
     ### Define NLL form ###
     def nll(params):
@@ -178,10 +179,13 @@ def run_fit(
         raise RuntimeError()
 
     ### Covariances ###
-    # Note we don't use the Scipy covariance which is not too accurate
-    # cov = res.hess_inv.todense()
-    hess = ttbar_fit.hessian(nll, res.x, [0.001] * n_params)
-    cov = np.linalg.inv(hess)
+    # Note we don't use the Scipy covariance which is not too accurate.
+    # But inverting the matrix takes forever when including systematics.
+    if n_params > 10:
+        cov = res.hess_inv.todense()
+    else:
+        hess = ttbar_fit.hessian(nll, res.x, [0.001] * n_params)
+        cov = np.linalg.inv(hess)
     errs = np.diag(cov) ** 0.5
     cov_norm = cov / errs / errs[:, None]
     out = {
@@ -201,11 +205,12 @@ def run_fit(
     for k,v in out.items():
         if 'cov' in k: continue
         notice_msg += f'\n    {k:{max_key_length}}: {v[0]:8.4f} +- {v[1]:7.4f}'
-    notice_msg += f'\n    cov:'
-    for i in range(len(errs)):
-        notice_msg += f'\n        '
-        for j in range(len(errs)):
-            notice_msg += f'{cov_norm[i][j]:7.4f}  '
+    if n_params <= 10:
+        notice_msg += f'\n    cov:'
+        for i in range(len(errs)):
+            notice_msg += f'\n        '
+            for j in range(len(errs)):
+                notice_msg += f'{cov_norm[i][j]:7.4f}  '
     print(notice_msg, '\n')
 
     return out
