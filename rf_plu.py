@@ -45,18 +45,18 @@ def run(
     VVUnfold.channel(region).setStatErrorThreshold(0.05) # 0.05 means that errors < 5% will be ignored
 
     ### Get hists ###
-    hist_name = f'*_VV{lepton_channel}Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lepton_channel).name
+    hist_name = f'{{}}_VV{lepton_channel}Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lepton_channel).name
     # WARNING this assumes each sample is in separate files!
 
     ### Add data ###
     if stat_validation_index == None:
-        hist_name_data = 'data' + hist_name[1:]
+        hist_name_data = hist_name.format('data')
     else:
-        hist_name_data = f'data_var{stat_validation_index:03}' + hist_name[1:]
+        hist_name_data = hist_name.format(f'data_var{stat_validation_index:03}')
     VVUnfold.channel(region).addData('data', hist_file_format.format(sample='data'), hist_name_data)
 
     ### Add ttbar ###
-    VVUnfold.channel(region).addSample('ttbar', hist_file_format.format(sample='ttbar'), hist_name)
+    VVUnfold.channel(region).addSample('ttbar', hist_file_format.format(sample='ttbar'), hist_name.format('ttbar'))
     sample = VVUnfold.channel(region).sample('ttbar')
     # ResonanceFinder has a major bug when using mean != 1 GAUSSIAN constraints. So hack
     # fix by scaling by the mean as a constant first (which works fine).
@@ -68,7 +68,7 @@ def run(
         sample.addVariation(variation)
 
     ### Add stop ###
-    VVUnfold.channel(region).addSample('stop', hist_file_format.format(sample='stop'), hist_name)
+    VVUnfold.channel(region).addSample('stop', hist_file_format.format(sample='stop'), hist_name.format('stop'))
     sample = VVUnfold.channel(region).sample('stop')
     # ResonanceFinder has a major bug when using mean != 1 GAUSSIAN constraints. So hack
     # fix by scaling by the mean as a constant first (which works fine).

@@ -370,12 +370,12 @@ def is_histo_syst(x):
     return True
 
 
-def hist_name_variation(hist_name, sample : Sample, variation):
+def hist_name_variation(hist_name, sample : Sample, variation, separator='_'):
     if not is_histo_syst(variation):
         return hist_name
     if sample == Sample.data:
         return hist_name
-    return f'{hist_name}_{variation}'
+    return hist_name + separator + variation
 
 
 

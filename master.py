@@ -680,7 +680,8 @@ def save_rebinned_histograms(config : ChannelConfig):
 
                 hist = plot.rebin(hist, bins)
                 new_name = hist_name.format(lep=f'{config.lepton_channel}Lep', sample=sample_name)
-                new_name = utils.hist_name_variation(new_name, config.file_manager.samples[sample_name], variation)
+                new_name = utils.hist_name_variation(new_name, config.file_manager.samples[sample_name], variation, separator='__')
+                # For some reason RF expects a double underscore...not sure how to change
                 hist.SetName(new_name)
 
                 f = file(sample_name)
