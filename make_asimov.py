@@ -40,7 +40,7 @@ def parse_args():
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument('filepaths', nargs='+')
-    parser.add_argument('-o', '--output', default='{lep}lep_data-asimov.hists.root')
+    parser.add_argument('-o', '--output', default='hist_data-asimov_{lep}-0.root')
     return parser.parse_args()
 
 
@@ -79,12 +79,14 @@ def main():
             ### Sum hists ###
             hists = file_manager.get_hist_all_samples(lepton_channel, name)
             h_data = None
-            for _,h in hists.items():
+            for sample,h in hists.items():
+                # print(sample.rjust(15), h.Integral())
                 if h_data is None:
                     h_data = h.Clone()
                 else:
                     h_data.Add(h)
             h_data.SetName(name.format(sample='data'))
+            # print('Data'.rjust(15), h_data.Integral())
 
             ### Set sqrt(N) errors ###
             for i in range(len(h_data)):

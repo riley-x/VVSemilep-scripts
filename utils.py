@@ -483,8 +483,10 @@ class FileManager:
         files = self.files[(lep, sample.name)]
 
         h_out = None
-        for key in sample.hist_keys:
-            for lep_name in self.lepton_channel_names[lep]:
+        sample_keys = sample.hist_keys if '{sample}' in hist_name_format else [None]
+        lep_keys = self.lepton_channel_names[lep] if '{lep}' in hist_name_format else [None]
+        for key in sample_keys:
+            for lep_name in lep_keys:
                 name = hist_name_format.format(lep=lep_name, sample=key)
                 name = hist_name_variation(name, sample, variation)
                 for file in files:

@@ -38,6 +38,7 @@ def run(
     VVUnfold.setCollectionTagNominal('')
     VVUnfold.setCollectionTagUp(utils.variation_up_key)
     VVUnfold.setCollectionTagDown(utils.variation_down_key)
+    # VVUnfold.setPruningThreshold(0.01, 0.01) # is this buggy? According to Liza on Mattermost
 
     ### Single region ###
     region = "SR"
