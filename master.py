@@ -772,7 +772,8 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
         config_args = dict(
             lepton_channel=channel_config.lepton_channel,
             var=var,
-            output_dir=f'{channel_config.output_dir}/gpr/{lepton_channel}lep/{var}/{variation}',
+            output_hists_dir=f'{channel_config.output_dir}/gpr',
+            output_plots_dir=f'{channel_config.output_dir}/gpr/{lepton_channel}lep/{var}/{variation}',
             use_vjets_mc=channel_config.is_asimov,
             variation=variation,
             mu_ttbar=channel_config.ttbar_fitter.get_var(variation),

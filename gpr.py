@@ -1687,7 +1687,8 @@ class FitConfig:
             var : utils.Variable,
             variation : str = 'nominal',
             use_vjets_mc : bool = False,
-            output_dir : str = './output',
+            output_plots_dir : str = './output',
+            output_hists_dir : str = None,
             gpr_version : str = 'rbf',
             sr_window : tuple[float, float] = (72, 102),
             mu_stop : float = 1,
@@ -1697,17 +1698,19 @@ class FitConfig:
         self.var = var
         self.variation = variation
         self.use_vjets_mc = use_vjets_mc
-        self.output_root = output_dir
+        self.output_plots_dir = output_plots_dir
+        self.output_hists_dir = output_hists_dir or output_plots_dir
         self.gpr_version = gpr_version
         self.sr_window = sr_window
         self.mu_stop = mu_stop
         self.mu_ttbar = mu_ttbar
 
         ### Outputs ###
-        self.output_dir = f'{output_dir}/{lepton_channel}lep/{var}/{variation}'
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
-        self.fit_results = FitResults(f'{output_dir}/gpr_fit_results.csv') # original output_dir
+        if not os.path.exists(self.output_plots_dir):
+            os.makedirs(self.output_plots_dir)
+        if not os.path.exists(self.output_hists_dir):
+            os.makedirs(self.output_hists_dir)
+        self.fit_results = FitResults(f'{output_hists_dir}/gpr_fit_results.csv') # original output_dir
         
         ### Binning ###
         self.bins_y = self.get_bins_y()
@@ -1773,7 +1776,7 @@ def summary_actions_from_csv(config : FitConfig):
     graphs = [config.fit_results.get_graph(**csv_base_spec, fitter=x, unscale_width=True) for x in fitters]
     plot_summary_distribution(
         graphs,
-        filename=f'{config.output_dir}/gpr_{config.lepton_channel}lep_{config.var}_summary',
+        filename=f'{config.output_plots_dir}/gpr_{config.lepton_channel}lep_{config.var}_summary',
         subtitle=[
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
             f'{config.lepton_channel}-lepton channel',
@@ -1786,7 +1789,7 @@ def summary_actions_from_csv(config : FitConfig):
     )
 
     ### Save output histogram ###
-    f_output = ROOT.TFile(f'{config.output_root}/gpr_{config.lepton_channel}lep_vjets_yield.root', 'UPDATE')
+    f_output = ROOT.TFile(f'{config.output_hists_dir}/gpr_{config.lepton_channel}lep_vjets_yield.root', 'UPDATE')
     
     # This naming convention is pretty important to match that in the CxAODReader outputs
     # Since ResonanceFinder uses the same convention for ALL samples.
@@ -1888,7 +1891,7 @@ def run(
             h_mc=h_mc,
             h_diboson=h_diboson_bin,
             vary_bin=bin_y,
-            filebase=f'{config.output_dir}/gpr_{config.lepton_channel}lep_{config.var}_{config.variation}_{binstr}_',
+            filebase=f'{config.output_plots_dir}/gpr_{config.lepton_channel}lep_{config.var}_{config.variation}_{binstr}_',
             config=config,
             subtitle=common_subtitle,
         )
@@ -1910,7 +1913,7 @@ def run(
                 h_ttbar=prepare_bin(h_ttbar, bins),
                 h_stop=prepare_bin(h_stop, bins),
                 h_diboson=prepare_bin(h_diboson, bins),
-                filename=f'{config.output_dir}/gpr_{config.lepton_channel}lep_{config.var}_{config.variation}_{binstr}_postfit',
+                filename=f'{config.output_plots_dir}/gpr_{config.lepton_channel}lep_{config.var}_{config.variation}_{binstr}_postfit',
                 subtitle=common_subtitle,
                 sr_window=config.sr_window,
                 mu_diboson=contour_scanner.mu_integral[0],
@@ -1972,7 +1975,7 @@ def main():
         var=getattr(utils.Variable, args.var),
         variation=args.variation,
         use_vjets_mc=args.closure_test,
-        output_dir=args.output,
+        output_plots_dir=args.output,
         mu_stop=args.mu_stop,
         mu_ttbar=args.mu_ttbar,
     )
