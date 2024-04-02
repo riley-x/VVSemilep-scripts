@@ -227,6 +227,9 @@ def plot_yield_comparison(h_fit, h_mc, h_eft=None, eft_legend=None, **plot_opts)
 
 
 def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_results, filename : str):
+    '''
+    Uses [plot_yield_comparison] to plot the PLU unfolded result against the fiducial MC.
+    '''
     bins = np.array(utils.get_bins(config.lepton_channel, variable), dtype=float)
 
     ### Fit ###
@@ -237,8 +240,14 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
         h_fit.SetBinError(i, mu[1])
 
     ### MC ###
+    temp_file_manager = utils.FileManager(
+        samples=[utils.Sample.diboson, utils.Sample.cw_lin, utils.Sample.cw_quad],
+        file_path_formats=['../../{lep}/{lep}_{sample}_x_Feb24-ANN.hists.root'],
+        lepton_channels=[1],
+    )
     def get(sample):
-        h = config.file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + variable.name)
+        # h = config.file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + variable.name)
+        h = temp_file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + variable.name)
         return plot.rebin(h.ProjectionX(), bins)
     h_mc = get(utils.Sample.diboson)
 
@@ -548,20 +557,37 @@ def plot_pulls(config : ChannelConfig, variable : utils.Variable, fit_results : 
 
 
 def plot_correlations(config : ChannelConfig, variable : utils.Variable, roofit_results, filename : str):
-    ### Create hist ###
-    bins = utils.get_bins(config.lepton_channel, variable)
-    alphas = [utils.variation_lumi] + utils.variations_custom + utils.variations_hist
-    mus = [f'mu_{x:02}' for x in range(1, len(bins))]
-    pars = [f'alpha_{x}' for x in alphas] + mus
+    ### Get parameter lists ###
+    # bins = utils.get_bins(config.lepton_channel, variable)
+    # alphas = [utils.variation_lumi] + utils.variations_custom + utils.variations_hist
+    # mus = [f'mu_{x:02}' for x in range(1, len(bins))]
+    # pars = [f'alpha_{x}' for x in alphas] + mus
+    pars_all = [ v.GetName() for v in roofit_results.floatParsFinal() ]
+    pars_prune = []
+    prune_threshold = 0.05
+    for i,par in enumerate(pars_all):
+        if 'mu' in par:
+            pars_prune.append(par)
+        else:
+            for j in range(len(pars)):
+                if j == i: continue
+                if roofit_results.correlations(pars_all[i], pars_all[j]) > prune_threshold:
+                    pars_prune.append(par)
+                    break
 
-    n = len(pars)
-    h = ROOT.TH2F('h_cov', '', n, 0, n, n, 0, n)
-    for i in range(n):
-        h.GetXaxis().SetBinLabel(i + 1, pars[i].replace('alpha_', ''))
-        h.GetYaxis().SetBinLabel(n - i, pars[i].replace('alpha_', ''))
-        for j in range(n):
-            h.SetBinContent(n - i, j + 1, roofit_results.correlation(pars[i], pars[j]))
-    h.GetXaxis().LabelsOption('v')
+    ### Create matrices ###
+    def create_hist(pars):
+        n = len(pars)
+        h = ROOT.TH2F('h_cov', '', n, 0, n, n, 0, n)
+        for i in range(n):
+            h.GetXaxis().SetBinLabel(i + 1, pars[i].replace('alpha_', ''))
+            h.GetYaxis().SetBinLabel(n - i, pars[i].replace('alpha_', ''))
+            for j in range(n):
+                h.SetBinContent(n - i, j + 1, roofit_results.correlation(pars[i], pars[j]))
+        h.GetXaxis().LabelsOption('v')
+        return h
+    h_all = create_hist(pars_all)
+    h_prune = create_hist(pars_prune)
 
     ### Plot ###
     plot.create_gradient(np.array([
@@ -573,18 +599,26 @@ def plot_correlations(config : ChannelConfig, variable : utils.Variable, roofit_
         [1.0,  1.0, 0.2, 0.0],
     ]))
     ROOT.gStyle.SetNumberContours(101)
-    plot.plot(
-        filename=filename,
+    common_args = dict(
         text_pos='topright',
         subtitle=[
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
             f'{config.lepton_channel}-lepton channel {variable} fit',
         ],
-        objs=[h],
         opts='COLZ',
         z_range=[-1, 1],
         left_margin=0.3,
         bottom_margin=0.3,
+    )
+    plot.plot(
+        objs=[h_all],
+        filename=filename,
+        **common_args,
+    )
+    plot.plot(
+        objs=[h_prune],
+        filename=filename + f'_prune{prune_threshold}',
+        **common_args,
     )
 
 
