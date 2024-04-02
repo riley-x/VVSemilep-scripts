@@ -40,7 +40,7 @@ def parse_args():
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument('filepaths', nargs='+')
-    parser.add_argument('-o', '--output', default='hist_data-asimov_{lep}-0.root')
+    parser.add_argument('-o', '--output', default='hist_data-asimov_{lep}lep-0.root')
     return parser.parse_args()
 
 
