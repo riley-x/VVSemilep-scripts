@@ -71,6 +71,8 @@ def main():
                 '__v__fatjet_m' not in name and \
                 'unfoldingMtx' not in name:
                 continue
+            if '__1up' in name or '__1down' in name or '_Sys' in name:
+                continue
             name = name.replace(utils.Sample.diboson.hist_keys[0], '{sample}')
             print(name)
 
