@@ -210,8 +210,12 @@ class TtbarSysFitter:
         self.vars[utils.variation_mu_stop + utils.variation_down_key] = results_stop_down['mu_ttbar'][0]
 
     def get_var(self, variation):
+        if variation in [utils.variation_nom] or 'mu-diboson' in variation:
+            return self.mu_ttbar_nom[0]
+
         out = self.vars.get(variation)
         if out is not None: return out
+
         res = run_fit(self.file_manager, mu_stop_0=self._mu_stop_nom, variation=variation)
         self.vars[variation] = res['mu_ttbar'][0]
         return self.vars[variation]

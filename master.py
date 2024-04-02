@@ -641,6 +641,7 @@ class ChannelConfig:
             skip_direct_fit : bool,
             skip_gpr : bool,
             skip_gpr_if_present : bool,
+            gpr_condor : bool,
             is_asimov : bool,
             run_plu_val : bool,
         ):
@@ -654,6 +655,7 @@ class ChannelConfig:
         self.skip_direct_fit = skip_direct_fit
         self.skip_gpr = skip_gpr
         self.skip_gpr_if_present = skip_gpr_if_present
+        self.gpr_condor = gpr_condor
         self.is_asimov = is_asimov
         self.plu_validation_iters = 100 if run_plu_val else 0
 
@@ -766,91 +768,76 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     plot.notice(f'{channel_config.log_base} running GPR fits for {var}')
 
     ### Config ###
-    config_base = {
-        'lepton_channel': channel_config.lepton_channel,
-        'var': var,
-        'output_dir': channel_config.output_dir + '/gpr',
-        'use_vjets_mc': channel_config.is_asimov,
-    }
-    def run(config):
-        # Putting this catch here still runs the summary plots and generates 
-        # gpr_sigcontam_corrs
-        if not (channel_config.skip_fits or channel_config.skip_gpr): 
+    def run(variation, mu_stop=channel_config.mu_stop[0]):
+        config_args = dict(
+            lepton_channel=channel_config.lepton_channel,
+            var=var,
+            output_dir=f'{channel_config.output_dir}/gpr/{lepton_channel}lep/{var}/{variation}',
+            use_vjets_mc=channel_config.is_asimov,
+            variation=variation,
+            mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
+        )
+        config = gpr.FitConfig(**config_args)
+
+        if channel_config.skip_fits or channel_config.skip_gpr: 
+            # Putting this catch here instead of around run_gpr still runs the
+            # summary plots and generates gpr_sigcontam_corrs
+            pass
+        elif channel_config.gpr_condor:
+            print(config_args)
+        else:
             gpr.run(
                 file_manager=channel_config.file_manager, 
                 config=config, 
-                # from_csv_only=channel_config.skip_fits or channel_config.skip_gpr,
+                from_csv_only=channel_config.skip_fits or channel_config.skip_gpr,
                 skip_if_in_csv=channel_config.skip_gpr_if_present,
             )
+        
+        return config
 
     ### Nominal ###
-    fit_config = gpr.FitConfig(
-        variation='nominal',
-        mu_stop=channel_config.mu_stop[0],
-        mu_ttbar=channel_config.ttbar_fitter.mu_ttbar_nom[0],
-        **config_base,
-    )
-    run(fit_config)
+    run('nominal')
 
     ### Diboson signal strength variations ###
     mu_diboson_points = [0.9, 0.95, 1.05, 1.1]
     for mu_diboson in mu_diboson_points:
-        fit_config = gpr.FitConfig(
-            variation=f'mu-diboson{mu_diboson}',
-            mu_stop=channel_config.mu_stop[0],
-            mu_ttbar=channel_config.ttbar_fitter.mu_ttbar_nom[0],
-            **config_base,
+        fit_config = run(f'mu-diboson{mu_diboson}')
+    if not config.gpr_condor:
+        channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
+            config=fit_config,
+            yields=mu_diboson_points,
+            filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
         )
-        run(fit_config)
-    channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
-        config=fit_config,
-        yields=mu_diboson_points,
-        filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
-    )
 
     ### ttbar signal strength variations ###
     for updown in [utils.variation_up_key, utils.variation_down_key]:
-        variation = utils.variation_mu_ttbar + updown
-        fit_config = gpr.FitConfig(
-            variation=variation,
-            mu_stop=channel_config.mu_stop[0],
-            mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
-            **config_base,
-        )
-        run(fit_config)
+        run(utils.variation_mu_ttbar + updown)
 
     ### Single top signal strength variations ###
-    variation = utils.variation_mu_stop + utils.variation_up_key
-    fit_config = gpr.FitConfig(
-        variation=variation,
+    fit_config = run(
+        variation=utils.variation_mu_stop + utils.variation_up_key,
         mu_stop=channel_config.mu_stop[0] + channel_config.mu_stop[1],
-        mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
-        **config_base,
     )
-    run(fit_config)
-    variation = utils.variation_mu_stop + utils.variation_down_key
-    fit_config = gpr.FitConfig(
-        variation=variation,
+    fit_config = run(
+        variation=utils.variation_mu_stop + utils.variation_down_key,
         mu_stop=channel_config.mu_stop[0] - channel_config.mu_stop[1],
-        mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
-        **config_base,
     )
-    run(fit_config)
-    plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
+
+    ### ttbar/stop summary plot ###
+    if not config.gpr_condor:
+        plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
 
     ### Syst variations ###
     for variation_base in utils.variations_hist:
         for updown in [utils.variation_up_key, utils.variation_down_key]:
-            variation = variation_base + updown
-            fit_config = gpr.FitConfig(
-                variation=variation,
-                mu_stop=channel_config.mu_stop[0],
-                mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
-                **config_base,
-            )
-            run(fit_config)
+            fit_config = run(variation_base + updown)
 
+    ### Outputs ###
     channel_config.gpr_results = fit_config.fit_results
+    if config.gpr_condor:
+        plot.success("Launched GPR jobs on condor, exiting now. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
+        sys.exit()
+
 
 
 def run_direct_fit(config : ChannelConfig, var : utils.Variable):
@@ -1144,6 +1131,7 @@ def parse_args():
     parser.add_argument('--no-systs', action='store_true', help="Run without using the systematic variations.")
     parser.add_argument('--asimov', action='store_true', help="Use asimov data instead. Will look for files using [data-asimov] as the naming key instead of [data]. Create asimov data easily using make_asimov.py")
     parser.add_argument('--run-plu-val', action='store_true', help="Runs a PLU validation test by varying the data histogram and performing the entire PLU fit multiple times.")
+    parser.add_argument('--condor', action='store_true', help="Runs the GPR fits via HT Condor. Merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
     parser.add_argument('--mu-stop', default='1,0.2', help="The stop signal strength. Should be a comma-separated pair val,err.")
     parser.add_argument('--channels', default='0,1,2', help="The lepton channels to run over, separated by commas.")
     return parser.parse_args()
@@ -1201,6 +1189,7 @@ def main():
             skip_direct_fit=args.skip_direct_fit,
             skip_gpr=args.skip_gpr,
             skip_gpr_if_present=args.skip_gpr_if_present,
+            gpr_condor=args.condor,
             is_asimov=args.asimov,
             run_plu_val=args.run_plu_val,
         )
