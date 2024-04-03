@@ -95,7 +95,7 @@ class CondorSubmitMaker:
             os.makedirs(f'{config.output_dir}/condor_logs')
 
         self.f = open(filepath, 'w')
-        self.f.write(f'''
+        self.f.write(f'''\
 # Setup
 Universe = vanilla
 getenv = True
@@ -649,7 +649,6 @@ def plot_correlations(config : ChannelConfig, variable : utils.Variable, roofit_
             h.GetYaxis().SetBinLabel(n - i, pars[i].replace('alpha_', '').replace('gamma_', ''))
             for j in range(n):
                 h.SetBinContent(i + 1, n - j, roofit_results.correlation(pars[i], pars[j]))
-                # h.SetBinContent(n - i, j + 1, roofit_results.correlation(pars[i], pars[j]))
         h.GetXaxis().LabelsOption('v')
         return h
     h_all = create_hist(pars_all)
@@ -835,9 +834,9 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
 
     ### Condor ###
     if channel_config.gpr_condor:
-        condor_file = CondorSubmitMaker(channel_config, var, f'{channel_config.output_dir}/gpr/submit.condor')
+        condor_file = CondorSubmitMaker(channel_config, var, f'{channel_config.output_dir}/gpr/{channel_config.lepton_channel}lep_{var}.submit.condor')
 
-    ### Config ###
+    ### Common run function ###
     def run(variation, mu_stop=channel_config.mu_stop[0]):
         config = gpr.FitConfig(
             lepton_channel=channel_config.lepton_channel,
@@ -909,10 +908,9 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
         condor_file.close()
         res = subprocess.run(['condor_submit', condor_file.filepath])
         if res.returncode == 0:
-            plot.success("Launched GPR jobs on condor, exiting now. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
+            plot.success("Launched GPR jobs on condor. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
         else:
             plot.error(f"Couldn't launch condor jobs: {res}.")
-        sys.exit()
 
 
 def run_direct_fit(config : ChannelConfig, var : utils.Variable):
@@ -1167,6 +1165,8 @@ def run_channel(config : ChannelConfig):
         gc.disable() # https://root-forum.cern.ch/t/segfault-on-creating-canvases-and-pads-in-a-loop-with-pyroot/44729/13
         run_gpr(config, var) # When skip_gpr, still generates the summary plots
         gc.enable()
+        if config.gpr_condor:
+            continue
 
         ### Diboson yield ###
         if not config.skip_fits and not config.skip_direct_fit:

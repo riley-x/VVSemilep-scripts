@@ -22,9 +22,8 @@ be replaced with the lepton channel number, and 'sample', which uses
 See [utils.FileManager] for details.
 '''
 
-import ROOT
+import ROOT # type: ignore
 
-import os
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import utils
