@@ -442,6 +442,7 @@ class FileManager:
             [Sample.file_stubs] for each sample.
         '''
         self.samples = { sample.name : sample for sample in samples }
+        self.file_path_formats = file_path_formats
         self.files = {
             (lep, sample.name) : self._get_sample_files(lep, sample, file_path_formats)
             for lep in lepton_channels

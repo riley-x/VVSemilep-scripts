@@ -1710,7 +1710,7 @@ class FitConfig:
             os.makedirs(self.output_plots_dir)
         if not os.path.exists(self.output_hists_dir):
             os.makedirs(self.output_hists_dir)
-        self.fit_results = FitResults(f'{output_hists_dir}/gpr_fit_results.csv') # original output_dir
+        self.fit_results = FitResults(f'{self.output_hists_dir}/gpr_fit_results.csv') # original output_dir
         
         ### Binning ###
         self.bins_y = self.get_bins_y()
@@ -1938,6 +1938,7 @@ def parse_args():
     parser.add_argument("--var", required=True, help='Variable to fit against; this must be present in a histogram {var}__v__fatjet_m and in the variable.py module.')
     
     parser.add_argument('-o', '--output', default='./output')
+    parser.add_argument('--output-hists', default=None)
     parser.add_argument('--closure-test', action='store_true', help='Set this flag to fit and do a closure test against the V+jets MC.')
     parser.add_argument('--mu-ttbar', default=1, help='Scale factor for the ttbar sample. Default = 1.')
     parser.add_argument('--mu-stop', default=1, help='Scale factor for the stop sample. Default = 1.')
@@ -1976,6 +1977,7 @@ def main():
         variation=args.variation,
         use_vjets_mc=args.closure_test,
         output_plots_dir=args.output,
+        output_hists_dir=args.output_hists,
         mu_stop=args.mu_stop,
         mu_ttbar=args.mu_ttbar,
     )

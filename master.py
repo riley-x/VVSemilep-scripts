@@ -75,6 +75,69 @@ def convert_alpha(alpha : tuple[float, float], orig : tuple[float, float]) -> tu
     err = alpha[1] * orig[1]
     return (val, err)
 
+
+class CondorSubmitMaker:
+    '''
+    Creates the condor.submit file for launching GPR jobs on HT Condor batch systems.
+
+    Usage:
+        maker = CondorSubmitMaker(config, var, 'submit.condor')
+        maker.add(gpr_config1)
+        maker.add(gpr_config2)
+        ...
+        maker.close()
+    '''
+    def __init__(self, config : ChannelConfig, var : utils.Variable, filepath : str):
+        self.config = config
+        self.var = var
+        self.filepath = filepath
+        if not os.path.exists(f'{config.output_dir}/condor_logs'):
+            os.makedirs(f'{config.output_dir}/condor_logs')
+
+        self.f = open(filepath, 'w')
+        self.f.write(f'''
+# Setup
+Universe = vanilla
+getenv = True
+
+# Log paths
+output = {config.output_dir}/condor_logs/$(ClusterId).$(ProcId).out
+error = {config.output_dir}/condor_logs/$(ClusterId).$(ProcId).err
+log = {config.output_dir}/condor_logs/$(ClusterId).$(ProcId).log
+
+# Queue
++JobFlavour = "10 minutes"
++queue="short"
+
+# Command
+Executable = gpr.py
+transfer_input_files = plotting,utils.py
+
+# Queue
+queue arguments from (
+''')
+
+    def add(self, fit_config : gpr.FitConfig):
+        input_paths = [os.path.abspath(x) for x in self.config.file_manager.file_path_formats]
+        output_path = os.path.abspath(fit_config.output_plots_dir)
+        # Output hists and plots to same finely binned directory so no overwrite between jobs!
+
+        self.f.write('    ')
+        self.f.write(' '.join(input_paths))
+        self.f.write(f' --lepton {self.config.lepton_channel}')
+        self.f.write(f' --var {self.var}')
+        self.f.write(f' --output {output_path}')
+        if self.config.is_asimov:
+            self.f.write(f' --closure-test') 
+        self.f.write(f' --variation {fit_config.variation}')
+        self.f.write(f' --mu-ttbar {fit_config.mu_ttbar}')
+        self.f.write(f' --mu-stop {fit_config.mu_stop}\n')
+    
+    def close(self):
+        self.f.write(')')
+        self.f.close()
+        plot.success(f'Wrote condor submit file to {self.filepath}')
+
 ##########################################################################################
 ###                                        PLOTS                                       ###
 ##########################################################################################
@@ -767,25 +830,29 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     '''
     plot.notice(f'{channel_config.log_base} running GPR fits for {var}')
 
+    ### Condor ###
+    if channel_config.gpr_condor:
+        condor_file = CondorSubmitMaker(channel_config, var, f'{channel_config.output_dir}/gpr/submit.condor')
+
     ### Config ###
     def run(variation, mu_stop=channel_config.mu_stop[0]):
-        config_args = dict(
+        config = gpr.FitConfig(
             lepton_channel=channel_config.lepton_channel,
             var=var,
             output_hists_dir=f'{channel_config.output_dir}/gpr',
-            output_plots_dir=f'{channel_config.output_dir}/gpr/{lepton_channel}lep/{var}/{variation}',
+            output_plots_dir=f'{channel_config.output_dir}/gpr/{channel_config.lepton_channel}lep/{var}/{variation}',
             use_vjets_mc=channel_config.is_asimov,
             variation=variation,
             mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
+            mu_stop=mu_stop,
         )
-        config = gpr.FitConfig(**config_args)
 
         if channel_config.skip_fits or channel_config.skip_gpr: 
             # Putting this catch here instead of around run_gpr still runs the
             # summary plots and generates gpr_sigcontam_corrs
             pass
         elif channel_config.gpr_condor:
-            print(config_args)
+            condor_file.add(config)
         else:
             gpr.run(
                 file_manager=channel_config.file_manager, 
@@ -803,7 +870,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     mu_diboson_points = [0.9, 0.95, 1.05, 1.1]
     for mu_diboson in mu_diboson_points:
         fit_config = run(f'mu-diboson{mu_diboson}')
-    if not config.gpr_condor:
+    if not channel_config.gpr_condor:
         channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
             config=fit_config,
             yields=mu_diboson_points,
@@ -825,7 +892,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     )
 
     ### ttbar/stop summary plot ###
-    if not config.gpr_condor:
+    if not channel_config.gpr_condor:
         plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
 
     ### Syst variations ###
@@ -835,8 +902,15 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
 
     ### Outputs ###
     channel_config.gpr_results = fit_config.fit_results
-    if config.gpr_condor:
-        plot.success("Launched GPR jobs on condor, exiting now. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
+    if channel_config.gpr_condor:
+        condor_file.close()
+        res = subprocess.run(['condor_submit', condor_file.filepath])
+            # capture_output=True,
+            # text=True,
+        if res.returncode == 0:
+            plot.success("Launched GPR jobs on condor, exiting now. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
+        else:
+            plot.error(f"Couldn't launch condor jobs: {res}.")
         sys.exit()
 
 
