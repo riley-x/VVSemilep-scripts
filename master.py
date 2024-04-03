@@ -303,10 +303,12 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
         h_fit.SetBinError(i, mu[1])
 
     ### MC ###
-    temp_file_manager = utils.FileManager(
+    # Buggy response matrix in eos_v3 files, so point to local files in interim
+    # Note fixed in https://gitlab.cern.ch/CxAODFramework/CxAODReader_VVSemileptonic/-/merge_requests/445
+    temp_file_manager = utils.FileManager( 
         samples=[utils.Sample.diboson, utils.Sample.cw_lin, utils.Sample.cw_quad],
         file_path_formats=['../../{lep}/{lep}_{sample}_x_Feb24-ANN.hists.root'],
-        lepton_channels=[1],
+        lepton_channels=[0, 1, 2],
     )
     def get(sample):
         # h = config.file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + variable.name)
@@ -627,14 +629,14 @@ def plot_correlations(config : ChannelConfig, variable : utils.Variable, roofit_
     # pars = [f'alpha_{x}' for x in alphas] + mus
     pars_all = [ v.GetName() for v in roofit_results.floatParsFinal() ]
     pars_prune = []
-    prune_threshold = 0.05
+    prune_threshold = 0.2
     for i,par in enumerate(pars_all):
         if 'mu' in par:
             pars_prune.append(par)
         else:
-            for j in range(len(pars)):
+            for j in range(len(pars_all)):
                 if j == i: continue
-                if roofit_results.correlations(pars_all[i], pars_all[j]) > prune_threshold:
+                if abs(roofit_results.correlation(pars_all[i], pars_all[j])) > prune_threshold:
                     pars_prune.append(par)
                     break
 
@@ -643,10 +645,11 @@ def plot_correlations(config : ChannelConfig, variable : utils.Variable, roofit_
         n = len(pars)
         h = ROOT.TH2F('h_cov', '', n, 0, n, n, 0, n)
         for i in range(n):
-            h.GetXaxis().SetBinLabel(i + 1, pars[i].replace('alpha_', ''))
-            h.GetYaxis().SetBinLabel(n - i, pars[i].replace('alpha_', ''))
+            h.GetXaxis().SetBinLabel(i + 1, pars[i].replace('alpha_', '').replace('gamma_', ''))
+            h.GetYaxis().SetBinLabel(n - i, pars[i].replace('alpha_', '').replace('gamma_', ''))
             for j in range(n):
-                h.SetBinContent(n - i, j + 1, roofit_results.correlation(pars[i], pars[j]))
+                h.SetBinContent(i + 1, n - j, roofit_results.correlation(pars[i], pars[j]))
+                # h.SetBinContent(n - i, j + 1, roofit_results.correlation(pars[i], pars[j]))
         h.GetXaxis().LabelsOption('v')
         return h
     h_all = create_hist(pars_all)
@@ -910,7 +913,6 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
         else:
             plot.error(f"Couldn't launch condor jobs: {res}.")
         sys.exit()
-
 
 
 def run_direct_fit(config : ChannelConfig, var : utils.Variable):

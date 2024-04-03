@@ -9,13 +9,14 @@
 RUN
 ------------------------------------------------------------------------------------------
 
+Pass the root of the output direction (i.e. parent of the 'gpr' directory created by
+master.py)
 
+    merge_gpr_condor.py ./output
 '''
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import os
-import shutil
-
 
 ##########################################################################################
 ###                                        MAIN                                        ###
