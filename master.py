@@ -627,9 +627,24 @@ def plot_correlations(config : ChannelConfig, variable : utils.Variable, roofit_
     # alphas = [utils.variation_lumi] + utils.variations_custom + utils.variations_hist
     # mus = [f'mu_{x:02}' for x in range(1, len(bins))]
     # pars = [f'alpha_{x}' for x in alphas] + mus
-    pars_all = [ v.GetName() for v in roofit_results.floatParsFinal() ]
-    pars_prune = []
+
+    ### All pars (custom sort) ###
+    def sort_name(name):
+        sname = name.replace('alpha_', '').replace('gamma_', '')
+        if 'mu' in sname:
+            sname = '0' + sname
+        elif 'stat' in sname:
+            sname = '1' + sname
+        elif 'lumiNP' == sname:
+            sname = '2' + sname
+        return (sname, name)
+    pars_all = [ sort_name(v.GetName()) for v in roofit_results.floatParsFinal() ]
+    pars_all.sort()
+    pars_all = [ x[1] for x in pars_all ]
+
+    ### Pruned pars ###
     prune_threshold = 0.2
+    pars_prune = []
     for i,par in enumerate(pars_all):
         if 'mu' in par:
             pars_prune.append(par)
@@ -645,8 +660,9 @@ def plot_correlations(config : ChannelConfig, variable : utils.Variable, roofit_
         n = len(pars)
         h = ROOT.TH2F('h_cov', '', n, 0, n, n, 0, n)
         for i in range(n):
-            h.GetXaxis().SetBinLabel(i + 1, pars[i].replace('alpha_', '').replace('gamma_', ''))
-            h.GetYaxis().SetBinLabel(n - i, pars[i].replace('alpha_', '').replace('gamma_', ''))
+            par_label = pars[i].replace('alpha_', '').replace('gamma_', '')
+            h.GetXaxis().SetBinLabel(i + 1, par_label)
+            h.GetYaxis().SetBinLabel(n - i, par_label)
             for j in range(n):
                 h.SetBinContent(i + 1, n - j, roofit_results.correlation(pars[i], pars[j]))
         h.GetXaxis().LabelsOption('v')
