@@ -61,11 +61,16 @@ class Variable:
 
 
 Variable.vv_m = Variable(name="vv_m", title="m(VV)", unit="GeV")
+Variable.vv_mt = Variable(name="vv_mt", title="m_{T}(VV)", unit="GeV")
 Variable.vhad_pt = Variable(name="vhad_pt", title="p_{T}(J)", unit="GeV")
 
 Variable.llJ_m = Variable(name="llJ_m", title="m(llJ)", unit="GeV", rebin=100, logy=True)
 Variable.lvJ_m = Variable(name="lvJ_m", title="m(l#nuJ)", unit="GeV", rebin=100, logy=True)
 Variable.vvJ_m = Variable(name="vvJ_m", title="m(#nu#nuJ)", unit="GeV", rebin=100, logy=True)
+
+Variable.llJ_mt = Variable(name="llJ_mT", title="m_{T}(llJ)", unit="GeV", rebin=100, logy=True)
+Variable.lvJ_mt = Variable(name="lvJ_mT", title="m_{T}(l#nuJ)", unit="GeV", rebin=100, logy=True)
+Variable.vvJ_mt = Variable(name="vvJ_mT", title="m_{T}(#nu#nuJ)", unit="GeV", rebin=100, logy=True)
 
 Variable.fatjet_m = Variable(name="fatjet_m", title="m(J)", unit="GeV")
 
@@ -75,6 +80,10 @@ def generic_var_to_lep(var, lep):
         if lep == 0: return Variable.vvJ_m
         if lep == 1: return Variable.lvJ_m
         if lep == 2: return Variable.llJ_m
+    elif var.name == 'vv_mt':
+        if lep == 0: return Variable.vvJ_mt
+        if lep == 1: return Variable.lvJ_mt
+        if lep == 2: return Variable.llJ_mt
     return var
 
 

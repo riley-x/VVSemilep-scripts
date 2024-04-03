@@ -740,9 +740,14 @@ class ChannelConfig:
         self.is_asimov = is_asimov
         self.plu_validation_iters = 100 if run_plu_val else 0
 
-        self.log_base = f'master.py::run_channel({lepton_channel}lep)'
-        self.variables = [utils.Variable.vv_m]
         self.npcheck_dir = 'ResonanceFinder/NPCheck'
+        self.log_base = f'master.py::run_channel({lepton_channel}lep)'
+        if lepton_channel == 0:
+            self.variables = [utils.Variable.vv_mt]
+        elif lepton_channel == 0:
+            self.variables = [utils.Variable.vv_m]
+        elif lepton_channel == 0:
+            self.variables = [utils.Variable.vv_m]
 
         ### Set in run_channel ###
         self.response_matrix_filepath = None
