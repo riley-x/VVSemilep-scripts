@@ -905,8 +905,6 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     if channel_config.gpr_condor:
         condor_file.close()
         res = subprocess.run(['condor_submit', condor_file.filepath])
-            # capture_output=True,
-            # text=True,
         if res.returncode == 0:
             plot.success("Launched GPR jobs on condor, exiting now. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
         else:

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 '''
+DEPRECATED
+
 @file master.py 
 @author Riley Xu - riley.xu@gmail.com, riley.xu@cern.ch 
 @date February 29, 2024 
