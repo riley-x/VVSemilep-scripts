@@ -365,6 +365,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     h_ttbar.Scale(config.ttbar_fitter.mu_ttbar_nom[0])
     h_stop.Scale(config.mu_stop[0])
 
+    ### Sum and ratios ###
     h_sum = h_gpr.Clone()
     h_sum.Add(h_diboson)
     h_sum.Add(h_ttbar)
@@ -375,6 +376,14 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     h_ratio.Divide(h_sum)
     h_errs.Divide(h_sum)
 
+    stack = [
+        (h_diboson.Integral(), h_diboson, 'Diboson (#mu=1)', plot.colors.pastel_blue),
+        (h_stop.Integral(), h_stop, 'Single top', plot.colors.pastel_yellow),
+        (h_ttbar.Integral(), h_ttbar, 't#bar{t}', plot.colors.pastel_orange),
+        (h_gpr.Integral(), h_gpr, 'GPR (V+jets)', plot.colors.pastel_red),
+    ]
+    stack.sort()
+
     ### Plot ###
     pads = plot.RatioPads()
     plotter1 = pads.make_plotter1(
@@ -384,13 +393,14 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
             f'{config.lepton_channel}-lepton channel pre-PLU',
         ],
+        y_min=0.2,
     )
     plotter1.add(
-        objs=[h_diboson, h_stop, h_ttbar, h_gpr],
-        legend=['Diboson (#mu=1)', 'Single top', 't#bar{t}', 'GPR (V+jets)'],
+        objs=[x[1] for x in stack],
+        legend=[x[2] for x in stack],
         stack=True,
         opts='HIST',
-        fillcolor=[plot.colors.pastel_blue, plot.colors.pastel_yellow, plot.colors.pastel_orange, plot.colors.pastel_red],
+        fillcolor=[x[3] for x in stack],
         linewidth=1,
     )
     plotter1.add(
@@ -485,6 +495,13 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
     h_ratio.Divide(h_sum)
     h_errs.Divide(h_sum)
 
+    stack = [
+        (h_stop.Integral(), h_stop, 'top', plot.colors.pastel_yellow),
+        (h_ttbar.Integral(), h_ttbar, 't#bar{t}', plot.colors.pastel_orange),
+        (h_gpr.Integral(), h_gpr, 'V+jets', plot.colors.pastel_red),
+    ]
+    stack.sort()
+
     ######################################################################################
     ### PLOT
     ######################################################################################
@@ -508,20 +525,20 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
     ### Colors ###
     palette_colors = plot.colors_from_palette(ROOT.kViridis, len(h_signals))
     palette_colors = [plot.whiteblend(ROOT.gROOT.GetColor(x), 0.4) for x in palette_colors]
+    bkg_colors = [x[3] for x in stack]
     def stack_color(i):
         if i < len(h_signals):
             return palette_colors[i].GetNumber()
         else:
-            mc_colors = [plot.colors.pastel_yellow, plot.colors.pastel_orange, plot.colors.pastel_red]
-            return mc_colors[i - len(h_signals)]
+            return bkg_colors[i - len(h_signals)]
 
     ### Legend ###
     legend = [f'Bin {i}' for i in range(1, len(bins))][::-1]
-    legend += ['top', 't#bar{t}', 'V+jets']
+    legend += [x[2] for x in stack]
 
     ### Plot stack ###
     plotter1.add(
-        objs=h_signals[::-1] + [h_stop, h_ttbar, h_gpr],
+        objs=h_signals[::-1] + [x[1] for x in stack],
         legend=legend,
         stack=True,
         opts='HIST',
@@ -538,7 +555,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
         markerstyle=0,
         opts='E2',
         legend_opts='F',
-        legend=['Errs - syst'],
+        legend=['#splitline{GPR +}{MC stat}'],
     )
 
     ### Plot data ###
@@ -744,9 +761,9 @@ class ChannelConfig:
         self.log_base = f'master.py::run_channel({lepton_channel}lep)'
         if lepton_channel == 0:
             self.variables = [utils.Variable.vv_mt]
-        elif lepton_channel == 0:
+        elif lepton_channel == 1:
             self.variables = [utils.Variable.vv_m]
-        elif lepton_channel == 0:
+        elif lepton_channel == 2:
             self.variables = [utils.Variable.vv_m]
 
         ### Set in run_channel ###
@@ -857,9 +874,9 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     if channel_config.gpr_condor:
         condor_file = CondorSubmitMaker(channel_config, var, f'{channel_config.output_dir}/gpr/{channel_config.lepton_channel}lep_{var}.submit.condor')
 
-    ### Common run function ###
-    def run(variation, mu_stop=channel_config.mu_stop[0]):
-        config = gpr.FitConfig(
+    ### Config ###
+    def make_config(variation, mu_stop):
+        return gpr.FitConfig(
             lepton_channel=channel_config.lepton_channel,
             var=var,
             output_hists_dir=f'{channel_config.output_dir}/gpr',
@@ -869,12 +886,27 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
             mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
             mu_stop=mu_stop,
         )
+    mu_diboson_points = [0.9, 0.95, 1.05, 1.1]
+    
+    ### Summary plots ###
+    def summary_actions():
+        fit_config = make_config(utils.variation_nom, channel_config.mu_stop)
+        channel_config.gpr_results = fit_config.fit_results
+        channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
+            config=fit_config,
+            yields=mu_diboson_points,
+            filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
+        )
+        plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
+    
+    if channel_config.skip_fits or channel_config.skip_gpr:
+        summary_actions()
+        return
 
-        if channel_config.skip_fits or channel_config.skip_gpr: 
-            # Putting this catch here instead of around run_gpr still runs the
-            # summary plots and generates gpr_sigcontam_corrs
-            pass
-        elif channel_config.gpr_condor:
+    ### Common run function ###
+    def run(variation, mu_stop=channel_config.mu_stop[0]):
+        config = make_config(variation, mu_stop)
+        if channel_config.gpr_condor:
             condor_file.add(config)
         else:
             gpr.run(
@@ -883,48 +915,34 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
                 from_csv_only=channel_config.skip_fits or channel_config.skip_gpr,
                 skip_if_in_csv=channel_config.skip_gpr_if_present,
             )
-        
-        return config
 
     ### Nominal ###
     run('nominal')
 
     ### Diboson signal strength variations ###
-    mu_diboson_points = [0.9, 0.95, 1.05, 1.1]
     for mu_diboson in mu_diboson_points:
-        fit_config = run(f'mu-diboson{mu_diboson}')
-    if not channel_config.gpr_condor:
-        channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
-            config=fit_config,
-            yields=mu_diboson_points,
-            filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
-        )
+        run(f'mu-diboson{mu_diboson}')
 
     ### ttbar signal strength variations ###
     for updown in [utils.variation_up_key, utils.variation_down_key]:
         run(utils.variation_mu_ttbar + updown)
 
     ### Single top signal strength variations ###
-    fit_config = run(
+    run(
         variation=utils.variation_mu_stop + utils.variation_up_key,
         mu_stop=channel_config.mu_stop[0] + channel_config.mu_stop[1],
     )
-    fit_config = run(
+    run(
         variation=utils.variation_mu_stop + utils.variation_down_key,
         mu_stop=channel_config.mu_stop[0] - channel_config.mu_stop[1],
     )
 
-    ### ttbar/stop summary plot ###
-    if not channel_config.gpr_condor:
-        plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
-
     ### Syst variations ###
     for variation_base in utils.variations_hist:
         for updown in [utils.variation_up_key, utils.variation_down_key]:
-            fit_config = run(variation_base + updown)
+            run(variation_base + updown)
 
     ### Outputs ###
-    channel_config.gpr_results = fit_config.fit_results
     if channel_config.gpr_condor:
         condor_file.close()
         res = subprocess.run(['condor_submit', condor_file.filepath])
@@ -932,6 +950,8 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
             plot.success("Launched GPR jobs on condor. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
         else:
             plot.error(f"Couldn't launch condor jobs: {res}.")
+    else:
+        summary_actions()
 
 
 def run_direct_fit(config : ChannelConfig, var : utils.Variable):
