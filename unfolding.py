@@ -243,7 +243,7 @@ def optimize_binning(
         bin_indices.append(i)
         last_merge_size = merge_size
 
-    print('unfolding.py Optimized bins:', h.GetName(), [int(x) for x in bin_edges])
+    plot.success('unfolding.py Optimized bins:', h.GetName(), [int(x) for x in bin_edges])
     return bin_edges
 
 
@@ -325,6 +325,7 @@ def plot_fid_reco(mtx, var, **kwargs):
 
 _default_vars = [
     utils.Variable.vv_m,
+    utils.Variable.vv_mt,
 ]
 
 def main(
@@ -415,7 +416,7 @@ if __name__ == "__main__":
         formatter_class=ArgumentDefaultsHelpFormatter
     )
     parser.add_argument('filepath', help='Path to the CxAODReader output histograms')
-    parser.add_argument('sample', help='Sample name used in CxAODReader, such as "SMVV"')
+    parser.add_argument('sample', help='Sample name as in [utils.Sample]')
     parser.add_argument("lepton", type=int, choices=[0, 1, 2])
     parser.add_argument('-o', '--output', default='./output')
     parser.add_argument('--optimizeToRange', help='Automatically optimize the binning. Pass in a "min,max" range of values that the binning should cover.')
