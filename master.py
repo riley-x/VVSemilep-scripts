@@ -241,7 +241,7 @@ def plot_gpr_ttbar_and_stop_correlations(config : gpr.FitConfig, filename : str)
     )
 
 
-def plot_yield_comparison(h_fit, h_mc, h_eft=None, eft_legend=None, **plot_opts):
+def plot_yield_comparison(filename, h_fit, h_mc, h_eft=None, eft_legend=None, **plot_opts):
     '''
     Plots a 1D comparison between a fit and MC. The fit is shown as data points while the
     MC is shown as a filled blue band. Includes a fit/MC ratio.
@@ -272,20 +272,22 @@ def plot_yield_comparison(h_fit, h_mc, h_eft=None, eft_legend=None, **plot_opts)
         legend_opts = ['', 'FL', 'PEL']
 
     ROOT.gStyle.SetErrorX(0)
-    plot.plot_ratio(
-        objs1=objs,
-        objs2=[ratio],
-        legend=legend,
-        opts=opts,
-        legend_opts=legend_opts,
-        opts2='PE',
-        ytitle='Events',
-        ytitle2='Fit / SM' if h_eft else 'Fit / MC',
-        hline=1,
-        y_range2=(0.5, 1.5),
-        logy=True,
-        **plot_opts,
-    )
+    for logy in [True, False]:
+        plot.plot_ratio(
+            filename = filename + '_logy' if logy else filename,
+            objs1=objs,
+            objs2=[ratio],
+            legend=legend,
+            opts=opts,
+            legend_opts=legend_opts,
+            opts2='PE0',
+            ytitle='Events',
+            ytitle2='Fit / SM' if h_eft else 'Fit / MC',
+            hline=1,
+            y_range2=(0.5, 1.5),
+            logy=logy,
+            **plot_opts,
+        )
     ROOT.gStyle.SetErrorX()
 
 
@@ -439,7 +441,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     )
     plotter2.add(
         objs=[h_ratio],
-        opts='PE',
+        opts='PE0',
         legend=None,
     )
     plotter2.draw()
@@ -585,7 +587,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
     )
     plotter2.add(
         objs=[h_ratio],
-        opts='PE',
+        opts='PE0',
         legend=None,
     )
     plotter2.draw()

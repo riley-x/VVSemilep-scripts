@@ -17,7 +17,7 @@ master.py)
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import os
-import ROOT
+import ROOT # type: ignore
 
 ##########################################################################################
 ###                                        MAIN                                        ###
