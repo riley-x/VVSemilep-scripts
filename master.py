@@ -424,7 +424,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     ### Subplot ###
     plotter2 = pads.make_plotter2(
         ytitle='Data / Bkgs',
-        xtitle='m(J) [GeV]',
+        xtitle=f'{variable:title}',
         ignore_outliers_y=False,
         y_range=(0.5, 1.5),
     )
@@ -570,7 +570,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
     ### Subplot ###
     plotter2 = pads.make_plotter2(
         ytitle='Data / Fit',
-        xtitle='m(J) [GeV]',
+        xtitle=f'{variable:title}',
         ignore_outliers_y=False,
         y_range=[0.5, 1.5],
     )
