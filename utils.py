@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Union
 import ctypes
 import numpy as np
+import os
 
 from plotting import plot
 import ROOT # type: ignore
@@ -85,7 +86,6 @@ def generic_var_to_lep(var, lep):
         if lep == 1: return Variable.lvJ_mt
         if lep == 2: return Variable.llJ_mt
     return var
-
 
 
 #########################################################################################
@@ -191,7 +191,6 @@ def get_bins(lepton_channel : int, var: Variable):
             return [300, 360, 460, 580, 730, 940, 1200, 1460, 3000]
 
     raise NotImplementedError(f"utils.py::get_bins({lepton_channel}, {var.name})")
-
 
 
 #########################################################################################
@@ -391,7 +390,6 @@ def hist_name_variation(hist_name, sample : Sample, variation, separator='_'):
     return hist_name + separator + variation
 
 
-
 #########################################################################################
 ###                                    File Access                                    ###
 #########################################################################################
@@ -438,8 +436,10 @@ class FileManager:
     data!
     '''
 
+    _filesystem_case_insensitive = os.path.exists(__file__.upper()) and os.path.exists(__file__.lower())
+
     lepton_channel_names = {
-        0: ['0lep', '0Lep', 'HIGG5D1'],
+        0: ['0lep', '0Lep', 'HIGG5D1'], # DO NOT MODIFY without checking the macOS test in _get_sample_files
         1: ['1lep', '1Lep', 'HIGG5D2'],
         2: ['2lep', '2Lep', 'HIGG2D4'],
     }
@@ -462,13 +462,16 @@ class FileManager:
             for sample in samples
         }
 
-
     def _get_sample_files(self, lep : int, sample : Sample, file_path_formats: list[str]) -> list[ROOT.TFile]:
         files = []
         ROOT.gSystem.RedirectOutput("/dev/null") # mute TFile error messages
         for path in file_path_formats:
             for stub in sample.file_stubs:
                 for lep_name in self.lepton_channel_names[lep]:
+                    if self._filesystem_case_insensitive and lep_name.endswith('Lep'): 
+                        # DON'T try both 1lep and 1Lep in case-insensitive file systems or
+                        # else the file will be duplicated
+                        continue 
                     formatted_path = path.format(lep=lep_name, sample=stub)
                     try:
                         files.append(ROOT.TFile(formatted_path))
@@ -479,7 +482,6 @@ class FileManager:
         if not files:
             plot.warning(f'FileManager() unable to find files for {sample} in the {lep}-lep channel.')
         return files
-
 
     def get_hist(self, lep : int, sample : Union[str, Sample], hist_name_format : str, variation : str = variation_nom) -> Union[ROOT.TH1F, None]:
         '''
@@ -499,6 +501,7 @@ class FileManager:
         h_out = None
         sample_keys = sample.hist_keys if '{sample}' in hist_name_format else [None]
         lep_keys = self.lepton_channel_names[lep] if '{lep}' in hist_name_format else [None]
+        used_keys = [] # (sample, lep, file)
         for key in sample_keys:
             for lep_name in lep_keys:
                 name = hist_name_format.format(lep=lep_name, sample=key)
@@ -508,8 +511,11 @@ class FileManager:
                     if not h or h.ClassName() == 'TObject':
                         continue
                     elif h_out is None:
+                        used_keys.append((key, lep_name, file.GetName()))
                         h_out = h.Clone()
                     else:
+                        used_keys.append((key, lep_name, file.GetName()))
+
                         h_out.Add(h)
 
         if h_out is None:
@@ -517,6 +523,11 @@ class FileManager:
                 plot.warning(f'FileManager() unable to find histgoram {hist_name_format} with variation {variation} for {sample} in the {lep}-lep channel.')
             else:
                 plot.warning(f'FileManager() unable to find histgoram {hist_name_format} for {sample} in the {lep}-lep channel.')
+        elif len(used_keys) > 1:
+            msg = f"FileManager.get_hist() Added {len(used_keys)} histograms for {hist_name_format}:"
+            for skey,lkey,fname in used_keys:
+                msg += f'\n    sample={skey}, lep={lkey}, file={fname}'
+            plot.warning(msg)
         return h_out
 
     def get_file_names(self, lep : int, sample : Union[str, Sample]) -> list[str]:
