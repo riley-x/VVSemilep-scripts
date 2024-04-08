@@ -1062,6 +1062,7 @@ def plot_postfit(h_gpr, h_data, h_ttbar, h_stop, h_diboson, filename, sr_window,
     pads = plot.RatioPads(**plot_args)
     plotter1 = pads.make_plotter1(
         ytitle='Events / GeV',
+        x_range=[50, 250],
         **plot_args,
     )
     plotter1.add(
@@ -1097,6 +1098,7 @@ def plot_postfit(h_gpr, h_data, h_ttbar, h_stop, h_diboson, filename, sr_window,
     plotter2 = pads.make_plotter2(
         ytitle='Data / Fit',
         xtitle='m(J) [GeV]',
+        x_range=[50, 250],
     )
     plotter2.add(
         objs=[ratio_sr, ratio_cr],
@@ -1724,10 +1726,18 @@ class FitConfig:
     def get_bins_x(self, bin_y):
         out = None
         if self.var.name == "vv_m":
-            if bin_y[0] >= 2000:
-                out = [50, 72, 102, 150, 200, 250]
-            elif bin_y[0] > 1000:
-                out = [50, 55, 60, 66, 72, 82, 92, 102, 125, 150, 175, 200, 250]
+            if self.lepton_channel == 1:
+                if bin_y[0] >= 2000:
+                    out = [50, 72, 102, 150, 200, 250]
+                elif bin_y[0] > 1000:
+                    out = [50, 55, 60, 66, 72, 82, 92, 102, 125, 150, 175, 200, 250]
+            elif self.lepton_channel == 2:
+                if bin_y[0] >= 1400:
+                    out = [50, 72, 102, 150, 200, 250]
+                elif bin_y[0] > 1000:
+                    out = [50, 55, 60, 66, 72, 82, 92, 102, 125, 150, 175, 200, 250]
+                else:
+                    out = [50, 55, 60, 66, 72] + list(np.arange(82, 250, 10))
         if out is None:
             out = np.concatenate(([50, 53, 56, 59], np.arange(62, 250, 5)))
         return np.array(out, dtype=float)

@@ -333,6 +333,7 @@ def main(
         sample : utils.Sample, 
         lepton_channel : int, 
         output : str = './output', 
+        output_plots : str = None,
         vars : list[utils.Variable] = _default_vars,
         optimization_range : tuple[float, float] = None,
     ):
@@ -355,7 +356,8 @@ def main(
         '#sqrt{s}=13 TeV, 140 fb^{-1}',
         f'{lepton_channel}-lepton channel, {sample}',
     ]
-    output_basename = f'{output}/{sample}_{lepton_channel}lep'
+    output_plots = output_plots or output
+    output_plot_basepath = f'{output_plots}/{sample}_{lepton_channel}lep'
 
     ### Files ###    
     rf_output_path = output_path(output, sample, lepton_channel)
@@ -379,18 +381,18 @@ def main(
     
         ### Plot ###
         plot_migration_matrix(mtx, var,
-            filename=f'{output_basename}_{var}_migration_matrix',
+            filename=f'{output_plot_basepath}_{var}_migration_matrix',
             subtitle=[
                 *common_subtitle,
                 '% migration from each fiducial bin'
             ],
         )
         plot_eff_acc(mtx, var,
-            filename=f'{output_basename}_{var}_eff_acc',
+            filename=f'{output_plot_basepath}_{var}_eff_acc',
             subtitle=common_subtitle,
         )
         plot_fid_reco(mtx, var,
-            filename=f'{output_basename}_{var}_fid_reco',
+            filename=f'{output_plot_basepath}_{var}_fid_reco',
             subtitle=common_subtitle,
         )
 

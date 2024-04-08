@@ -466,6 +466,8 @@ class FileManager:
             for sample in samples
         }
 
+        self._log_cache : set[tuple[int, str, str]] = set() # (lep, sample.name, file_format) to supress log messages
+
     def _get_sample_files(self, lep : int, sample : Sample, file_path_formats: list[str]) -> list[ROOT.TFile]:
         files = []
         ROOT.gSystem.RedirectOutput("/dev/null") # mute TFile error messages
@@ -519,7 +521,6 @@ class FileManager:
                         h_out = h.Clone()
                     else:
                         used_keys.append((key, lep_name, file.GetName()))
-
                         h_out.Add(h)
 
         if h_out is None:
@@ -528,10 +529,13 @@ class FileManager:
             else:
                 plot.warning(f'FileManager() unable to find histgoram {hist_name_format} for {sample} in the {lep}-lep channel.')
         elif len(used_keys) > 1:
-            msg = f"FileManager.get_hist() Added {len(used_keys)} histograms for {hist_name_format}:"
-            for skey,lkey,fname in used_keys:
-                msg += f'\n    sample={skey}, lep={lkey}, file={fname}'
-            plot.warning(msg)
+            cache_key = (lep, sample.name, hist_name_format)
+            if cache_key not in self._log_cache:
+                self._log_cache.add(cache_key)
+                msg = f"FileManager.get_hist() Added {len(used_keys)} histograms for {hist_name_format}:"
+                for skey,lkey,fname in used_keys:
+                    msg += f'\n    sample={skey}, lep={lkey}, file={fname}'
+                plot.warning(msg)
         return h_out
 
     def get_file_names(self, lep : int, sample : Union[str, Sample]) -> list[str]:

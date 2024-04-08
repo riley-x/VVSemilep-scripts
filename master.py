@@ -976,7 +976,7 @@ def run_direct_fit(config : ChannelConfig, var : utils.Variable):
             config=config,
             variable=var,
             bin=(bins[i], bins[i+1]),
-            gpr_mu_corr=config.gpr_sigcontam_corrs[i] if config.gpr_sigcontam_corrs else None,
+            gpr_mu_corr=config.gpr_sigcontam_corrs[i] if config.gpr_sigcontam_corrs is not None else None,
         )
         diboson_yield = res['diboson-yield']
         h_diboson_fit.SetBinContent(i+1, diboson_yield[0])
@@ -1199,6 +1199,7 @@ def run_channel(config : ChannelConfig):
             sample=utils.Sample.diboson,
             lepton_channel=config.lepton_channel,
             output=f'{config.output_dir}/response_matrix',
+            output_plots=f'{config.output_dir}/plots',
             vars=config.variables,
         )
 
