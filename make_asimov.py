@@ -80,7 +80,10 @@ def main():
             h_data = None
             for sample,h in hists.items():
                 # print(sample.rjust(15), h.Integral())
-                if h_data is None:
+                if h is None:
+                    print(f'Warning! Missing histogram for {name} for {sample}')
+                    continue
+                elif h_data is None:
                     h_data = h.Clone()
                 else:
                     h_data.Add(h)

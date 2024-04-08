@@ -472,6 +472,8 @@ class FileManager:
         files = []
         ROOT.gSystem.RedirectOutput("/dev/null") # mute TFile error messages
         for path in file_path_formats:
+            if '{lep}' not in path or '{sample}' not in path:
+                raise NotImplementedError('FileManager._get_sample_files() assumes {lep} and {sample} keys in formatters')
             for stub in sample.file_stubs:
                 for lep_name in self.lepton_channel_names[lep]:
                     if self._filesystem_case_insensitive and lep_name.endswith('Lep'): 

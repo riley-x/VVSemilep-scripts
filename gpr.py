@@ -1948,7 +1948,7 @@ def parse_args():
     parser.add_argument("--var", required=True, help='Variable to fit against; this must be present in a histogram {var}__v__fatjet_m and in the variable.py module.')
     
     parser.add_argument('-o', '--output', default='./output')
-    parser.add_argument('--output-hists', default=None)
+    parser.add_argument('--output-hists', default=None, help='Alternative directory to output the main CSV/histograms to. Defaults to same directory as [--output].')
     parser.add_argument('--closure-test', action='store_true', help='Set this flag to fit and do a closure test against the V+jets MC.')
     parser.add_argument('--mu-ttbar', default=1, type=float, help='Scale factor for the ttbar sample. Default = 1.')
     parser.add_argument('--mu-stop', default=1, type=float, help='Scale factor for the stop sample. Default = 1.')
