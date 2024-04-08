@@ -43,7 +43,7 @@ RUN
 
 Optionally specify
 
-    --optimizeToRange 500,300
+    --optimize 500,3000
 
 To run the automatic bin optimization.
 '''
@@ -163,7 +163,7 @@ def get_response_matrix(h):
 
 def optimize_binning(
         h, fid_range,
-        threshold_diag=0.7,
+        threshold_diag=0.8,
         max_mc_frac_err=0.2,
         min_reco_count=10,
         monotonic_bin_sizes=False,
@@ -243,7 +243,7 @@ def optimize_binning(
         bin_indices.append(i)
         last_merge_size = merge_size
 
-    plot.success('unfolding.py Optimized bins:', h.GetName(), [int(x) for x in bin_edges])
+    plot.success(f'unfolding.py Optimized bins: {h.GetName()} {[int(x) for x in bin_edges]}')
     return bin_edges
 
 
@@ -325,7 +325,7 @@ def plot_fid_reco(mtx, var, **kwargs):
 
 _default_vars = [
     utils.Variable.vv_m,
-    utils.Variable.vv_mt,
+    # utils.Variable.vv_mt,
 ]
 
 def main(
@@ -419,7 +419,7 @@ if __name__ == "__main__":
     parser.add_argument('sample', help='Sample name as in [utils.Sample]')
     parser.add_argument("lepton", type=int, choices=[0, 1, 2])
     parser.add_argument('-o', '--output', default='./output')
-    parser.add_argument('--optimizeToRange', help='Automatically optimize the binning. Pass in a "min,max" range of values that the binning should cover.')
+    parser.add_argument('--optimize', help='Automatically optimize the binning. Pass in a "min,max" range of values that the binning should cover.')
     args = parser.parse_args()
 
     ### Files ###
@@ -438,5 +438,5 @@ if __name__ == "__main__":
         sample=sample, 
         lepton_channel=args.lepton,
         output=args.output,
-        optimization_range=None if args.optimizeToRange is None else [float(x) for x in args.optimizeToRange.split(',')]
+        optimization_range=None if args.optimize is None else [float(x) for x in args.optimize.split(',')]
     )

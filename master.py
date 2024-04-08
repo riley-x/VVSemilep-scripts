@@ -736,6 +736,7 @@ class ChannelConfig:
             ttbar_fitter: ttbar_fit.TtbarSysFitter,
             mu_stop : tuple[float, float],
             output_dir : str,
+            nominal_only : bool,
             skip_hist_gen : bool,
             skip_fits : bool,
             skip_direct_fit : bool,
@@ -750,10 +751,11 @@ class ChannelConfig:
         self.ttbar_fitter = ttbar_fitter
         self.mu_stop = mu_stop
         self.output_dir = output_dir
+        self.nominal_only = nominal_only
         self.skip_hist_gen = skip_hist_gen
         self.skip_fits = skip_fits
-        self.skip_direct_fit = skip_direct_fit
-        self.skip_gpr = skip_gpr
+        self.skip_direct_fit = skip_direct_fit or skip_fits
+        self.skip_gpr = skip_gpr or skip_fits
         self.skip_gpr_if_present = skip_gpr_if_present
         self.gpr_condor = gpr_condor
         self.is_asimov = is_asimov
@@ -894,12 +896,13 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     def summary_actions():
         fit_config = make_config(utils.variation_nom, channel_config.mu_stop)
         channel_config.gpr_results = fit_config.fit_results
-        channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
-            config=fit_config,
-            yields=mu_diboson_points,
-            filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
-        )
-        plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
+        if not channel_config.nominal_only:
+            channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
+                config=fit_config,
+                yields=mu_diboson_points,
+                filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
+            )
+            plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
     
     if channel_config.skip_fits or channel_config.skip_gpr:
         summary_actions()
@@ -920,6 +923,9 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
 
     ### Nominal ###
     run('nominal')
+    if channel_config.nominal_only:
+        summary_actions()
+        return
 
     ### Diboson signal strength variations ###
     for mu_diboson in mu_diboson_points:
@@ -970,7 +976,7 @@ def run_direct_fit(config : ChannelConfig, var : utils.Variable):
             config=config,
             variable=var,
             bin=(bins[i], bins[i+1]),
-            gpr_mu_corr=config.gpr_sigcontam_corrs[i],
+            gpr_mu_corr=config.gpr_sigcontam_corrs[i] if config.gpr_sigcontam_corrs else None,
         )
         diboson_yield = res['diboson-yield']
         h_diboson_fit.SetBinContent(i+1, diboson_yield[0])
@@ -1039,6 +1045,7 @@ def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index 
             hist_file_format=config.rebinned_hists_filepath,
             mu_stop=config.mu_stop,
             mu_ttbar=config.ttbar_fitter.mu_ttbar_nom,
+            gpr_mu_corrs=not config.nominal_only,
             stat_validation_index=stat_validation_index,
         )
     else:
@@ -1246,7 +1253,8 @@ def parse_args():
     parser.add_argument('--skip-direct-fit', action='store_true', help="Don't do the direct diboson yield fit.")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-gpr-if-present', action='store_true', help="Will run the GPR fits but skip the ones that are present in the CSV already.")
-    parser.add_argument('--no-systs', action='store_true', help="Run without using the systematic variations.")
+    parser.add_argument('--nominal', action='store_true', help="Run without any correlations to other signal strengths or systematic variations.")
+    parser.add_argument('--no-systs', action='store_true', help="Run without using the systematic variations, but still does the ttbar/diboson mu adjustments.")
     parser.add_argument('--asimov', action='store_true', help="Use asimov data instead. Will look for files using [data-asimov] as the naming key instead of [data]. Create asimov data easily using make_asimov.py")
     parser.add_argument('--run-plu-val', action='store_true', help="Runs a PLU validation test by varying the data histogram and performing the entire PLU fit multiple times.")
     parser.add_argument('--condor', action='store_true', help="Runs the GPR fits via HT Condor. Merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
@@ -1278,7 +1286,7 @@ def main():
     if args.asimov:
         utils.Sample.data.file_stubs = ['data-asimov']
         args.output += '/asimov'
-    if args.no_systs:
+    if args.no_systs or args.nominal:
         utils.variations_hist.clear()
     mu_stop = [float(x) for x in args.mu_stop.split(',')]
     channels = [int(x) for x in args.channels.split(',')]
@@ -1302,6 +1310,7 @@ def main():
             ttbar_fitter=ttbar_fitter,
             mu_stop=mu_stop,
             output_dir=args.output,
+            nominal_only=args.nominal,
             skip_hist_gen=args.skip_hist_gen,
             skip_fits=args.skip_fits,
             skip_direct_fit=args.skip_direct_fit,

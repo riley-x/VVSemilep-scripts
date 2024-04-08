@@ -20,6 +20,7 @@ def run(
         hist_file_format : str,
         mu_stop : tuple[float, float],
         mu_ttbar : tuple[float, float],
+        gpr_mu_corrs : bool = True,
         stat_validation_index : int = None,
     ):
     from ROOT import RF # type: ignore
@@ -84,10 +85,11 @@ def run(
     VVUnfold.channel(region).addSample('vjets', f'{output_dir}/gpr/gpr_{lepton_channel}lep_vjets_yield.root', 'Vjets_SR_' + variable.name)
     sample = VVUnfold.channel(region).sample('vjets')
     sample.setUseStatError(True)
-    for variation in utils.variations_custom:
-        sample.addVariation(variation)
-    for variation in utils.variations_hist:
-        sample.addVariation(variation)
+    if gpr_mu_corrs:
+        for variation in utils.variations_custom:
+            sample.addVariation(variation)
+        for variation in utils.variations_hist:
+            sample.addVariation(variation)
 
     ### Add signals ###
     bins = utils.get_bins(lepton_channel, variable)

@@ -141,11 +141,14 @@ def run_fit(
             mc_err += (val - n_mc_nom[0]) * (1 if updown == utils.variation_up_key else -1)
 
             ### Get GPR err ###
-            val = config.gpr_results.get_entry(
-                variation=variation_updown,
-                **gpr_csv_args,
-            )[0]
-            gpr_err += (val - n_gpr_nom[0]) * (1 if updown == utils.variation_up_key else -1)
+            if config.nominal_only:
+                gpr_err = 0
+            else:
+                val = config.gpr_results.get_entry(
+                    variation=variation_updown,
+                    **gpr_csv_args,
+                )[0]
+                gpr_err += (val - n_gpr_nom[0]) * (1 if updown == utils.variation_up_key else -1)
         
         mc_err /= 2
         gpr_err /= 2
@@ -158,7 +161,8 @@ def run_fit(
     def nll(params):
         mu_diboson = params[0]
         pred = mu_diboson * n_diboson_nom[0] + n_mc_nom[0] + n_gpr_nom[0]
-        pred += gpr_mu_corr * n_gpr_nom[0] * (1 - mu_diboson) # signal contamination correction
+        if gpr_mu_corr: # signal contamination correction
+            pred += gpr_mu_corr * n_gpr_nom[0] * (1 - mu_diboson) 
         nll_val = 0
         for var,i in var_index.items():
             pred += params[i] * var_sigmas[var]

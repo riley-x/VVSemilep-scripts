@@ -179,6 +179,10 @@ def get_bins(lepton_channel : int, var: Variable):
             # old binning
             return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
         elif lepton_channel == 2:
+            # optimized binning with threshold_diag=0.8, threshold_err=0.2, min_reco_count=10
+            return [700, 770, 890, 1040, 1210, 1400, 1640, 3000]
+            # manually adjusted
+            return [700, 750, 800, 900, 1000, 1100, 1250, 1400, 3000]
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
             return [700, 750, 830, 910, 1010, 1110, 1220, 1380, 3000]
     elif var.name == "vv_mt":
