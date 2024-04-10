@@ -527,9 +527,9 @@ class FileManager:
 
         if h_out is None:
             if variation != variation_nom:
-                plot.warning(f'FileManager() unable to find histgoram {hist_name_format} with variation {variation} for {sample} in the {lep}-lep channel.')
+                plot.warning(f'FileManager() unable to find histogram {hist_name_format} with variation {variation} for {sample} in the {lep}-lep channel.')
             else:
-                plot.warning(f'FileManager() unable to find histgoram {hist_name_format} for {sample} in the {lep}-lep channel.')
+                plot.warning(f'FileManager() unable to find histogram {hist_name_format} for {sample} in the {lep}-lep channel.')
         elif len(used_keys) > 1:
             cache_key = (lep, sample.name, hist_name_format)
             if cache_key not in self._log_cache:

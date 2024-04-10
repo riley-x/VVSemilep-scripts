@@ -93,6 +93,8 @@ class CondorSubmitMaker:
         self.filepath = filepath
         if not os.path.exists(f'{config.output_dir}/condor_logs'):
             os.makedirs(f'{config.output_dir}/condor_logs')
+        if not os.path.exists(os.path.dirname(filepath)):
+            os.makedirs(os.path.dirname(filepath))
 
         self.f = open(filepath, 'w')
         self.f.write(f'''\
@@ -108,6 +110,10 @@ log = {config.output_dir}/condor_logs/$(ClusterId).$(ProcId).log
 # Queue
 +JobFlavour = "10 minutes"
 +queue="short"
+
+# Retry failed jobs
+on_exit_remove = (ExitBySignal == False) && (ExitCode == 0)
+max_retries = 3
 
 # Command
 Executable = gpr.py
@@ -128,11 +134,11 @@ queue arguments from (
         self.f.write(f' --var {self.var}')
         self.f.write(f' --output {output_path}')
         if self.config.is_asimov:
-            self.f.write(f' --closure-test') 
+            self.f.write(f' --closure-test')
         self.f.write(f' --variation {fit_config.variation}')
         self.f.write(f' --mu-ttbar {fit_config.mu_ttbar}')
         self.f.write(f' --mu-stop {fit_config.mu_stop}\n')
-    
+
     def close(self):
         self.f.write(')')
         self.f.close()
@@ -307,7 +313,7 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
     ### MC ###
     # Buggy response matrix in eos_v3 files, so point to local files in interim
     # Note fixed in https://gitlab.cern.ch/CxAODFramework/CxAODReader_VVSemileptonic/-/merge_requests/445
-    temp_file_manager = utils.FileManager( 
+    temp_file_manager = utils.FileManager(
         samples=[utils.Sample.diboson, utils.Sample.cw_lin, utils.Sample.cw_quad],
         file_path_formats=['../../{lep}/{lep}_{sample}_x_Feb24-ANN.hists.root'],
         lepton_channels=[0, 1, 2],
@@ -891,7 +897,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
             mu_stop=mu_stop,
         )
     mu_diboson_points = [0.9, 0.95, 1.05, 1.1]
-    
+
     ### Summary plots ###
     def summary_actions():
         fit_config = make_config(utils.variation_nom, channel_config.mu_stop)
@@ -903,7 +909,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
                 filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
             )
             plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
-    
+
     if channel_config.skip_fits or channel_config.skip_gpr:
         summary_actions()
         return
@@ -915,8 +921,8 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
             condor_file.add(config)
         else:
             gpr.run(
-                file_manager=channel_config.file_manager, 
-                config=config, 
+                file_manager=channel_config.file_manager,
+                config=config,
                 from_csv_only=channel_config.skip_fits or channel_config.skip_gpr,
                 skip_if_in_csv=channel_config.skip_gpr_if_present,
             )
