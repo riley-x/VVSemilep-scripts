@@ -27,7 +27,7 @@ class Variable:
         The name of the unit of the variable. Again this should match the histogram
         outputs.
     @property rebin
-        A default rebinning option, see [plot.rebin].
+        A default fine rebinning option for diagnostic plots. See [plot.rebin].
     '''
     def __init__(self, name, title, unit, rebin=None, **plot_opts):
         '''
@@ -61,9 +61,9 @@ class Variable:
         }
 
 
-Variable.vv_m = Variable(name="vv_m", title="m(VV)", unit="GeV")
-Variable.vv_mt = Variable(name="vv_mt", title="m_{T}(VV)", unit="GeV")
-Variable.vhad_pt = Variable(name="vhad_pt", title="p_{T}(J)", unit="GeV")
+Variable.vv_m = Variable(name="vv_m", title="m(VV)", unit="GeV", rebin=100, logy=True)
+Variable.vv_mt = Variable(name="vv_mt", title="m_{T}(VV)", unit="GeV", rebin=100, logy=True)
+Variable.vhad_pt = Variable(name="vhad_pt", title="p_{T}(J)", unit="GeV", rebin=100, logy=True)
 
 Variable.llJ_m = Variable(name="llJ_m", title="m(llJ)", unit="GeV", rebin=100, logy=True)
 Variable.lvJ_m = Variable(name="lvJ_m", title="m(l#nuJ)", unit="GeV", rebin=100, logy=True)
@@ -73,7 +73,7 @@ Variable.llJ_mt = Variable(name="llJ_mT", title="m_{T}(llJ)", unit="GeV", rebin=
 Variable.lvJ_mt = Variable(name="lvJ_mT", title="m_{T}(l#nuJ)", unit="GeV", rebin=100, logy=True)
 Variable.vvJ_mt = Variable(name="vvJ_mT", title="m_{T}(#nu#nuJ)", unit="GeV", rebin=100, logy=True)
 
-Variable.fatjet_m = Variable(name="fatjet_m", title="m(J)", unit="GeV")
+Variable.fatjet_m = Variable(name="fatjet_m", title="m(J)", unit="GeV", rebin=2, logy=True)
 
 
 def generic_var_to_lep(var, lep):
@@ -163,7 +163,7 @@ Sample.cw_quad = Sample('cw_quad', 'c_{W}^{2}', ['EFT'], [f'VV{x}qq_NPeq1_cW_1' 
 
 
 def get_bins(lepton_channel : int, var: Variable):
-    if var.name == "vv_m":
+    if var.name in ["vv_m", "lvJ_m", "llJ_m"]:
         if lepton_channel == 0:
             # below, but matched to 1lep custom since they're pretty similar
             return [700, 810, 940, 1090, 1260, 1500, 2000, 3000]
@@ -185,7 +185,7 @@ def get_bins(lepton_channel : int, var: Variable):
             return [700, 750, 800, 900, 1000, 1100, 1250, 1400, 3000]
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
             return [700, 750, 830, 910, 1010, 1110, 1220, 1380, 3000]
-    elif var.name == "vv_mt":
+    elif var.name == "vv_mt" or var.name == "vvJ_mT":
         if lepton_channel == 0:
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
             return [600, 690, 810, 940, 1090, 1260, 1430, 1630, 1850, 3000]
