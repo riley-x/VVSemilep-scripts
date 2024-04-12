@@ -269,7 +269,7 @@ def plot_MC_main_channel_yields(file_manager : utils.FileManager, output_dir : s
         h.Scale(100)
         ratios.append(h)
 
-    ### Plot ###
+    ### Plot main ###
     pads = plot.RatioPads(height1=0.6, bottom_margin=0.16)
     plotter1 = pads.make_plotter1(
         objs=hists_l,
@@ -290,6 +290,7 @@ def plot_MC_main_channel_yields(file_manager : utils.FileManager, output_dir : s
         line.Draw()
         plotter1.cache.append(line)
     
+    ### Plot ratio ###
     plotter2 = pads.make_plotter2(
         objs=ratios,
         ytitle='% of Total',

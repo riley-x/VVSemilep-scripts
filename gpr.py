@@ -975,7 +975,6 @@ def plot_summary_distribution(hists,
         # h.SetMarkerSize(0.05)
 
     ### Options ###
-    kwargs.setdefault('textpos', 'topright')
     kwargs.setdefault('opts', 'P2+')
     kwargs.setdefault('legend_opts', 'PE')
     kwargs.setdefault('ytitle', 'Events')
