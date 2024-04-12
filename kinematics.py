@@ -216,13 +216,26 @@ def plot_MC_main_channel_yields(file_manager : utils.FileManager, output_dir : s
     Plots a cutflow-esque graph that shows the MC yields in each of the main channels (lep
     x SR/CR). Includes a ratio plot that shows the percentage of total yield.
     '''
+    ### Config ###
+    sample_colors = {
+        utils.Sample.wjets.name:   plot.colors.blue,
+        utils.Sample.zjets.name:   plot.colors.purple,
+        utils.Sample.ttbar.name:   plot.colors.orange,
+        utils.Sample.stop.name:    plot.colors.red,
+        utils.Sample.diboson.name: plot.colors.green,
+    }
+
     ### Create "cutflow" hists ###
     hists = {}
     legend = []
+    colors = []
+    colors_40 = []
     for _,sample in file_manager.samples.items():
         if sample == utils.Sample.data: continue
         hists[sample.name] = ROOT.TH1F('h_{sample}', '', 8, 0, 8)
         legend.append(sample.title)
+        colors.append(sample_colors[sample.name])
+        colors_40.append(plot.colors.tableu_40_l[plot.colors.tableu_l.index(sample_colors[sample.name])])
     
     ### Fill each bin ###
     i_bin = 0
@@ -267,8 +280,8 @@ def plot_MC_main_channel_yields(file_manager : utils.FileManager, output_dir : s
         legend=legend,
         ytitle='Events',
         x_bin_labels=bin_labels, # not shown, but matches the ticks with subplot
-        linecolor=plot.colors.tableu,
-        markercolor=plot.colors.tableu,
+        linecolor=colors,
+        markercolor=colors,
         logy=True,
     )
     for x in vertical_lines[:-1]:
@@ -286,8 +299,8 @@ def plot_MC_main_channel_yields(file_manager : utils.FileManager, output_dir : s
         label_offset_x=0.015,
         title_offset_x=1.5,
         linewidth=1,
-        linecolor=plot.colors.tableu,
-        fillcolor=plot.colors.tableu_40,
+        linecolor=colors,
+        fillcolor=colors_40,
         stack=True,
         opts='HIST',
         y_range=[0, 100],
