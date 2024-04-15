@@ -443,7 +443,7 @@ class FileManager:
     _filesystem_case_insensitive = os.path.exists(__file__.upper()) and os.path.exists(__file__.lower())
 
     lepton_channel_names = {
-        0: ['0lep', '0Lep', 'HIGG5D1'], # DO NOT MODIFY without checking the macOS test in _get_sample_files
+        0: ['0lep', '0Lep', 'HIGG5D1'], # DO NOT MODIFY without checking the _filesystem_case_insensitive test in _get_sample_files
         1: ['1lep', '1Lep', 'HIGG5D2'],
         2: ['2lep', '2Lep', 'HIGG2D4'],
     }
@@ -470,6 +470,7 @@ class FileManager:
 
     def _get_sample_files(self, lep : int, sample : Sample, file_path_formats: list[str]) -> list[ROOT.TFile]:
         files = []
+
         ROOT.gSystem.RedirectOutput("/dev/null") # mute TFile error messages
         for path in file_path_formats:
             if '{lep}' not in path or '{sample}' not in path:
@@ -489,6 +490,8 @@ class FileManager:
 
         if not files:
             plot.warning(f'FileManager() unable to find files for {sample} in the {lep}-lep channel.')
+        elif len(files) > 1:
+            plot.warning(f'FileManager() multiple files found for {sample} in the {lep}-lep channel. These will be added together!!!')
         return files
 
     def get_hist(self, lep : int, sample : Union[str, Sample], hist_name_format : str, variation : str = variation_nom) -> Union[ROOT.TH1F, None]:
