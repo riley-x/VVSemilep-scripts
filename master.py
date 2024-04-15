@@ -604,14 +604,37 @@ def plot_pulls(config : ChannelConfig, variable : utils.Variable, fit_results : 
     all_vars = [utils.variation_lumi] + utils.variations_custom + utils.variations_hist
     nvars = len(all_vars)
 
+    ### Syst grouping ###
+    do_grouping = nvars > 15
+    if do_grouping:
+        group_fields = [ # Prefix, name, [variations] 
+            ('SysEL', 'Electron', []),
+            ('SysMUON', 'Muon', []),
+            ('SysTAUS', 'Tau', []),
+            ('SysJET', 'Jet', []),
+            ('SysFT', 'Flavor', []),
+            ('', 'Other', []),
+        ]
+        for var in all_vars:
+            for prefix,group_name,var_list in group_fields:
+                if var.startswith(prefix):
+                    var_list.append(var)
+                    break
+        all_vars = []
+        for prefix,group_name,var_list in group_fields:
+            all_vars.extend(var_list)
+
     ### Create hist ###
     h = ROOT.TH1F('h_pulls', '', nvars, 0, nvars)
     for i,var in enumerate(all_vars):
         alpha = fit_results[f'alpha_{var}']
         h.SetBinContent(i + 1, alpha[0])
         h.SetBinError(i + 1, alpha[1])
-        h.GetXaxis().SetBinLabel(i + 1, var)
-    h.GetXaxis().LabelsOption('u')
+        if do_grouping:
+            h.GetXaxis().SetBinLabel(i + 1, '')
+        else:
+            h.GetXaxis().SetBinLabel(i + 1, var)
+    h.GetXaxis().LabelsOption('v')
 
     ### Plotter ###
     ROOT.gStyle.SetErrorX(0)
@@ -623,11 +646,12 @@ def plot_pulls(config : ChannelConfig, variable : utils.Variable, fit_results : 
         _frame=h,
         subtitle=[
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{config.lepton_channel}-lepton channel {variable} pulls',
+            f'{config.lepton_channel}-lepton channel {variable.title} pulls',
         ],
         ytitle='(#theta_{fit} - #theta_{0}) / #sigma_{#theta}',
         y_range=(-5, 5),
-        bottom_margin=0.3,
+        bottom_margin=0.2 if do_grouping else 0.5,
+        tick_length_x=0 if do_grouping else 0.015,
     )
 
     ### Plot objects ###
@@ -639,6 +663,31 @@ def plot_pulls(config : ChannelConfig, variable : utils.Variable, fit_results : 
     plotter.add([h], opts='E1', markersize=2, markerstyle=ROOT.kFullSquare)
     plotter.draw()
 
+    ### Group labels ###
+    if do_grouping:
+        def draw_line(x):
+            l1 = ROOT.TLine(x, -5, x, -4.7)
+            l1.Draw()
+            l2 = ROOT.TLine(x, 5, x, 4.7)
+            l2.Draw()
+            plotter.cache.append(l1)
+            plotter.cache.append(l2)
+        def draw_label(start, end, name):
+            t = ROOT.TLatex((start + end) / 2, -5.2, name)
+            t.SetTextAngle(90)
+            t.SetTextAlign(ROOT.kVAlignCenter + ROOT.kHAlignRight)
+            # t.SetTextSize(0.035) # normal size = 0.035
+            t.Draw()
+            plotter.cache.append(t)
+
+        n_running = 0
+        for i,(prefix,group_name,var_list) in enumerate(group_fields):
+            if i != 0:
+                draw_line(n_running)
+            draw_label(n_running, n_running + len(var_list), group_name)
+            n_running += len(var_list)
+            
+    ### Save ###
     plot.save_canvas(c, filename)
     ROOT.gStyle.SetErrorX()
     ROOT.gStyle.SetEndErrorSize(0)
