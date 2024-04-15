@@ -21,9 +21,7 @@ CONFIG
 ------------------------------------------------------------------------------------------
 
 Check [utils.Sample] and [utils.Variable] to make sure the hardcoded naming stuctures are
-correct.
-
-Check [unfolding.get_bins] and [gpr.FitConfig.get_bins_y] to ensure the desired binnings
+correct. Check [utils.get_bins] and [gpr.FitConfig.get_bins_x] to ensure the desired binnings
 are set.
 
 ------------------------------------------------------------------------------------------
