@@ -98,6 +98,7 @@ def run_fit(
         file_manager : utils.FileManager, 
         mu_stop_0 : Union[tuple[float, float], float] = (1, 0.2),
         variation='nominal',
+        do_print=True,
     ):
     '''
     @param mu_stop_0
@@ -170,16 +171,17 @@ def run_fit(
         out['mu_stop'] = (res.x[2], errs[2])
     
     ### Printout ###
-    notice_msg = f'ttbar_fit.py::run_fit({variation}) fit results:'
-    for k,v in out.items():
-        if 'cov' in k: continue
-        notice_msg += f'\n    {k:10}: {v[0]:7.4f} +- {v[1]:.4f}'
-    notice_msg += f'\n    cov:'
-    for i in range(len(errs)):
-        notice_msg += f'\n        '
-        for j in range(len(errs)):
-            notice_msg += f'{cov_norm[i][j]:7.4f}  '
-    plot.notice(notice_msg)
+    if do_print:
+        notice_msg = f'ttbar_fit.py::run_fit({variation}) fit results:'
+        for k,v in out.items():
+            if 'cov' in k: continue
+            notice_msg += f'\n    {k:10}: {v[0]:7.4f} +- {v[1]:.4f}'
+        notice_msg += f'\n    cov:'
+        for i in range(len(errs)):
+            notice_msg += f'\n        '
+            for j in range(len(errs)):
+                notice_msg += f'{cov_norm[i][j]:7.4f}  '
+        plot.notice(notice_msg)
     
     return out
 
@@ -216,7 +218,7 @@ class TtbarSysFitter:
         out = self.vars.get(variation)
         if out is not None: return out
 
-        res = run_fit(self.file_manager, mu_stop_0=self._mu_stop_nom, variation=variation)
+        res = run_fit(self.file_manager, mu_stop_0=self._mu_stop_nom, variation=variation, do_print=False)
         self.vars[variation] = res['mu_ttbar'][0]
         return self.vars[variation]
 

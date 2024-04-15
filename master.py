@@ -245,7 +245,7 @@ def plot_gpr_ttbar_and_stop_correlations(config : gpr.FitConfig, filename : str)
     )
 
 
-def plot_yield_comparison(filename, h_fit, h_mc, h_eft=None, eft_legend=None, **plot_opts):
+def _plot_yield_comparison(filename, h_fit, h_mc, h_eft=None, eft_legend=None, **plot_opts):
     '''
     Plots a 1D comparison between a fit and MC. The fit is shown as data points while the
     MC is shown as a filled blue band. Includes a fit/MC ratio.
@@ -343,14 +343,19 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
         ],
         xtitle=f'{variable:title}',
     )
-    plot_yield_comparison(**yield_args, filename=filename)
-    plot_yield_comparison(**yield_args, h_eft=h_cw_quad, eft_legend='c_{W}^{quad}=' + f'{cw:.2f}', filename=filename + '_cw')
+    _plot_yield_comparison(**yield_args, filename=filename)
+    _plot_yield_comparison(**yield_args, h_eft=h_cw_quad, eft_legend='c_{W}^{quad}=' + f'{cw:.2f}', filename=filename + '_cw')
 
 
-def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
+def plot_mc_gpr_stack(
+        config : ChannelConfig, 
+        variable : utils.Variable, 
+        filename : str, 
+        subtitle : list[str] = [], 
+        mu_diboson : float = 1,
+    ):
     '''
-    Plots a stack plot comparing data to backgrounds prior to the PLU fit but using the
-    GPR background estimate.
+    Plots a stack plot comparing data to MC backgrounds and the GPR V+jets estimate.
     '''
     ### Get hists ###
     f_gpr = ROOT.TFile(f'{config.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
@@ -370,6 +375,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
 
     h_ttbar.Scale(config.ttbar_fitter.mu_ttbar_nom[0])
     h_stop.Scale(config.mu_stop[0])
+    h_diboson.Scale(mu_diboson)
 
     ### Sum and ratios ###
     h_sum = h_gpr.Clone()
@@ -383,7 +389,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     h_errs.Divide(h_sum)
 
     stack = [
-        (h_diboson.Integral(), h_diboson, 'Diboson (#mu=1)', plot.colors.pastel_blue),
+        (h_diboson.Integral(), h_diboson, 'Diboson (#mu=1)' if mu_diboson == 1 else 'Diboson', plot.colors.pastel_blue),
         (h_stop.Integral(), h_stop, 'Single top', plot.colors.pastel_yellow),
         (h_ttbar.Integral(), h_ttbar, 't#bar{t}', plot.colors.pastel_orange),
         (h_gpr.Integral(), h_gpr, 'GPR (V+jets)', plot.colors.pastel_red),
@@ -395,10 +401,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     plotter1 = pads.make_plotter1(
         ytitle='Events',
         logy=True,
-        subtitle=[
-            '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{config.lepton_channel}-lepton channel pre-PLU',
-        ],
+        subtitle=['#sqrt{s}=13 TeV, 140 fb^{-1}'] + subtitle,
         y_min=0.2,
     )
     plotter1.add(
@@ -451,7 +454,7 @@ def plot_pre_plu_fit(config : ChannelConfig, variable : utils.Variable):
     plotter2.draw()
     plotter2.draw_hline(1, ROOT.kDashed)
 
-    plot.save_canvas(pads.c, f'{config.output_dir}/plots/{config.lepton_channel}lep_{variable}.plu_prefit')
+    plot.save_canvas(pads.c, filename)
 
 
 def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results : dict[str, tuple[float, float]]):
@@ -676,7 +679,6 @@ def plot_pulls(config : ChannelConfig, variable : utils.Variable, fit_results : 
             t = ROOT.TLatex((start + end) / 2, -5.2, name)
             t.SetTextAngle(90)
             t.SetTextAlign(ROOT.kVAlignCenter + ROOT.kHAlignRight)
-            # t.SetTextSize(0.035) # normal size = 0.035
             t.Draw()
             plotter.cache.append(t)
 
@@ -832,9 +834,6 @@ class ChannelConfig:
 
         ### Set by save_rebinned_histograms ###
         self.rebinned_hists_filepath = None
-
-        ### Set by run_plu ###
-        self.plu_ws_filepath = None
 
 
 ##########################################################################################
@@ -1038,7 +1037,7 @@ def run_direct_fit(config : ChannelConfig, var : utils.Variable):
         diboson_yield = res['diboson-yield-mc-statonly']
         h_diboson_mc.SetBinContent(i+1, diboson_yield[0])
         h_diboson_mc.SetBinError(i+1, diboson_yield[1])
-    plot_yield_comparison(
+    _plot_yield_comparison(
         h_fit=h_diboson_fit,
         h_mc=h_diboson_mc,
         filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.directfit_yields',
@@ -1051,7 +1050,7 @@ def run_direct_fit(config : ChannelConfig, var : utils.Variable):
     )
 
 
-def run_npcheck_drawfit(config : ChannelConfig, var : utils.Variable):
+def run_npcheck_drawfit(config : ChannelConfig, var : utils.Variable, ws_path : str):
     '''
     Runs drawPostFit.C from NPCheck. This is supplanted by [plot_plu_fit].
 
@@ -1060,7 +1059,7 @@ def run_npcheck_drawfit(config : ChannelConfig, var : utils.Variable):
     plot.notice(f'{config.log_base} drawing PLU fits using NPCheck')
     with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}.draw_fit.txt', 'w') as f:
         res = subprocess.run(
-            ['./runDrawFit.py', config.plu_ws_filepath,
+            ['./runDrawFit.py', ws_path,
                 '--mu', '1',
                 '--fccs', 'fccs/FitCrossChecks.root'
             ],
@@ -1076,10 +1075,13 @@ def run_npcheck_drawfit(config : ChannelConfig, var : utils.Variable):
     shutil.copyfile(npcheck_output_path, target_path)
 
 
-def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index : int = None):
+def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, stat_validation_index : int = None):
     '''
-    Runs the profile likelihood unfolding fit using ResonanceFinder. Assumes the
-    GPR/response matrices have been created already.
+    Runs the resonance finder script. Common to both the PLU and diboson-signal strength
+    fits.
+
+    @param mode
+        Same options as in [rf.run].
     '''
     # Really important this import is here otherwise segfaults occur, due to the
     # `from ROOT import RF` line I think. But somehow hiding it here is fine.
@@ -1089,8 +1091,9 @@ def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index 
 
     ### Create RF workspace ###
     if not config.skip_fits:
-        plot.notice(f'{config.log_base} creating ResonanceFinder workspace')
+        plot.notice(f'{config.log_base} creating ResonanceFinder workspace for {mode} fit')
         ws_path = rf_plu.run(
+            mode=mode,
             lepton_channel=config.lepton_channel,
             variable=var,
             response_matrix_path=config.response_matrix_filepath,
@@ -1102,19 +1105,23 @@ def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index 
             stat_validation_index=stat_validation_index,
         )
     else:
-        ws_path = rf_plu.ws_path(config.output_dir, config.lepton_channel, var, stat_validation_index)
+        ws_path = rf_plu.ws_path(
+            mode=mode,
+            output_dir=config.output_dir, 
+            lep=config.lepton_channel, 
+            var=var, 
+            stat_validation_index=stat_validation_index,
+        )
     ws_path = os.path.abspath(ws_path)
-    if stat_validation_index is None:
-        config.plu_ws_filepath = ws_path
 
     ### Run fits ###
     if stat_validation_index is None:
-        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.fcc.root'
+        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}_{mode}.fcc.root'
     else:
-        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.fcc_var{stat_validation_index:03}.root'
+        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}_{mode}.fcc_var{stat_validation_index:03}.root'
     if not config.skip_fits:
-        plot.notice(f'{config.log_base} running PLU fits')
-        with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}.fcc.txt', 'w') as f:
+        plot.notice(f'{config.log_base} running {mode} fits')
+        with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}_{mode}.fcc.txt', 'w') as f:
             res = subprocess.run(
                 ['./runFitCrossCheck.py', ws_path],  # the './' is necessary!
                 cwd=config.npcheck_dir,
@@ -1131,9 +1138,20 @@ def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index 
     if not config.skip_fits:
         roofit_results.Print()
 
-    plu_fit_results = { v.GetName() : (v.getValV(), v.getError()) for v in roofit_results.floatParsFinal() }
-    plu_fit_results['mu-stop'] = convert_alpha(plu_fit_results['alpha_mu-stop'], config.mu_stop)
-    plu_fit_results['mu-ttbar'] = convert_alpha(plu_fit_results['alpha_mu-ttbar'], config.ttbar_fitter.mu_ttbar_nom)
+    ### Parse results ###
+    dict_results = { v.GetName() : (v.getValV(), v.getError()) for v in roofit_results.floatParsFinal() }
+    dict_results['mu-stop'] = convert_alpha(dict_results['alpha_mu-stop'], config.mu_stop)
+    dict_results['mu-ttbar'] = convert_alpha(dict_results['alpha_mu-ttbar'], config.ttbar_fitter.mu_ttbar_nom)
+
+    return ws_path, roofit_results, dict_results
+
+
+def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index : int = None):
+    '''
+    Runs the profile likelihood unfolding fit using ResonanceFinder. Assumes the
+    GPR/response matrices have been created already.
+    '''
+    ws_path, roofit_results, plu_fit_results = run_rf(config, var, 'PLU', stat_validation_index)
 
     ### Plots ###
     if stat_validation_index is None:
@@ -1240,6 +1258,27 @@ def run_plu_val(config : ChannelConfig, variable : utils.Variable, results_nom :
     )
 
 
+def run_diboson_fit(config: ChannelConfig, var : utils.Variable):
+    '''
+    Runs a ResonanceFinder fit to the diboson signal strength. Complementary to the PLU
+    fits, but not broken into fiducial response bins. 
+    '''
+    ws_path, roofit_results, dict_results = run_rf(config, var, 'diboson')
+    mu_diboson = dict_results['mu-diboson']
+    
+    ### Plots ###
+    plot_mc_gpr_stack(
+        config=config, 
+        variable=var,
+        subtitle=[
+            f'{config.lepton_channel}-lepton channel postfit',
+            f'Diboson #mu = {mu_diboson[0]:.2f} #pm {mu_diboson[1]:.2f}',
+        ],
+        mu_diboson=mu_diboson[0],
+        filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_postfit',
+    )
+
+
 def run_channel(config : ChannelConfig):
     '''
     Main run function for a single lepton channel.
@@ -1276,16 +1315,26 @@ def run_channel(config : ChannelConfig):
         if not config.skip_fits and not config.skip_direct_fit:
             run_direct_fit(config, var)
 
-        ### Prefit plot (pre-PLU but using GPR) ###
-        plot_pre_plu_fit(config, var)
+        ### Prefit plot (pre-likelihood fits but using GPR) ###
+        plot_mc_gpr_stack(
+            config=config,
+            variable=var,
+            subtitle=[f'{config.lepton_channel}-lepton channel prefit (post-GPR)'],
+            filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.prefit',
+        )
 
-        ### Profile likelihood unfolding fit ###
+        ### Resonance finder fits ###
         try: # This requires ResonanceFinder!
+            ### PLU fit ###
             plu_results = run_plu(config, var)
+
+            ### PLU validation test ###
             if config.plu_validation_iters:
                 run_plu_val(config, var, plu_results)
+            
+            run_diboson_fit(config, var)
         except Exception as e:
-            plot.warning(str(e))
+            plot.error(str(e))
             raise e
 
 
