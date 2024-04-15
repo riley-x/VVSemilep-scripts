@@ -1264,9 +1264,9 @@ def run_diboson_fit(config: ChannelConfig, var : utils.Variable):
     fits, but not broken into fiducial response bins. 
     '''
     ws_path, roofit_results, dict_results = run_rf(config, var, 'diboson')
-    mu_diboson = dict_results['mu-diboson']
     
-    ### Plots ###
+    ### Plot fit ###
+    mu_diboson = dict_results['mu-diboson']
     plot_mc_gpr_stack(
         config=config, 
         variable=var,
@@ -1277,6 +1277,12 @@ def run_diboson_fit(config: ChannelConfig, var : utils.Variable):
         mu_diboson=mu_diboson[0],
         filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_postfit',
     )
+
+    ### Draw pulls ###
+    plot_pulls(config, var, dict_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_pulls')
+
+    ### Draw correlation matrix ###
+    plot_correlations(config, var, roofit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_corr')
 
 
 def run_channel(config : ChannelConfig):

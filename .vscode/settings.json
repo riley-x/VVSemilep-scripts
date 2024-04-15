@@ -4,6 +4,8 @@
         "*.mcmeta": "json",
         "drawPostFit.C": "cpp",
         "drawPullPlot.C": "cpp",
-        "drawCorrMatrix.C": "cpp"
+        "drawCorrMatrix.C": "cpp",
+        "drawNLL.C": "cpp",
+        "makeNLL.C": "cpp"
     }
 }
