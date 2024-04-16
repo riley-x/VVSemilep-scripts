@@ -866,22 +866,23 @@ def save_rebinned_histograms(config : ChannelConfig):
         bins = utils.get_bins(config.lepton_channel, variable)
         bins = np.array(bins, dtype=float)
         for variation in variations:
-            hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_'
-            hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
+            for channel in ['SR', 'TCR']:
+                hist_name = '{sample}_VV{lep}_MergHP_Inclusive_' + channel + '_'
+                hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
 
-            hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name, variation)
-            for sample_name,hist in hists.items():
-                if sample_name == utils.Sample.data.name: continue # Handled in [save_data_variation_histograms]
+                hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name, variation)
+                for sample_name,hist in hists.items():
+                    if sample_name == utils.Sample.data.name: continue # Handled in [save_data_variation_histograms]
 
-                hist = plot.rebin(hist, bins)
-                new_name = hist_name.format(lep=f'{config.lepton_channel}Lep', sample=sample_name)
-                new_name = utils.hist_name_variation(new_name, config.file_manager.samples[sample_name], variation, separator='__')
-                # For some reason RF expects a double underscore...not sure how to change
-                hist.SetName(new_name)
+                    hist = plot.rebin(hist, bins)
+                    new_name = hist_name.format(lep=f'{config.lepton_channel}Lep', sample=sample_name)
+                    new_name = utils.hist_name_variation(new_name, config.file_manager.samples[sample_name], variation, separator='__')
+                    # For some reason RF expects a double underscore...not sure how to change
+                    hist.SetName(new_name)
 
-                f = file(sample_name)
-                f.cd()
-                hist.Write()
+                    f = file(sample_name)
+                    f.cd()
+                    hist.Write()
 
     ### Data rebinned histograms for PLU stat test ###
     save_data_variation_histograms(config, file(utils.Sample.data.name))

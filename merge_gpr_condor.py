@@ -3,7 +3,7 @@
 @file merge_gpr_condor.py 
 @author Riley Xu - riley.xu@gmail.com, riley.xu@cern.ch 
 @date April 2, 2024 
-@brief Merges the CSV and ROOT files of condor GPR runs
+@brief Merges the CSV and ROOT files of condor GPR runs. This WILL override the output files!
 
 ------------------------------------------------------------------------------------------
 RUN
@@ -39,7 +39,7 @@ def main():
 
     root_out_files = []
     for lep in [0, 1, 2]:
-        root_out_files.append(ROOT.TFile(os.path.join(base_dir, root_name.format(lep=lep)), 'UPDATE'))
+        root_out_files.append(ROOT.TFile(os.path.join(base_dir, root_name.format(lep=lep)), 'RECREATE'))
         
     first_line = True
     with open(os.path.join(base_dir, csv_name), 'w') as out_file:
