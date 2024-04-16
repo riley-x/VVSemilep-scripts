@@ -169,7 +169,7 @@ def plot_gpr_mu_diboson_correlations(
     legend.insert(i_nom, '1.0')
 
     ### Get ratios ###
-    average_deltas = np.zeros(len(config.bins_y) - 1)
+    average_corr_factor = np.zeros(len(config.bins_y) - 1) # this is the correction factor that should be ADDED to the measured GPR yield (scaled by 1-mu)
     h_nom = graphs[i_nom]
     def subplot(hists, **kwargs):
         # Use the callback here to copy the formatting from [hists]
@@ -184,7 +184,7 @@ def plot_gpr_mu_diboson_correlations(
                 h.SetPointY(i, delta_delta)
                 h.SetPointEYhigh(i, 0)
                 h.SetPointEYlow(i, 0)
-                average_deltas[i] += delta_delta
+                average_corr_factor[i] += (h_nom.GetPointY(i) - h.GetPointY(i)) / (1 - mu)
             ratios.append(h)
         return ratios
 
@@ -209,7 +209,7 @@ def plot_gpr_mu_diboson_correlations(
         ydivs2=503,
     )
 
-    return average_deltas / len(yields)
+    return average_corr_factor / len(yields)
 
 
 def plot_gpr_ttbar_and_stop_correlations(config : gpr.FitConfig, filename : str):
@@ -920,6 +920,29 @@ def save_data_variation_histograms(config : ChannelConfig, f : ROOT.TFile):
             h.Write()
 
 
+def make_gpr_floating_correlation_hists(gpr_config : gpr.FitConfig, channel_config : ChannelConfig, variable : utils.Variable):
+    '''
+    Given a floating parameter like mu_diboson, the correlation with the GPR yield is
+    implemented as an additive correction histogram (1 - mu) * diff. But ResonanceFinder
+    can't scale by (1 - mu), so we have to break it apart into diff + mu * (-diff).
+
+    @requires
+        [channel_config.gpr_sigcontam_corrs] to be set.
+    '''
+    h_diff = ROOT.TH1F(f'gpr_mu-diboson_posdiff_{variable}', '', len(gpr_config.bins_y) - 1, gpr_config.bins_y)
+    for i,v in enumerate(channel_config.gpr_sigcontam_corrs):
+        h_diff.SetBinContent(i+1, v)
+        h_diff.SetBinError(i+1, 0)
+
+    h_neg = h_diff.Clone()
+    h_neg.SetName(f'gpr_mu-diboson_negdiff_{variable}')
+    h_neg.Scale(-1)
+
+    f_output = ROOT.TFile(gpr_config.output_root_file_path, 'UPDATE')
+    h_diff.Write()
+    h_neg.Write()
+
+
 def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     '''
     Runs the GPR fit for every variation.
@@ -955,6 +978,10 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
                 filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
             )
             plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
+
+            ### Get diboson (1 - mu) histograms ###
+            make_gpr_floating_correlation_hists(channel_config)
+    
 
     if channel_config.skip_fits or channel_config.skip_gpr:
         summary_actions()

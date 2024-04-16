@@ -1712,6 +1712,7 @@ class FitConfig:
         if not os.path.exists(self.output_hists_dir):
             os.makedirs(self.output_hists_dir)
         self.fit_results = FitResults(f'{self.output_hists_dir}/gpr_fit_results.csv') # original output_dir
+        self.output_root_file_path = f'{self.output_hists_dir}/gpr_{self.lepton_channel}lep_vjets_yield.root'
         
         ### Binning ###
         self.bins_y = self.get_bins_y()
@@ -1798,7 +1799,7 @@ def summary_actions_from_csv(config : FitConfig):
     )
 
     ### Save output histogram ###
-    f_output = ROOT.TFile(f'{config.output_hists_dir}/gpr_{config.lepton_channel}lep_vjets_yield.root', 'UPDATE')
+    f_output = ROOT.TFile(config.output_root_file_path, 'UPDATE')
     
     # This naming convention is pretty important to match that in the CxAODReader outputs
     # Since ResonanceFinder uses the same convention for ALL samples.
