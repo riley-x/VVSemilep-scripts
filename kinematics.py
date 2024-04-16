@@ -42,7 +42,7 @@ See [utils.FileManager] for details.
 '''
 
 from plotting import plot
-import ROOT
+import ROOT # type: ignore
 import numpy as np
 import os
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter

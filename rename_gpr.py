@@ -25,6 +25,59 @@ import sys
 ###                                        MAIN                                        ###
 ##########################################################################################
 
+def run(root_dir, out_name, lep):
+    f_gpr = ROOT.TFile(f'{root_dir}/gpr/gpr_{lep}lep_vjets_yield.root')
+    f_wjets = ROOT.TFile(f'{root_dir}/rebin/{lep}lep_wjets_rebin.root')
+    f_zjets = ROOT.TFile(f'{root_dir}/rebin/{lep}lep_zjets_rebin.root')
+    f_out = ROOT.TFile(out_name.format(lep=lep), 'RECREATE')
+
+    ### Get GPR histo names ###
+    used_names = set() # ignore backup cycles
+    for key in f_gpr.GetListOfKeys():
+        name = key.GetName()
+        if '_mu-' in name: continue # skip mu correlations for now (diboson,stop,ttbar)
+        used_names.add(name)
+
+    ### Copy and rename GPR histos ###
+    for name in sorted(used_names):
+        h = f_gpr.Get(name)
+        if lep == 0:
+            name = name.replace('Vjets_SR', 'Vjets_VV0Lep_MergHP_Inclusive_SR')
+            name = name.replace('vv_mt', 'vvJ_mT')
+        elif lep == 1:
+            name = name.replace('Vjets_SR', 'Vjets_VV1Lep_MergHP_Inclusive_SR')
+            name = name.replace('vv_m', 'lvJ_m')
+        else:
+            name = name.replace('Vjets_SR', 'Vjets_VV2Lep_MergHP_Inclusive_SR')
+            name = name.replace('vv_m', 'llJ_m')
+        # name = name.replace('__mu-', '_SysMu-')
+        name = name.replace('__Sys', '_Sys')
+        
+        f_out.cd()
+        h.SetName(name)
+        h.Write()
+
+    ### Copy and rename TCR MC histos ###
+    count = 0
+    for key in f_wjets.GetListOfKeys():
+        name = key.GetName()
+        if not 'Inclusive_TCR' in name: continue
+
+        h = f_wjets.Get(name).Clone()
+        h.Add(f_zjets.Get(name.replace('wjets', 'zjets')))
+
+        name = name.replace('wjets', 'Vjets')
+        name = name.replace('__Sys', '_Sys')
+
+        f_out.cd()
+        h.SetName(name)
+        h.Write()
+        count += 1
+    
+    f_out.Write()
+    f_out.Close()
+    print(f"Saved {len(used_names)}+{count} histograms to {f_out.GetName()}")
+
 
 def main():
     root_dir = sys.argv[1]
@@ -34,55 +87,10 @@ def main():
         out_name = 'gpr_{lep}lep_vjets.rename.root'
 
     for lep in [0, 1, 2]:
-        f_gpr = ROOT.TFile(f'{root_dir}/gpr/gpr{lep}lep_vjets_yield.root')
-        f_wjets = ROOT.TFile(f'{root_dir}/rebin/{lep}lep_wjets_rebin.root')
-        f_zjets = ROOT.TFile(f'{root_dir}/rebin/{lep}lep_zjets_rebin.root')
-        f_out = ROOT.TFile(out_name.format(lep=lep))
-    
-        ### Get GPR histo names ###
-        used_names = set() # ignore backup cycles
-        for key in f_gpr.GetListOfKeys():
-            name = key.GetName()
-            if '__mu-' in name: continue # skip mu correlations for now
-            used_names.add(name)
-
-        ### Copy and rename GPR histos ###
-        for name in sorted(used_names):
-            h = f_gpr.Get(name)
-            if lep == 0:
-                name = name.replace('Vjets_SR', 'Vjets_VV0Lep_MergHP_Inclusive_SR')
-                name = name.replace('vv_mt', 'vvJ_mT')
-            elif lep == 1:
-                name = name.replace('Vjets_SR', 'Vjets_VV1Lep_MergHP_Inclusive_SR')
-                name = name.replace('vv_m', 'lvJ_m')
-            else:
-                name = name.replace('Vjets_SR', 'Vjets_VV2Lep_MergHP_Inclusive_SR')
-                name = name.replace('vv_m', 'llJ_m')
-            # name = name.replace('__mu-', '_SysMu-')
-            name = name.replace('__Sys', '_Sys')
-            
-            f_out.cd()
-            h.SetName(name)
-            h.Write()
-
-        ### Copy and rename TCR MC histos ###
-        for key in f_wjets.GetListOfKeys():
-            name = key.GetName()
-            if 'Inclusive_SR' in name: continue
-
-            h = f_wjets.Get(name).Clone()
-            h.Add(f_zjets.Get(name.replace('wjets', 'zjets')))
-
-            name = name.replace('wjets', 'Vjets')
-            name = name.replace('__Sys', '_Sys')
-
-            f_out.cd()
-            h.SetName(name)
-            h.Write()
-        
-        f_out.Write()
-        f_out.Close()
-        print(f"Saved {len(used_names)} histograms to {f_out.GetName()}")
+        try:
+            run(root_dir, out_name, lep)
+        except Exception as e: 
+            print(e)
 
 
 if __name__ == "__main__":

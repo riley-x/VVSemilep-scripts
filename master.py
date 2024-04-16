@@ -930,7 +930,8 @@ def make_gpr_floating_correlation_hists(gpr_config : gpr.FitConfig, channel_conf
     @requires
         [channel_config.gpr_sigcontam_corrs] to be set.
     '''
-    h_diff = ROOT.TH1F(f'gpr_mu-diboson_posdiff_{variable}', '', len(gpr_config.bins_y) - 1, gpr_config.bins_y)
+    bins = utils.get_bins(channel_config.lepton_channel, variable)
+    h_diff = ROOT.TH1F(f'gpr_mu-diboson_posdiff_{variable}', '', len(bins) - 1, np.array(bins, dtype=float))
     for i,v in enumerate(channel_config.gpr_sigcontam_corrs):
         h_diff.SetBinContent(i+1, v)
         h_diff.SetBinError(i+1, 0)
@@ -981,7 +982,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
             plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
 
             ### Get diboson (1 - mu) histograms ###
-            make_gpr_floating_correlation_hists(channel_config)
+            make_gpr_floating_correlation_hists(fit_config, channel_config, var)
     
 
     if channel_config.skip_fits or channel_config.skip_gpr:
@@ -1422,7 +1423,9 @@ def main():
     args = parse_args()
     if args.asimov:
         utils.Sample.data.file_stubs = ['data-asimov']
-        args.output += '/asimov'
+        if args.output.endswith('/'):
+            args.output = args.output[:-1]
+        args.output += '-asimov'
     if args.no_systs or args.nominal:
         utils.variations_hist.clear()
     mu_stop = [float(x) for x in args.mu_stop.split(',')]

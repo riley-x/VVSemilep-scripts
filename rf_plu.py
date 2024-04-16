@@ -76,7 +76,10 @@ def run(
             - 'PLU': Runs the profile-likelihood unfolding fit, such that there are nbins
               signals, and the strength of each signal is the fiducial event count. These
               use the response matrix histograms as the signal inputs.
-            - 'diboson', or an EFT term.
+            - 'diboson': Runs a direct fit to the diboson signal strength, with the
+              diboson MC as the only floating signal. Note this only looks at a single
+              channel at a time though.
+            - an EFT term: TODO
     '''
     from ROOT import RF # type: ignore
 
