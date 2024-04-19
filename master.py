@@ -782,6 +782,117 @@ def plot_correlations(roofit_results, filename : str, subtitle : list[str] = [])
 ###                                       CONFIG                                       ###
 ##########################################################################################
 
+# TODO use the new classes.
+class GlobalConfig:
+    '''
+    Configuration parameters common to all channels
+    '''
+    npcheck_dir = 'ResonanceFinder/NPCheck'
+    response_matrix_filepath = 'response_matrix/{sample}_{lep}lep_rf_histograms.root'
+    rebinned_hists_filepath = 'rebin/{lep}_{sample}_rebin.root'
+
+    def __init__(
+            self,
+            ### Basic config ###
+            file_manager : utils.FileManager,
+            ttbar_fitter: ttbar_fit.TtbarSysFitter,
+            mu_stop : tuple[float, float],
+            output_dir : str,
+            ### Run management ###
+            nominal_only : bool,
+            skip_hist_gen : bool,
+            skip_fits : bool,
+            skip_direct_fit : bool,
+            skip_gpr : bool,
+            skip_gpr_if_present : bool,
+            gpr_condor : bool,
+            is_asimov : bool,
+            run_plu_val : bool,
+        ):
+        ### Basic config ###
+        self.file_manager = file_manager
+        self.ttbar_fitter = ttbar_fitter
+        self.mu_stop = mu_stop
+        self.output_dir = output_dir
+
+        ### Run management ###
+        self.nominal_only = nominal_only
+        self.skip_hist_gen = skip_hist_gen
+        self.skip_fits = skip_fits
+        self.skip_direct_fit = skip_direct_fit or skip_fits
+        self.skip_gpr = skip_gpr or skip_fits
+        self.skip_gpr_if_present = skip_gpr_if_present
+        self.gpr_condor = gpr_condor
+        self.is_asimov = is_asimov
+        self.plu_validation_iters = 100 if run_plu_val else 0
+
+
+class NewChannelConfig:
+    '''
+    Configuration parameters specific to a set of run channels. This could be an aggregate
+    of all channels, i.e. for running diboson-xsec fits, or a single channel and variable,
+    i.e. for GPR and unfolding fits.
+    '''
+    def __init__(
+            self,
+            global_config : GlobalConfig,
+            lepton_channels : list[int],
+            variable_tag : str = 'vv_m/mT',
+            variables : dict[int, list[utils.Variable]] = None,
+        ):
+        '''
+        @param variables/variable_tag
+            Specify a dict of variables for each lepton channel, or a tag for a predefined
+            setup (see [_parse_variable_tag]). The dictionary always takes precedence if 
+            set.
+        '''
+        self.global_config = global_config,
+        self.lepton_channels = lepton_channels
+        self.lepton_tag = '-'.join(lepton_channels)
+        if variables is not None:
+            self.variables = variables
+            self.variable_tag = '-'.join(str(x) for x in variables)
+        else:
+            self.variables = self._parse_variable_tag(variable_tag)
+            self.variable_tag = variable_tag
+        self.base_name = f'{self.lepton_tag}lep_{self.variable_tag}'
+
+        ### Set by run_gpr ###
+        self.gpr_results : gpr.FitResults = None
+        self.gpr_sigcontam_corrs : list[float] = None
+
+
+    def _parse_variable_tag(tag):
+        if tag == 'vv_m/mT':
+            return {
+                0: [utils.Variable.vv_mt],
+                1: [utils.Variable.vv_m],
+                2: [utils.Variable.vv_m],
+            }
+        else:
+            raise NotImplementedError(f'ChannelConfig unknown tag {tag}')
+    
+
+    def get_variables(self, lepton_channel : int) -> list[utils.Variable]:
+        return self.variables[lepton_channel]
+
+
+    def split_config(self) -> list[NewChannelConfig]:
+        '''
+        If this config represents joint channels/variables, splits out configs for the
+        individual channels.
+        '''
+        out = []
+        for lep,variables in self.variables:
+            for var in variables:
+                out.append(NewChannelConfig(
+                    global_config=self.global_config,
+                    lepton_channels=[lep],
+                    variables=[var],
+                ))
+        if len(out) == 1: return [] # this channel is already split
+        return out
+
 
 class ChannelConfig:
 
@@ -1182,8 +1293,8 @@ def run_diboson_fit_multichannel(
     ### NLL ###
     if True or not skip_fits:
         plot.notice(f'Running multichannel diboson-xsec NLL')
-        run_nll(output_dir, f'{lep_name}lep_{var_name}.diboson', asimov=False)
-        run_nll(output_dir, f'{lep_name}lep_{var_name}.diboson', asimov=True)
+        run_nll(output_dir, f'{lep_name}lep_{var_name}.diboson', ws_path, asimov=False)
+        run_nll(output_dir, f'{lep_name}lep_{var_name}.diboson', ws_path, asimov=True)
         
 
 def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asimov=False):
@@ -1236,6 +1347,7 @@ def save_rebinned_histograms(config : ChannelConfig):
         bins = np.array(bins, dtype=float)
         for variation in variations:
             for channel in ['SR', 'TCR']:
+                if channel == 'TCR' and config.lepton_channel != 1: continue
                 hist_name = '{sample}_VV{lep}_MergHP_Inclusive_' + channel + '_'
                 hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
 
