@@ -20,11 +20,9 @@ from plotting import plot
 ###                                       CONFIG                                       ###
 ##########################################################################################
 
-def ws_path(output_dir, lepton_channels, var, mode, stat_validation_index=None):
-    lep_name = '-'.join([str(x) for x in lepton_channels])
-    if not isinstance(var, (tuple, list)):
-        var = [var]
-    var_name = '-'.join([str(x) for x in var])
+def ws_path(output_dir, variables, mode, stat_validation_index=None):
+    lep_name = '-'.join(str(k) for k in variables.keys())
+    var_name = '-'.join(str(x) for v in variables.values() for x in v)
     if stat_validation_index is None:
         return f'{output_dir}/rf/{lep_name}lep_{var_name}_{mode}.ws.root'
     else:
@@ -74,8 +72,7 @@ def _add_diboson(runner, lepton_channel, lumi_uncert, region, hist_file_format, 
     
 def run(
         mode : str,
-        lepton_channels : list[int],
-        variables : Union[utils.Variable, list[utils.Variable]],
+        variables : dict[int, list[utils.Variable]],
         response_matrix_path : str,
         output_dir : str,
         hist_file_format : str,
@@ -94,8 +91,6 @@ def run(
               diboson MC as the only floating signal. Note this only looks at a single
               channel at a time though.
             - an EFT term: TODO
-    @param lepton_channel
-        The list of channels to use.
     @param stat_validation_index
         Runs a validation test by using an alternate data sample, i.e. one that have been Poisson
         varied. The histograms should be named with prefix 'data_var{stat_validation_index:03}'.
@@ -103,10 +98,8 @@ def run(
     from ROOT import RF # type: ignore
 
     ### Fix args ###
-    if not isinstance(variables, (list, tuple)):
-        variables = [variables] * len(lepton_channels)
-    lep_name = '-'.join([str(x) for x in lepton_channels])
-    var_name = '-'.join([str(x) for x in variables])
+    lep_name = '-'.join(str(k) for k in variables.keys())
+    var_name = '-'.join(str(x) for v in variables.values() for x in v)
 
     ### Config ###
     analysis = f'VV{lep_name}lep'
@@ -125,74 +118,75 @@ def run(
     # VVUnfold.setPruningThreshold(0.01, 0.01) # is this buggy? According to Liza on Mattermost
 
     ### Regions ###
-    for lep,variable in zip(lepton_channels, variables):
-        ### Setup ###
-        region = f"Region_{lep}lep_MergedHP_SR"
-        runner.addChannel(region)
-        runner.channel(region).setStatErrorThreshold(0.05) # 0.05 means that errors < 5% will be ignored
+    for lep,var_list in variables.items():
+        for variable in var_list:
+            ### Setup ###
+            region = f"Region_{lep}lep_MergedHP_SR_{variable}"
+            runner.addChannel(region)
+            runner.channel(region).setStatErrorThreshold(0.05) # 0.05 means that errors < 5% will be ignored
 
-        ### Get hists ###
-        hist_name = f'{{}}_VV{lep}Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lep).name
+            ### Get hists ###
+            hist_name = f'{{}}_VV{lep}Lep_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, lep).name
 
-        ### Add data ###
-        if stat_validation_index == None:
-            hist_name_data = hist_name.format('data')
-        else:
-            hist_name_data = hist_name.format(f'data_var{stat_validation_index:03}')
-        runner.channel(region).addData('data', hist_file_format.format(lep=lep, sample='data'), hist_name_data)
+            ### Add data ###
+            if stat_validation_index == None:
+                hist_name_data = hist_name.format('data')
+            else:
+                hist_name_data = hist_name.format(f'data_var{stat_validation_index:03}')
+            runner.channel(region).addData('data', hist_file_format.format(lep=lep, sample='data'), hist_name_data)
 
-        ### Add ttbar ###
-        runner.channel(region).addSample('ttbar', hist_file_format.format(lep=lep, sample='ttbar'), hist_name.format('ttbar'))
-        sample = runner.channel(region).sample('ttbar')
-        # ResonanceFinder has a major bug when using mean != 1 GAUSSIAN constraints. So hack
-        # fix by scaling by the mean as a constant first (which works fine).
-        sample.multiplyBy('mu-ttbar_nom', mu_ttbar[0])
-        sample.multiplyBy(utils.variation_mu_ttbar, 1, 1 - mu_ttbar[1] / mu_ttbar[0], 1 + mu_ttbar[1] / mu_ttbar[0], RF.MultiplicativeFactor.GAUSSIAN)
-        sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
-        sample.setUseStatError(True)
-        for variation in utils.variations_hist:
-            sample.addVariation(variation)
-
-        ### Add stop ###
-        runner.channel(region).addSample('stop', hist_file_format.format(lep=lep, sample='stop'), hist_name.format('stop'))
-        sample = runner.channel(region).sample('stop')
-        # ResonanceFinder has a major bug when using mean != 1 GAUSSIAN constraints. So hack
-        # fix by scaling by the mean as a constant first (which works fine).
-        sample.multiplyBy('mu-stop_nom', mu_stop[0])
-        sample.multiplyBy(utils.variation_mu_stop, 1, 1 - mu_stop[1] / mu_stop[0], 1 + mu_stop[1] / mu_stop[0], RF.MultiplicativeFactor.GAUSSIAN)
-        sample.multiplyBy(utils.variation_lumi,  1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
-        sample.setUseStatError(True)
-        for variation in utils.variations_hist:
-            sample.addVariation(variation)
-
-        ### Add GPR ###
-        runner.channel(region).addSample('vjets', f'{output_dir}/gpr/gpr_{lep}lep_vjets_yield.root', 'Vjets_SR_' + variable.name)
-        sample = runner.channel(region).sample('vjets')
-        sample.setUseStatError(True)
-        if gpr_mu_corrs:
-            for variation in utils.variations_custom:
-                sample.addVariation(variation)
+            ### Add ttbar ###
+            runner.channel(region).addSample('ttbar', hist_file_format.format(lep=lep, sample='ttbar'), hist_name.format('ttbar'))
+            sample = runner.channel(region).sample('ttbar')
+            # ResonanceFinder has a major bug when using mean != 1 GAUSSIAN constraints. So hack
+            # fix by scaling by the mean as a constant first (which works fine).
+            sample.multiplyBy('mu-ttbar_nom', mu_ttbar[0])
+            sample.multiplyBy(utils.variation_mu_ttbar, 1, 1 - mu_ttbar[1] / mu_ttbar[0], 1 + mu_ttbar[1] / mu_ttbar[0], RF.MultiplicativeFactor.GAUSSIAN)
+            sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
+            sample.setUseStatError(True)
             for variation in utils.variations_hist:
                 sample.addVariation(variation)
 
-        ### Mode switch (signals and diboson background) ###
-        common_args = {
-            'runner': runner,
-            'lepton_channel': lep,
-            'variable': variable,
-            'region': region,
-            'hist_file_format': hist_file_format,
-            'hist_name': hist_name,
-            'lumi_uncert': lumi_uncert,
-        }
-        if mode == 'PLU':
-            signal_name = _add_plu(**common_args, response_matrix_path=response_matrix_path)
-        elif mode == 'diboson':
-            signal_name = _add_diboson(**common_args)
-        else:
-            raise NotImplementedError(f'rf.py() unknown mode {mode}')
+            ### Add stop ###
+            runner.channel(region).addSample('stop', hist_file_format.format(lep=lep, sample='stop'), hist_name.format('stop'))
+            sample = runner.channel(region).sample('stop')
+            # ResonanceFinder has a major bug when using mean != 1 GAUSSIAN constraints. So hack
+            # fix by scaling by the mean as a constant first (which works fine).
+            sample.multiplyBy('mu-stop_nom', mu_stop[0])
+            sample.multiplyBy(utils.variation_mu_stop, 1, 1 - mu_stop[1] / mu_stop[0], 1 + mu_stop[1] / mu_stop[0], RF.MultiplicativeFactor.GAUSSIAN)
+            sample.multiplyBy(utils.variation_lumi,  1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
+            sample.setUseStatError(True)
+            for variation in utils.variations_hist:
+                sample.addVariation(variation)
 
-        runner.linearizeRegion(region) # What is this for?
+            ### Add GPR ###
+            runner.channel(region).addSample('vjets', f'{output_dir}/gpr/gpr_{lep}lep_vjets_yield.root', 'Vjets_SR_' + variable.name)
+            sample = runner.channel(region).sample('vjets')
+            sample.setUseStatError(True)
+            if gpr_mu_corrs:
+                for variation in utils.variations_custom:
+                    sample.addVariation(variation)
+                for variation in utils.variations_hist:
+                    sample.addVariation(variation)
+
+            ### Mode switch (signals and diboson background) ###
+            common_args = {
+                'runner': runner,
+                'lepton_channel': lep,
+                'variable': variable,
+                'region': region,
+                'hist_file_format': hist_file_format,
+                'hist_name': hist_name,
+                'lumi_uncert': lumi_uncert,
+            }
+            if mode == 'PLU':
+                signal_name = _add_plu(**common_args, response_matrix_path=response_matrix_path)
+            elif mode == 'diboson':
+                signal_name = _add_diboson(**common_args)
+            else:
+                raise NotImplementedError(f'rf.py() unknown mode {mode}')
+
+            runner.linearizeRegion(region) # What is this for?
 
     ### Global options ###
     #VVUnfold.reuseHist(True) # What is this for?
@@ -208,7 +202,7 @@ def run(
 
     ### Copy back ###
     rf_output_path = f'{output_dir}/rf/ws/{analysis}_{signal_name}_{outputWSTag}.root'
-    target_path = ws_path(output_dir, lepton_channels, variables, mode, stat_validation_index)
+    target_path = ws_path(output_dir, variables, mode, stat_validation_index)
     shutil.copyfile(rf_output_path, target_path)
     plot.success(f'Created workspace at {target_path}')
     return target_path

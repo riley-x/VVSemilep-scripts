@@ -788,8 +788,7 @@ class GlobalConfig:
     Configuration parameters common to all channels
     '''
     npcheck_dir = 'ResonanceFinder/NPCheck'
-    response_matrix_filepath = 'response_matrix/{sample}_{lep}lep_rf_histograms.root'
-    rebinned_hists_filepath = 'rebin/{lep}_{sample}_rebin.root'
+    
 
     def __init__(
             self,
@@ -815,6 +814,9 @@ class GlobalConfig:
         self.mu_stop = mu_stop
         self.output_dir = output_dir
 
+        self.response_matrix_filepath = output_dir + '/response_matrix/diboson_{lep}lep_rf_histograms.root'
+        self.rebinned_hists_filepath = output_dir + '/rebin/{lep}lep_{sample}_rebin.root'
+
         ### Run management ###
         self.nominal_only = nominal_only
         self.skip_hist_gen = skip_hist_gen
@@ -837,7 +839,7 @@ class NewChannelConfig:
             self,
             global_config : GlobalConfig,
             lepton_channels : list[int],
-            variable_tag : str = 'vv_m/mT',
+            variable_tag : str = 'vv_m-mT',
             variables : dict[int, list[utils.Variable]] = None,
         ):
         '''
@@ -846,14 +848,14 @@ class NewChannelConfig:
             setup (see [_parse_variable_tag]). The dictionary always takes precedence if 
             set.
         '''
-        self.global_config = global_config,
+        self.gbl = global_config # alias
         self.lepton_channels = lepton_channels
-        self.lepton_tag = '-'.join(lepton_channels)
+        self.lepton_tag = '-'.join(str(x) for x in lepton_channels)
         if variables is not None:
             self.variables = variables
-            self.variable_tag = '-'.join(str(x) for x in variables)
+            self.variable_tag = '-'.join(str(x) for k,v in variables.items() for x in v)
         else:
-            self.variables = self._parse_variable_tag(variable_tag)
+            self.variables = NewChannelConfig._parse_variable_tag(variable_tag)
             self.variable_tag = variable_tag
         self.base_name = f'{self.lepton_tag}lep_{self.variable_tag}'
 
@@ -862,8 +864,8 @@ class NewChannelConfig:
         self.gpr_sigcontam_corrs : list[float] = None
 
 
-    def _parse_variable_tag(tag):
-        if tag == 'vv_m/mT':
+    def _parse_variable_tag(tag) -> dict[int, list[utils.Variable]]:
+        if tag == 'vv_m-mT':
             return {
                 0: [utils.Variable.vv_mt],
                 1: [utils.Variable.vv_m],
@@ -886,9 +888,9 @@ class NewChannelConfig:
         for lep,variables in self.variables:
             for var in variables:
                 out.append(NewChannelConfig(
-                    global_config=self.global_config,
+                    global_config=self.gbl,
                     lepton_channels=[lep],
-                    variables=[var],
+                    variables={lep: [var]},
                 ))
         if len(out) == 1: return [] # this channel is already split
         return out
@@ -997,8 +999,7 @@ def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, stat_valida
         plot.notice(f'{config.log_base} creating ResonanceFinder workspace for {mode} fit')
         ws_path = rf_plu.run(
             mode=mode,
-            lepton_channels=[config.lepton_channel],
-            variables=var,
+            variables={config.lepton_channel: [var]},
             response_matrix_path=config.response_matrix_filepath,
             output_dir=config.output_dir,
             hist_file_format=config.rebinned_hists_filepath,
@@ -1011,8 +1012,7 @@ def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, stat_valida
         ws_path = rf_plu.ws_path(
             mode=mode,
             output_dir=config.output_dir, 
-            lepton_channels=[config.lepton_channel], 
-            var=var, 
+            variables={config.lepton_channel: [var]},
             stat_validation_index=stat_validation_index,
         )
     ws_path = os.path.abspath(ws_path)
@@ -1209,15 +1209,7 @@ def run_diboson_fit(config: ChannelConfig, var : utils.Variable):
         run_nll(config.output_dir, f'{config.lepton_channel}lep_{var}.diboson', ws_path)
 
 
-def run_diboson_fit_multichannel(
-        output_dir : str,
-        mu_stop : tuple[float, float],
-        mu_ttbar : tuple[float, float],
-        lepton_channels : list[int] = [1, 2],
-        variables : list[utils.Variable] = [utils.Variable.vv_m, utils.Variable.vv_m],
-        skip_fits : bool = False,
-        nominal_only : bool = False,
-    ):
+def run_diboson_fit_multichannel(config : NewChannelConfig):
     '''
     Runs the resonance finder script to fit the diboson cross section in all channels. 
     '''
@@ -1225,38 +1217,34 @@ def run_diboson_fit_multichannel(
     # `from ROOT import RF` line I think. But somehow hiding it here is fine.
     import rf_plu
 
-    os.makedirs(f'{output_dir}/rf', exist_ok=True)
+    os.makedirs(f'{config.gbl.output_dir}/rf', exist_ok=True)
 
     ### Create RF workspace ###
-    if not skip_fits:
+    if not config.gbl.skip_fits:
         plot.notice(f'Creating ResonanceFinder workspace for all-channel fit')
         ws_path = rf_plu.run(
             mode='diboson',
-            lepton_channels=lepton_channels,
-            variables=variables,
-            response_matrix_path=f'{output_dir}/response_matrix/diboson_{{lep}}lep_rf_histograms.root',
-            output_dir=output_dir,
-            hist_file_format=f'{output_dir}/rebin/{{lep}}lep_{{sample}}_rebin.root',
-            mu_stop=mu_stop,
-            mu_ttbar=mu_ttbar,
-            gpr_mu_corrs=not nominal_only,
+            variables=config.variables,
+            response_matrix_path=config.gbl.response_matrix_filepath,
+            output_dir=config.gbl.output_dir,
+            hist_file_format=config.gbl.rebinned_hists_filepath,
+            mu_stop=config.gbl.mu_stop,
+            mu_ttbar=config.gbl.ttbar_fitter.mu_ttbar_nom,
+            gpr_mu_corrs=not config.gbl.nominal_only,
         )
     else:
         ws_path = rf_plu.ws_path(
             mode='diboson',
-            output_dir=output_dir, 
-            lepton_channels=lepton_channels,
-            var=variables,
+            output_dir=config.gbl.output_dir, 
+            variables=config.variables,
         )
     ws_path = os.path.abspath(ws_path)
 
     ### Run fits ###
-    lep_name = '-'.join(str(x) for x in lepton_channels)
-    var_name = '-'.join(str(x) for x in variables)
-    fcc_path = f'{output_dir}/rf/{lep_name}lep_{var_name}_diboson.fcc.root'
-    if not skip_fits:
+    fcc_path = f'{config.gbl.output_dir}/rf/{config.base_name}_diboson.fcc.root'
+    if not config.gbl.skip_fits:
         plot.notice(f'Running multichannel diboson fit')
-        with open(f'{output_dir}/rf/log.{lep_name}lep_{var_name}_diboson.fcc.txt', 'w') as f:
+        with open(f'{config.gbl.output_dir}/rf/log.{config.base_name}_diboson.fcc.txt', 'w') as f:
             res = subprocess.run(
                 ['./runFitCrossCheck.py', ws_path],  # the './' is necessary!
                 cwd='ResonanceFinder/NPCheck',
@@ -1270,31 +1258,31 @@ def run_diboson_fit_multichannel(
     fcc_file = ROOT.TFile(fcc_path)
     results_name = 'PlotsAfterGlobalFit/unconditionnal/fitResult'
     roofit_results = fcc_file.Get(results_name)
-    if not skip_fits:
+    if not config.gbl.skip_fits:
         roofit_results.Print()
 
     ### Parse results ###
     dict_results = { v.GetName() : (v.getValV(), v.getError()) for v in roofit_results.floatParsFinal() }
-    dict_results['mu-stop'] = convert_alpha(dict_results['alpha_mu-stop'], mu_stop)
-    dict_results['mu-ttbar'] = convert_alpha(dict_results['alpha_mu-ttbar'], mu_ttbar)
+    dict_results['mu-stop'] = convert_alpha(dict_results['alpha_mu-stop'], config.gbl.mu_stop)
+    dict_results['mu-ttbar'] = convert_alpha(dict_results['alpha_mu-ttbar'], config.gbl.ttbar_fitter.mu_ttbar_nom)
 
     ### Draw pulls ###
     plot_pulls(
         fit_results=dict_results, 
-        filename=f'{output_dir}/plots/{lep_name}lep_{var_name}.diboson_pulls',
+        filename=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_pulls',
     )
 
     ### Draw correlation matrix ###
     plot_correlations(
         roofit_results=roofit_results, 
-        filename=f'{output_dir}/plots/{lep_name}lep_{var_name}.diboson_corr',
+        filename=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_corr',
     )
 
     ### NLL ###
     if True or not skip_fits:
         plot.notice(f'Running multichannel diboson-xsec NLL')
-        run_nll(output_dir, f'{lep_name}lep_{var_name}.diboson', ws_path, asimov=False)
-        run_nll(output_dir, f'{lep_name}lep_{var_name}.diboson', ws_path, asimov=True)
+        run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=False)
+        run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=True)
         
 
 def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asimov=False):
@@ -1712,13 +1700,28 @@ def main():
 
     ### Diboson signal strength fit ###
     if len(channels) > 1:
-        run_diboson_fit_multichannel(
-            output_dir=args.output,
+        global_config = GlobalConfig(
+            ### Basic config ###
+            file_manager=file_manager,
+            ttbar_fitter=ttbar_fitter,
             mu_stop=mu_stop,
-            mu_ttbar=ttbar_fitter.mu_ttbar_nom,
-            skip_fits=args.skip_fits,
+            output_dir=args.output,
+            ### Run management ###
             nominal_only=args.nominal,
+            skip_hist_gen=args.skip_hist_gen,
+            skip_fits=args.skip_fits,
+            skip_direct_fit=args.skip_direct_fit,
+            skip_gpr=args.skip_gpr,
+            skip_gpr_if_present=args.skip_gpr_if_present,
+            gpr_condor=args.condor,
+            is_asimov=args.asimov,
+            run_plu_val=args.run_plu_val,
         )
+        config = NewChannelConfig(
+            global_config=global_config,
+            lepton_channels=channels,
+        )
+        run_diboson_fit_multichannel(config)
 
 
 if __name__ == "__main__":
