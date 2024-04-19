@@ -838,246 +838,8 @@ class ChannelConfig:
 
 
 ##########################################################################################
-###                                         RUN                                        ###
+###                                  RESONANCE FINDER                                  ###
 ##########################################################################################
-
-
-def save_rebinned_histograms(config : ChannelConfig):
-    '''
-    Rebins the CxAODReader histograms to match the response matrix/gpr.
-    '''
-    os.makedirs(f'{config.output_dir}/rebin', exist_ok=True)
-    config.rebinned_hists_filepath = f'{config.output_dir}/rebin/{config.lepton_channel}lep_{{sample}}_rebin.root'
-
-    ### Output ###
-    output_files = {}
-    def file(sample):
-        if sample not in output_files:
-            output_files[sample] = ROOT.TFile(config.rebinned_hists_filepath.format(sample=sample), 'RECREATE')
-        return output_files[sample]
-
-    ### All histo variations ###
-    variations = [utils.variation_nom]
-    for x in utils.variations_hist:
-        variations.append(x + utils.variation_up_key)
-        variations.append(x + utils.variation_down_key)
-
-    ### Loop per variable ###
-    for variable in config.variables:
-        bins = utils.get_bins(config.lepton_channel, variable)
-        bins = np.array(bins, dtype=float)
-        for variation in variations:
-            for channel in ['SR', 'TCR']:
-                hist_name = '{sample}_VV{lep}_MergHP_Inclusive_' + channel + '_'
-                hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
-
-                hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name, variation)
-                for sample_name,hist in hists.items():
-                    if sample_name == utils.Sample.data.name: continue # Handled in [save_data_variation_histograms]
-
-                    hist = plot.rebin(hist, bins)
-                    new_name = hist_name.format(lep=f'{config.lepton_channel}Lep', sample=sample_name)
-                    new_name = utils.hist_name_variation(new_name, config.file_manager.samples[sample_name], variation, separator='__')
-                    # For some reason RF expects a double underscore...not sure how to change
-                    hist.SetName(new_name)
-
-                    f = file(sample_name)
-                    f.cd()
-                    hist.Write()
-
-    ### Data rebinned histograms for PLU stat test ###
-    save_data_variation_histograms(config, file(utils.Sample.data.name))
-
-    plot.success(f'Saved rebinned histograms to {config.rebinned_hists_filepath}')
-
-
-def save_data_variation_histograms(config : ChannelConfig, f : ROOT.TFile):
-    '''
-    Saves several statistical variations of the data histograms
-    '''
-    ### Loop per variable ###
-    for variable in config.variables:
-        ### Config ###
-        bins = utils.get_bins(config.lepton_channel, variable)
-        bins = np.array(bins, dtype=float)
-
-        hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_'
-        hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
-
-        ### Nominal hist ###
-        h_nom = config.file_manager.get_hist(config.lepton_channel, utils.Sample.data, hist_name)
-        h_nom = plot.rebin(h_nom, bins)
-        h_nom.SetName(hist_name.format(lep=f'{config.lepton_channel}Lep', sample='data'))
-
-        f.cd()
-        h_nom.Write()
-
-        ### Create variations ###
-        rng = np.random.default_rng()
-        for i in range(config.plu_validation_iters):
-            name = hist_name.format(lep=f'{config.lepton_channel}Lep', sample=f'data_var{i:03}')
-            h = ROOT.TH1F(name, name, len(bins) - 1, bins)
-            for x in range(1, h_nom.GetNbinsX() + 1):
-                h[x] = rng.poisson(h_nom[x])
-            h.Write()
-
-
-def make_gpr_floating_correlation_hists(gpr_config : gpr.FitConfig, channel_config : ChannelConfig, variable : utils.Variable):
-    '''
-    Given a floating parameter like mu_diboson, the correlation with the GPR yield is
-    implemented as an additive correction histogram (1 - mu) * diff. But ResonanceFinder
-    can't scale by (1 - mu), so we have to break it apart into diff + mu * (-diff).
-
-    @requires
-        [channel_config.gpr_sigcontam_corrs] to be set.
-    '''
-    bins = utils.get_bins(channel_config.lepton_channel, variable)
-    h_diff = ROOT.TH1F(f'gpr_mu-diboson_posdiff_{variable}', '', len(bins) - 1, np.array(bins, dtype=float))
-    for i,v in enumerate(channel_config.gpr_sigcontam_corrs):
-        h_diff.SetBinContent(i+1, v)
-        h_diff.SetBinError(i+1, 0)
-
-    h_neg = h_diff.Clone()
-    h_neg.SetName(f'gpr_mu-diboson_negdiff_{variable}')
-    h_neg.Scale(-1)
-
-    f_output = ROOT.TFile(gpr_config.output_root_file_path, 'UPDATE')
-    h_diff.Write()
-    h_neg.Write()
-
-
-def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
-    '''
-    Runs the GPR fit for every variation.
-    '''
-    plot.notice(f'{channel_config.log_base} running GPR fits for {var}')
-
-    ### Condor ###
-    if channel_config.gpr_condor:
-        condor_file = CondorSubmitMaker(channel_config, var, f'{channel_config.output_dir}/gpr/{channel_config.lepton_channel}lep_{var}.submit.condor')
-
-    ### Config ###
-    def make_config(variation, mu_stop):
-        return gpr.FitConfig(
-            lepton_channel=channel_config.lepton_channel,
-            var=var,
-            output_hists_dir=f'{channel_config.output_dir}/gpr',
-            output_plots_dir=f'{channel_config.output_dir}/gpr/{channel_config.lepton_channel}lep/{var}/{variation}',
-            use_vjets_mc=channel_config.is_asimov,
-            variation=variation,
-            mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
-            mu_stop=mu_stop,
-        )
-    mu_diboson_points = [0.9, 0.95, 1.05, 1.1]
-
-    ### Summary plots ###
-    def summary_actions():
-        fit_config = make_config(utils.variation_nom, channel_config.mu_stop)
-        channel_config.gpr_results = fit_config.fit_results
-        if not channel_config.nominal_only:
-            channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
-                config=fit_config,
-                yields=mu_diboson_points,
-                filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
-            )
-            plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
-
-            ### Get diboson (1 - mu) histograms ###
-            make_gpr_floating_correlation_hists(fit_config, channel_config, var)
-    
-
-    if channel_config.skip_fits or channel_config.skip_gpr:
-        summary_actions()
-        return
-
-    ### Common run function ###
-    def run(variation, mu_stop=channel_config.mu_stop[0]):
-        config = make_config(variation, mu_stop)
-        if channel_config.gpr_condor:
-            condor_file.add(config)
-        else:
-            gpr.run(
-                file_manager=channel_config.file_manager,
-                config=config,
-                from_csv_only=channel_config.skip_fits or channel_config.skip_gpr,
-                skip_if_in_csv=channel_config.skip_gpr_if_present,
-            )
-
-    ### Nominal ###
-    run('nominal')
-    if channel_config.nominal_only:
-        summary_actions()
-        return
-
-    ### Diboson signal strength variations ###
-    for mu_diboson in mu_diboson_points:
-        run(f'mu-diboson{mu_diboson}')
-
-    ### ttbar signal strength variations ###
-    for updown in [utils.variation_up_key, utils.variation_down_key]:
-        run(utils.variation_mu_ttbar + updown)
-
-    ### Single top signal strength variations ###
-    run(
-        variation=utils.variation_mu_stop + utils.variation_up_key,
-        mu_stop=channel_config.mu_stop[0] + channel_config.mu_stop[1],
-    )
-    run(
-        variation=utils.variation_mu_stop + utils.variation_down_key,
-        mu_stop=channel_config.mu_stop[0] - channel_config.mu_stop[1],
-    )
-
-    ### Syst variations ###
-    for variation_base in utils.variations_hist:
-        for updown in [utils.variation_up_key, utils.variation_down_key]:
-            run(variation_base + updown)
-
-    ### Outputs ###
-    if channel_config.gpr_condor:
-        condor_file.close()
-        res = subprocess.run(['condor_submit', condor_file.filepath])
-        if res.returncode == 0:
-            plot.success("Launched GPR jobs on condor. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
-        else:
-            plot.error(f"Couldn't launch condor jobs: {res}.")
-    else:
-        summary_actions()
-
-
-def run_direct_fit(config : ChannelConfig, var : utils.Variable):
-    '''
-    Test fit where we fit the detector-level diboson signal strength to each bin directly.
-
-    This will be superceded by the profile likelihood fit, but is a nice check.
-    '''
-    bins = utils.get_bins(config.lepton_channel, var)
-    h_diboson_fit = ROOT.TH1F('h_diboson', 'Diboson', len(bins) - 1, np.array(bins, dtype=float))
-    h_diboson_mc = ROOT.TH1F('h_diboson', 'Diboson', len(bins) - 1, np.array(bins, dtype=float))
-    for i in range(len(bins) - 1):
-        res = diboson_fit.run_fit(
-            config=config,
-            variable=var,
-            bin=(bins[i], bins[i+1]),
-            gpr_mu_corr=config.gpr_sigcontam_corrs[i] if config.gpr_sigcontam_corrs is not None else None,
-        )
-        diboson_yield = res['diboson-yield']
-        h_diboson_fit.SetBinContent(i+1, diboson_yield[0])
-        h_diboson_fit.SetBinError(i+1, diboson_yield[1])
-
-        diboson_yield = res['diboson-yield-mc-statonly']
-        h_diboson_mc.SetBinContent(i+1, diboson_yield[0])
-        h_diboson_mc.SetBinError(i+1, diboson_yield[1])
-    _plot_yield_comparison(
-        h_fit=h_diboson_fit,
-        h_mc=h_diboson_mc,
-        filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.directfit_yields',
-        subtitle=[
-            '#sqrt{s}=13 TeV, 140 fb^{-1}',
-            f'{config.lepton_channel}-lepton channel',
-            'Direct bin-by-bin fit',
-        ],
-        xtitle=f'{var:title}',
-    )
 
 
 def run_npcheck_drawfit(config : ChannelConfig, var : utils.Variable, ws_path : str):
@@ -1333,19 +1095,7 @@ def run_diboson_fit(config: ChannelConfig, var : utils.Variable):
     ### Run NLL ###
     if not config.skip_fits:
         plot.notice(f'{config.log_base} running diboson-xsec NLL')
-        with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}_diboson.nll.txt', 'w') as f:
-            # For some reason passing the fccs file breaks this
-            res = subprocess.run(
-                ['./runNLL.py', ws_path, '--granularity', '5', '--no-doAsimov'],  # the './' is necessary!
-                cwd=config.npcheck_dir,
-                stdout=f,
-                stderr=f,
-            )
-        res.check_returncode()
-        shutil.copyfile(
-            f'{config.npcheck_dir}/Plots/NLL/summary.pdf', 
-            f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_nll.pdf',
-        )
+        run_nll(config.output_dir, f'{config.lepton_channel}lep_{var}.diboson', ws_path)
 
 
 def run_diboson_fit_multichannel(
@@ -1432,20 +1182,270 @@ def run_diboson_fit_multichannel(
     ### NLL ###
     if True or not skip_fits:
         plot.notice(f'Running multichannel diboson-xsec NLL')
-        with open(f'{output_dir}/rf/log.{lep_name}lep_{var_name}_diboson.nll.txt', 'w') as f:
-            # For some reason passing the fccs file breaks this
-            res = subprocess.run(
-                ['./runNLL.py', ws_path, '--granularity', '5', '--no-doAsimov'],  # the './' is necessary!
-                cwd='ResonanceFinder/NPCheck',
-                stdout=f,
-                stderr=f,
-            )
-        res.check_returncode()
-        shutil.copyfile(
-            'ResonanceFinder/NPCheck/Plots/NLL/summary.pdf', 
-            f'{output_dir}/plots/{lep_name}lep_{var_name}.diboson_nll.pdf',
-        )
+        run_nll(output_dir, f'{lep_name}lep_{var_name}.diboson', asimov=False)
+        run_nll(output_dir, f'{lep_name}lep_{var_name}.diboson', asimov=True)
+        
 
+def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asimov=False):
+    log_name = f'{output_dir}/rf/log.{base_name}_nll' + ('-asimov' if asimov else '') + '.txt'
+    with open(log_name, 'w') as f:
+        # For some reason passing the fccs file breaks this
+        res = subprocess.run(
+            ['./runNLL.py', ws_path, '--granularity', str(granularity), '--doAsimov' if asimov else '--no-doAsimov'],  # the './' is necessary!
+            cwd='ResonanceFinder/NPCheck',
+            stdout=f,
+            stderr=f,
+        )
+    res.check_returncode()
+    shutil.copyfile(
+        'ResonanceFinder/NPCheck/Plots/NLL/summary.pdf', 
+        f'{output_dir}/plots/{base_name}_nll' + ('-asimov' if asimov else '') + '.pdf',
+    )
+
+
+
+
+##########################################################################################
+###                                         RUN                                        ###
+##########################################################################################
+
+
+def save_rebinned_histograms(config : ChannelConfig):
+    '''
+    Rebins the CxAODReader histograms to match the response matrix/gpr.
+    '''
+    os.makedirs(f'{config.output_dir}/rebin', exist_ok=True)
+    config.rebinned_hists_filepath = f'{config.output_dir}/rebin/{config.lepton_channel}lep_{{sample}}_rebin.root'
+
+    ### Output ###
+    output_files = {}
+    def file(sample):
+        if sample not in output_files:
+            output_files[sample] = ROOT.TFile(config.rebinned_hists_filepath.format(sample=sample), 'RECREATE')
+        return output_files[sample]
+
+    ### All histo variations ###
+    variations = [utils.variation_nom]
+    for x in utils.variations_hist:
+        variations.append(x + utils.variation_up_key)
+        variations.append(x + utils.variation_down_key)
+
+    ### Loop per variable ###
+    for variable in config.variables:
+        bins = utils.get_bins(config.lepton_channel, variable)
+        bins = np.array(bins, dtype=float)
+        for variation in variations:
+            for channel in ['SR', 'TCR']:
+                hist_name = '{sample}_VV{lep}_MergHP_Inclusive_' + channel + '_'
+                hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
+
+                hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name, variation)
+                for sample_name,hist in hists.items():
+                    if sample_name == utils.Sample.data.name: continue # Handled in [save_data_variation_histograms]
+
+                    hist = plot.rebin(hist, bins)
+                    new_name = hist_name.format(lep=f'{config.lepton_channel}Lep', sample=sample_name)
+                    new_name = utils.hist_name_variation(new_name, config.file_manager.samples[sample_name], variation, separator='__')
+                    # For some reason RF expects a double underscore...not sure how to change
+                    hist.SetName(new_name)
+
+                    f = file(sample_name)
+                    f.cd()
+                    hist.Write()
+
+    ### Data rebinned histograms for PLU stat test ###
+    save_data_variation_histograms(config, file(utils.Sample.data.name))
+
+    plot.success(f'Saved rebinned histograms to {config.rebinned_hists_filepath}')
+
+
+def save_data_variation_histograms(config : ChannelConfig, f : ROOT.TFile):
+    '''
+    Saves several statistical variations of the data histograms
+    '''
+    ### Loop per variable ###
+    for variable in config.variables:
+        ### Config ###
+        bins = utils.get_bins(config.lepton_channel, variable)
+        bins = np.array(bins, dtype=float)
+
+        hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_'
+        hist_name += utils.generic_var_to_lep(variable, config.lepton_channel).name
+
+        ### Nominal hist ###
+        h_nom = config.file_manager.get_hist(config.lepton_channel, utils.Sample.data, hist_name)
+        h_nom = plot.rebin(h_nom, bins)
+        h_nom.SetName(hist_name.format(lep=f'{config.lepton_channel}Lep', sample='data'))
+
+        f.cd()
+        h_nom.Write()
+
+        ### Create variations ###
+        rng = np.random.default_rng()
+        for i in range(config.plu_validation_iters):
+            name = hist_name.format(lep=f'{config.lepton_channel}Lep', sample=f'data_var{i:03}')
+            h = ROOT.TH1F(name, name, len(bins) - 1, bins)
+            for x in range(1, h_nom.GetNbinsX() + 1):
+                h[x] = rng.poisson(h_nom[x])
+            h.Write()
+
+
+def make_gpr_floating_correlation_hists(gpr_config : gpr.FitConfig, channel_config : ChannelConfig, variable : utils.Variable):
+    '''
+    Given a floating parameter like mu_diboson, the correlation with the GPR yield is
+    implemented as an additive correction histogram (1 - mu) * diff. But ResonanceFinder
+    can't scale by (1 - mu), so we have to break it apart into diff + mu * (-diff).
+
+    @requires
+        [channel_config.gpr_sigcontam_corrs] to be set.
+    '''
+    bins = utils.get_bins(channel_config.lepton_channel, variable)
+    h_diff = ROOT.TH1F(f'gpr_mu-diboson_posdiff_{variable}', '', len(bins) - 1, np.array(bins, dtype=float))
+    for i,v in enumerate(channel_config.gpr_sigcontam_corrs):
+        h_diff.SetBinContent(i+1, v)
+        h_diff.SetBinError(i+1, 0)
+
+    h_neg = h_diff.Clone()
+    h_neg.SetName(f'gpr_mu-diboson_negdiff_{variable}')
+    h_neg.Scale(-1)
+
+    f_output = ROOT.TFile(gpr_config.output_root_file_path, 'UPDATE')
+    h_diff.Write()
+    h_neg.Write()
+
+
+def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
+    '''
+    Runs the GPR fit for every variation.
+    '''
+    plot.notice(f'{channel_config.log_base} running GPR fits for {var}')
+
+    ### Condor ###
+    if channel_config.gpr_condor:
+        condor_file = CondorSubmitMaker(channel_config, var, f'{channel_config.output_dir}/gpr/{channel_config.lepton_channel}lep_{var}.submit.condor')
+
+    ### Config ###
+    def make_config(variation, mu_stop):
+        return gpr.FitConfig(
+            lepton_channel=channel_config.lepton_channel,
+            var=var,
+            output_hists_dir=f'{channel_config.output_dir}/gpr',
+            output_plots_dir=f'{channel_config.output_dir}/gpr/{channel_config.lepton_channel}lep/{var}/{variation}',
+            use_vjets_mc=channel_config.is_asimov,
+            variation=variation,
+            mu_ttbar=channel_config.ttbar_fitter.get_var(variation),
+            mu_stop=mu_stop,
+        )
+    mu_diboson_points = [0.9, 0.95, 1.05, 1.1]
+
+    ### Summary plots ###
+    def summary_actions():
+        fit_config = make_config(utils.variation_nom, channel_config.mu_stop)
+        channel_config.gpr_results = fit_config.fit_results
+        if not channel_config.nominal_only:
+            channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
+                config=fit_config,
+                yields=mu_diboson_points,
+                filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
+            )
+            plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
+
+            ### Get diboson (1 - mu) histograms ###
+            make_gpr_floating_correlation_hists(fit_config, channel_config, var)
+    
+
+    if channel_config.skip_fits or channel_config.skip_gpr:
+        summary_actions()
+        return
+
+    ### Common run function ###
+    def run(variation, mu_stop=channel_config.mu_stop[0]):
+        config = make_config(variation, mu_stop)
+        if channel_config.gpr_condor:
+            condor_file.add(config)
+        else:
+            gpr.run(
+                file_manager=channel_config.file_manager,
+                config=config,
+                from_csv_only=channel_config.skip_fits or channel_config.skip_gpr,
+                skip_if_in_csv=channel_config.skip_gpr_if_present,
+            )
+
+    ### Nominal ###
+    run('nominal')
+    if channel_config.nominal_only:
+        summary_actions()
+        return
+
+    ### Diboson signal strength variations ###
+    for mu_diboson in mu_diboson_points:
+        run(f'mu-diboson{mu_diboson}')
+
+    ### ttbar signal strength variations ###
+    for updown in [utils.variation_up_key, utils.variation_down_key]:
+        run(utils.variation_mu_ttbar + updown)
+
+    ### Single top signal strength variations ###
+    run(
+        variation=utils.variation_mu_stop + utils.variation_up_key,
+        mu_stop=channel_config.mu_stop[0] + channel_config.mu_stop[1],
+    )
+    run(
+        variation=utils.variation_mu_stop + utils.variation_down_key,
+        mu_stop=channel_config.mu_stop[0] - channel_config.mu_stop[1],
+    )
+
+    ### Syst variations ###
+    for variation_base in utils.variations_hist:
+        for updown in [utils.variation_up_key, utils.variation_down_key]:
+            run(variation_base + updown)
+
+    ### Outputs ###
+    if channel_config.gpr_condor:
+        condor_file.close()
+        res = subprocess.run(['condor_submit', condor_file.filepath])
+        if res.returncode == 0:
+            plot.success("Launched GPR jobs on condor. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
+        else:
+            plot.error(f"Couldn't launch condor jobs: {res}.")
+    else:
+        summary_actions()
+
+
+def run_direct_fit(config : ChannelConfig, var : utils.Variable):
+    '''
+    Test fit where we fit the detector-level diboson signal strength to each bin directly.
+
+    This will be superceded by the profile likelihood fit, but is a nice check.
+    '''
+    bins = utils.get_bins(config.lepton_channel, var)
+    h_diboson_fit = ROOT.TH1F('h_diboson', 'Diboson', len(bins) - 1, np.array(bins, dtype=float))
+    h_diboson_mc = ROOT.TH1F('h_diboson', 'Diboson', len(bins) - 1, np.array(bins, dtype=float))
+    for i in range(len(bins) - 1):
+        res = diboson_fit.run_fit(
+            config=config,
+            variable=var,
+            bin=(bins[i], bins[i+1]),
+            gpr_mu_corr=config.gpr_sigcontam_corrs[i] if config.gpr_sigcontam_corrs is not None else None,
+        )
+        diboson_yield = res['diboson-yield']
+        h_diboson_fit.SetBinContent(i+1, diboson_yield[0])
+        h_diboson_fit.SetBinError(i+1, diboson_yield[1])
+
+        diboson_yield = res['diboson-yield-mc-statonly']
+        h_diboson_mc.SetBinContent(i+1, diboson_yield[0])
+        h_diboson_mc.SetBinError(i+1, diboson_yield[1])
+    _plot_yield_comparison(
+        h_fit=h_diboson_fit,
+        h_mc=h_diboson_mc,
+        filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.directfit_yields',
+        subtitle=[
+            '#sqrt{s}=13 TeV, 140 fb^{-1}',
+            f'{config.lepton_channel}-lepton channel',
+            'Direct bin-by-bin fit',
+        ],
+        xtitle=f'{var:title}',
+    )
 
 
 def run_channel(config : ChannelConfig):
