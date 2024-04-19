@@ -788,6 +788,9 @@ class GlobalConfig:
     Configuration parameters common to all channels
     '''
     npcheck_dir = 'ResonanceFinder/NPCheck'
+
+    response_matrix_format = '/response_matrix/{sample}_{lep}lep_rf_histograms.root'
+    rebinned_hists_format = '/rebin/{lep}lep_{sample}_rebin.root'
     
 
     def __init__(
@@ -814,8 +817,9 @@ class GlobalConfig:
         self.mu_stop = mu_stop
         self.output_dir = output_dir
 
-        self.response_matrix_filepath = output_dir + '/response_matrix/diboson_{lep}lep_rf_histograms.root'
-        self.rebinned_hists_filepath = output_dir + '/rebin/{lep}lep_{sample}_rebin.root'
+        self.response_matrix_filepath = output_dir + GlobalConfig.response_matrix_format.format(sample='diboson')
+        self.rebinned_hists_filepath = output_dir + GlobalConfig.rebinned_hists_format
+        self.resonance_finder_outdir = f'{output_dir}/rf'
 
         ### Run management ###
         self.nominal_only = nominal_only
@@ -1002,6 +1006,7 @@ def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, stat_valida
             variables={config.lepton_channel: [var]},
             response_matrix_path=config.response_matrix_filepath,
             output_dir=config.output_dir,
+            base_name=f'{config.lepton_channel}lep_{var}',
             hist_file_format=config.rebinned_hists_filepath,
             mu_stop=config.mu_stop,
             mu_ttbar=config.ttbar_fitter.mu_ttbar_nom,
@@ -1012,19 +1017,19 @@ def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, stat_valida
         ws_path = rf_plu.ws_path(
             mode=mode,
             output_dir=config.output_dir, 
-            variables={config.lepton_channel: [var]},
+            base_name=f'{config.lepton_channel}lep_{var}',
             stat_validation_index=stat_validation_index,
         )
     ws_path = os.path.abspath(ws_path)
 
     ### Run fits ###
     if stat_validation_index is None:
-        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}_{mode}.fcc.root'
+        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.{mode}_fcc.root'
     else:
-        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}_{mode}.fcc_var{stat_validation_index:03}.root'
+        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.{mode}_fcc_var{stat_validation_index:03}.root'
     if not config.skip_fits:
         plot.notice(f'{config.log_base} running {mode} fits')
-        with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}_{mode}.fcc.txt', 'w') as f:
+        with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}.{mode}_fcc.txt', 'w') as f:
             res = subprocess.run(
                 ['./runFitCrossCheck.py', ws_path],  # the './' is necessary!
                 cwd=config.npcheck_dir,
@@ -1227,6 +1232,7 @@ def run_diboson_fit_multichannel(config : NewChannelConfig):
             variables=config.variables,
             response_matrix_path=config.gbl.response_matrix_filepath,
             output_dir=config.gbl.output_dir,
+            base_name=config.base_name,
             hist_file_format=config.gbl.rebinned_hists_filepath,
             mu_stop=config.gbl.mu_stop,
             mu_ttbar=config.gbl.ttbar_fitter.mu_ttbar_nom,
@@ -1236,15 +1242,15 @@ def run_diboson_fit_multichannel(config : NewChannelConfig):
         ws_path = rf_plu.ws_path(
             mode='diboson',
             output_dir=config.gbl.output_dir, 
-            variables=config.variables,
+            base_name=config.base_name,
         )
     ws_path = os.path.abspath(ws_path)
 
     ### Run fits ###
-    fcc_path = f'{config.gbl.output_dir}/rf/{config.base_name}_diboson.fcc.root'
+    fcc_path = f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_fcc.root'
     if not config.gbl.skip_fits:
         plot.notice(f'Running multichannel diboson fit')
-        with open(f'{config.gbl.output_dir}/rf/log.{config.base_name}_diboson.fcc.txt', 'w') as f:
+        with open(f'{config.gbl.output_dir}/rf/log.{config.base_name}.diboson_fcc.txt', 'w') as f:
             res = subprocess.run(
                 ['./runFitCrossCheck.py', ws_path],  # the './' is necessary!
                 cwd='ResonanceFinder/NPCheck',

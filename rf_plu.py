@@ -20,13 +20,11 @@ from plotting import plot
 ###                                       CONFIG                                       ###
 ##########################################################################################
 
-def ws_path(output_dir, variables, mode, stat_validation_index=None):
-    lep_name = '-'.join(str(k) for k in variables.keys())
-    var_name = '-'.join(str(x) for v in variables.values() for x in v)
+def ws_path(output_dir, base_name, mode, stat_validation_index=None):
     if stat_validation_index is None:
-        return f'{output_dir}/rf/{lep_name}lep_{var_name}_{mode}.ws.root'
+        return f'{output_dir}/rf/{base_name}.{mode}_ws.root'
     else:
-        return f'{output_dir}/rf/{lep_name}lep_{var_name}_{mode}.ws_var{stat_validation_index:03}.root'
+        return f'{output_dir}/rf/{base_name}.{mode}_ws_var{stat_validation_index:03}.root'
 
 ##########################################################################################
 ###                                        MODES                                       ###
@@ -75,6 +73,7 @@ def run(
         variables : dict[int, list[utils.Variable]],
         response_matrix_path : str,
         output_dir : str,
+        base_name : str,
         hist_file_format : str,
         mu_stop : tuple[float, float],
         mu_ttbar : tuple[float, float],
@@ -97,12 +96,8 @@ def run(
     '''
     from ROOT import RF # type: ignore
 
-    ### Fix args ###
-    lep_name = '-'.join(str(k) for k in variables.keys())
-    var_name = '-'.join(str(x) for v in variables.values() for x in v)
-
     ### Config ###
-    analysis = f'VV{lep_name}lep'
+    analysis = f'VV'
     outputWSTag = 'feb24'
     lumi_uncert = 0.017
     if stat_validation_index is not None:
@@ -194,15 +189,15 @@ def run(
 
     ### Make workspace ###
     if stat_validation_index is None:
-        log_name = f'{output_dir}/rf/log.{lep_name}lep_{var_name}_{mode}.rf.txt'
+        log_name = f'{output_dir}/rf/log.{base_name}.{mode}_rf.txt'
     else:
-        log_name = f'{output_dir}/rf/log.{lep_name}lep_{var_name}_{mode}.rf_var{stat_validation_index:03}.txt'
+        log_name = f'{output_dir}/rf/log.{base_name}.{mode}_rf_var{stat_validation_index:03}.txt'
     with plot.redirect(log_name):
         runner.produceWS()
 
     ### Copy back ###
     rf_output_path = f'{output_dir}/rf/ws/{analysis}_{signal_name}_{outputWSTag}.root'
-    target_path = ws_path(output_dir, variables, mode, stat_validation_index)
+    target_path = ws_path(output_dir, base_name, mode, stat_validation_index)
     shutil.copyfile(rf_output_path, target_path)
     plot.success(f'Created workspace at {target_path}')
     return target_path
