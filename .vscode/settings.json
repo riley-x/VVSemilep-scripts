@@ -6,6 +6,8 @@
         "drawPullPlot.C": "cpp",
         "drawCorrMatrix.C": "cpp",
         "drawNLL.C": "cpp",
-        "makeNLL.C": "cpp"
+        "makeNLL.C": "cpp",
+        "Minimization.C": "cpp",
+        "asimovdatamaking.c": "cpp"
     }
 }

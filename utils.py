@@ -44,6 +44,9 @@ class Variable:
 
     def __repr__(self) -> str:
         return f'Variable({self.name})'
+    
+    def __str__(self):
+        return self.name
 
     def __format__(self, __format_spec: str) -> str:
         if __format_spec:

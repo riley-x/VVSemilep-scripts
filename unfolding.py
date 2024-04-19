@@ -247,8 +247,12 @@ def optimize_binning(
     return bin_edges
 
 
-def output_path(output_dir, sample, lepton_channel):
-    return f'{output_dir}/{sample}_{lepton_channel}lep_rf_histograms.root'
+def output_path(output_dir, sample, lepton_channel=None):
+    out = f'{output_dir}/{sample}_{{lep}}lep_rf_histograms.root'
+    if lepton_channel is not None:
+        return out.format(lep=lepton_channel)
+    else:
+        return out
 
 
 ##############################################################################
