@@ -1007,10 +1007,11 @@ class ChannelConfig:
             # self.variables = [utils.Variable.fatjet_pt]
             self.variables = [utils.Variable.vv_mt]
         elif lepton_channel == 1:
-            # self.variables = [utils.Variable.fatjet_pt]
-            self.variables = [utils.Variable.vv_m]
+            self.variables = [utils.Variable.fatjet_pt]
+            # self.variables = [utils.Variable.vv_m]
         elif lepton_channel == 2:
-            self.variables = [utils.Variable.vv_m]
+            self.variables = [utils.Variable.fatjet_pt]
+            # self.variables = [utils.Variable.vv_m]
 
         ### Set in run_channel ###
         self.response_matrix_filepath = None

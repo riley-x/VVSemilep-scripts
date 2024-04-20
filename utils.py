@@ -196,9 +196,12 @@ def get_bins(lepton_channel : int, var: Variable):
         if lepton_channel == 0:
             # optimized binning with threshold_diag=0.8, threshold_err=0.2, min_reco_count=10
             return [300, 360, 460, 580, 730, 3000]
-        elif lepton_channel == 1 or True:
-            # optimized binning with threshold_diag=0.8, threshold_err=0.4, monotonic_bin_sizes=True
-            return [300, 360, 460, 580, 730, 940, 1200, 1460, 3000]
+        elif lepton_channel == 1:
+            # optimized binning with threshold_diag=0.8, threshold_err=0.2, min_reco_count=10
+            return [300, 360, 460, 580, 730, 3000]
+        elif lepton_channel == 2:
+            # optimized binning with threshold_diag=0.8, threshold_err=0.2, min_reco_count=10
+            return [300, 350, 450, 570, 3000]
 
     raise NotImplementedError(f"utils.py::get_bins({lepton_channel}, {var.name})")
 
