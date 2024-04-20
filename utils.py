@@ -66,7 +66,6 @@ class Variable:
 
 Variable.vv_m = Variable(name="vv_m", title="m(VV)", unit="GeV", rebin=100, logy=True)
 Variable.vv_mt = Variable(name="vv_mt", title="m_{T}(VV)", unit="GeV", rebin=100, logy=True)
-Variable.vhad_pt = Variable(name="vhad_pt", title="p_{T}(J)", unit="GeV", rebin=100, logy=True)
 
 Variable.llJ_m = Variable(name="llJ_m", title="m(llJ)", unit="GeV", rebin=100, logy=True)
 Variable.lvJ_m = Variable(name="lvJ_m", title="m(l#nuJ)", unit="GeV", rebin=100, logy=True)
@@ -76,6 +75,7 @@ Variable.llJ_mt = Variable(name="llJ_mT", title="m_{T}(llJ)", unit="GeV", rebin=
 Variable.lvJ_mt = Variable(name="lvJ_mT", title="m_{T}(l#nuJ)", unit="GeV", rebin=100, logy=True)
 Variable.vvJ_mt = Variable(name="vvJ_mT", title="m_{T}(#nu#nuJ)", unit="GeV", rebin=100, logy=True)
 
+Variable.fatjet_pt = Variable(name="fatjet_pt", title="p_{T}(J)", unit="GeV", rebin=100, logy=True)
 Variable.fatjet_m = Variable(name="fatjet_m", title="m(J)", unit="GeV", rebin=2, logy=True)
 
 
@@ -192,7 +192,7 @@ def get_bins(lepton_channel : int, var: Variable):
         if lepton_channel == 0:
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
             return [600, 690, 810, 940, 1090, 1260, 1430, 1630, 1850, 3000]
-    elif var.name == "vhad_pt":
+    elif var.name == "fatjet_pt" or var.name == "vhad_pt":
         if lepton_channel == 1:
             # optimized binning with threshold_diag=0.8, threshold_err=0.4, monotonic_bin_sizes=True
             return [300, 360, 460, 580, 730, 940, 1200, 1460, 3000]

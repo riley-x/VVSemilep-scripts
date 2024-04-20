@@ -782,7 +782,6 @@ def plot_correlations(roofit_results, filename : str, subtitle : list[str] = [])
 ###                                       CONFIG                                       ###
 ##########################################################################################
 
-# TODO use the new classes.
 class GlobalConfig:
     '''
     Configuration parameters common to all channels
@@ -817,7 +816,7 @@ class GlobalConfig:
         self.mu_stop = mu_stop
         self.output_dir = output_dir
 
-        self.response_matrix_filepath = output_dir + GlobalConfig.response_matrix_format.format(sample='diboson')
+        self.response_matrix_filepath = output_dir + GlobalConfig.response_matrix_format.format(sample='diboson', lep='{lep}')
         self.rebinned_hists_filepath = output_dir + GlobalConfig.rebinned_hists_format
         self.resonance_finder_outdir = f'{output_dir}/rf'
 
@@ -900,6 +899,7 @@ class NewChannelConfig:
         return out
 
 
+# TODO use the new classes.
 class ChannelConfig:
 
     def __init__(
@@ -939,7 +939,8 @@ class ChannelConfig:
         if lepton_channel == 0:
             self.variables = [utils.Variable.vv_mt]
         elif lepton_channel == 1:
-            self.variables = [utils.Variable.vv_m]
+            self.variables = [utils.Variable.fatjet_pt]
+            # self.variables = [utils.Variable.vv_m]
         elif lepton_channel == 2:
             self.variables = [utils.Variable.vv_m]
 
@@ -1285,11 +1286,11 @@ def run_diboson_fit_multichannel(config : NewChannelConfig):
     )
 
     ### NLL ###
-    if True or not skip_fits:
+    if not config.gbl.skip_fits:
         plot.notice(f'Running multichannel diboson-xsec NLL')
         run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=False)
         run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=True)
-        
+
 
 def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asimov=False):
     log_name = f'{output_dir}/rf/log.{base_name}_nll' + ('-asimov' if asimov else '') + '.txt'

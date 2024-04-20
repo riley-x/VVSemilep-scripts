@@ -419,7 +419,7 @@ def calculate_signal_strength_weights(
 
         ratio = n * weight / s
         n_integral += ratio
-        n_integral_err += ratio**2 * (ne**2 / n**2 + se**2 / s**2)
+        n_integral_err += ratio**2 * (ne**2 / n**2 + se**2 / s**2) if n > 0 else 0
 
     weights = np.array(weights) / weight_sum
     return weights, (n_integral / weight_sum, n_integral_err**0.5 / weight_sum), h_sr

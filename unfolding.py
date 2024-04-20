@@ -370,10 +370,15 @@ def main(
     ### Run ###
     for var in vars:
         ### Get base histogram ###
+        if var.name == 'fatjet_pt':
+            var_name = 'vhad_pt'
+        else:
+            var_name = f'{var}'
+            
         mtx = file_manager.get_hist(
             lep=lepton_channel, 
             sample=sample.name, 
-            hist_name_format='{sample}_VV{lep}_Merg_unfoldingMtx_' + f'{var}'
+            hist_name_format='{sample}_VV{lep}_Merg_unfoldingMtx_' + var_name
         )
 
         ### Rebin ###
