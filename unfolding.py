@@ -361,7 +361,6 @@ def main(
         f'{lepton_channel}-lepton channel, {sample}',
     ]
     output_plots = output_plots or output
-    output_plot_basepath = f'{output_plots}/{sample}_{lepton_channel}lep'
 
     ### Files ###    
     rf_output_path = output_path(output, sample, lepton_channel)
@@ -384,19 +383,20 @@ def main(
         mtx = plot.rebin2d(mtx, bins, bins)
     
         ### Plot ###
+        output_plot_basepath = f'{output_plots}/{lepton_channel}lep_{var}.{sample}'
         plot_migration_matrix(mtx, var,
-            filename=f'{output_plot_basepath}_{var}_migration_matrix',
+            filename=f'{output_plot_basepath}_migration_matrix',
             subtitle=[
                 *common_subtitle,
                 '% migration from each fiducial bin'
             ],
         )
         plot_eff_acc(mtx, var,
-            filename=f'{output_plot_basepath}_{var}_eff_acc',
+            filename=f'{output_plot_basepath}_eff_acc',
             subtitle=common_subtitle,
         )
         plot_fid_reco(mtx, var,
-            filename=f'{output_plot_basepath}_{var}_fid_reco',
+            filename=f'{output_plot_basepath}_fid_reco',
             subtitle=common_subtitle,
         )
 

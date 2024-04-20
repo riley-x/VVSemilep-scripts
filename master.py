@@ -311,11 +311,15 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
     ### MC ###
     # Buggy response matrix in eos_v3 files, so point to local files in interim
     # Note fixed in https://gitlab.cern.ch/CxAODFramework/CxAODReader_VVSemileptonic/-/merge_requests/445
-    temp_file_manager = utils.FileManager(
-        samples=[utils.Sample.diboson, utils.Sample.cw_lin, utils.Sample.cw_quad],
-        file_path_formats=['../../{lep}/{lep}_{sample}_x_Feb24-ANN.hists.root'],
-        lepton_channels=[0, 1, 2],
-    )
+    if 'v3' in config.file_manager.file_path_formats[0]:
+        plot.warning('master.py::plot_plu_yields() Not using v3 histograms with buggy response matrix. Using hardcoded local path!')
+        temp_file_manager = utils.FileManager(
+            samples=[utils.Sample.diboson, utils.Sample.cw_lin, utils.Sample.cw_quad],
+            file_path_formats=['../../{lep}/{lep}_{sample}_x_Feb24-ANN.hists.root'],
+            lepton_channels=[0, 1, 2],
+        )
+    else:
+        temp_file_manager = config.file_manager
     def get(sample):
         # h = config.file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + variable.name)
         h = temp_file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + variable.name)
@@ -1200,7 +1204,7 @@ def run_diboson_fit(config: ChannelConfig, var : utils.Variable):
     plot_pulls(
         fit_results=dict_results, 
         filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_pulls',
-        subtitle=f'{config.lepton_channel}-lepton channel {var.title} pulls',
+        subtitle=[f'{config.lepton_channel}-lepton channel {var.title} pulls'],
     )
 
     ### Draw correlation matrix ###
