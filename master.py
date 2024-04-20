@@ -924,7 +924,7 @@ class NewChannelConfig:
             self.variables = variables
             self.variable_tag = '-'.join(str(x) for k,v in variables.items() for x in v)
         else:
-            self.variables = NewChannelConfig._parse_variable_tag(variable_tag)
+            self.variables = NewChannelConfig._parse_variable_tag(variable_tag, lepton_channels)
             self.variable_tag = variable_tag
         self.base_name = f'{self.lepton_tag}lep_{self.variable_tag}'
 
@@ -933,15 +933,16 @@ class NewChannelConfig:
         self.gpr_sigcontam_corrs : list[float] = None
 
 
-    def _parse_variable_tag(tag) -> dict[int, list[utils.Variable]]:
+    def _parse_variable_tag(tag, lepton_channels) -> dict[int, list[utils.Variable]]:
         if tag == 'vv_m-mT':
-            return {
+            out = {
                 0: [utils.Variable.vv_mt],
                 1: [utils.Variable.vv_m],
                 2: [utils.Variable.vv_m],
             }
         else:
             raise NotImplementedError(f'ChannelConfig unknown tag {tag}')
+        return { k:v for k,v in out.items() if k in lepton_channels }
     
 
     def get_variables(self, lepton_channel : int) -> list[utils.Variable]:
@@ -1003,11 +1004,11 @@ class ChannelConfig:
         self.npcheck_dir = 'ResonanceFinder/NPCheck'
         self.log_base = f'master.py::run_channel({lepton_channel}lep)'
         if lepton_channel == 0:
-            self.variables = [utils.Variable.fatjet_pt]
-            # self.variables = [utils.Variable.vv_mt]
+            # self.variables = [utils.Variable.fatjet_pt]
+            self.variables = [utils.Variable.vv_mt]
         elif lepton_channel == 1:
-            self.variables = [utils.Variable.fatjet_pt]
-            # self.variables = [utils.Variable.vv_m]
+            # self.variables = [utils.Variable.fatjet_pt]
+            self.variables = [utils.Variable.vv_m]
         elif lepton_channel == 2:
             self.variables = [utils.Variable.vv_m]
 

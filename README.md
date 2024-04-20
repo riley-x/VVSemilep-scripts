@@ -45,13 +45,15 @@ master.py /path/to/hists/hist_{sample}_{lep}-0.root \
     [--asimov] 
 ```
 
-This script takes care of the following tasks, which can all be called individually too (see below).
+This script takes care of the following tasks, many of which can be called individually too (see below).
 
 1. Fitting the ttbar signal strength to 1lep TCR.
 2. Fitting the GPR to the event-subtracted MCR.
 3. Repeating the above for every systematic variation.
 4. Creating response matrices.
 5. Performing the profile likelihood unfolding fit.
+6. Performing the diboson cross section fit.
+7. Lots and lots of plots.
 
 The main input is a formatter path to the histogram files. These are assumed to follow a systematic naming scheme. Use python-esque formatters `{sample}` and `{lep}` to encode variable fields that will be replaced by the sample name and the lepton channel name. These are all hardcoded in [utils.py](utils.py). The `Sample` class is defined with the filestubs that will be tried for each sample, and the lepton stubs are taken from `FileManager.lepton_channel_names`. Note that `FileManager` implements the file and histogram fetcher and is used throughout. Be careful to not duplicate files; the script will greedily try every possible combination of names and will add them together if multiple are found (good for when you have separate files that need to be added anyways, like different campaigns. But bad if you're not expecting it). Multiple formatters can be passed to `master.py`, but again be careful about accidentally duplicating files.
 
