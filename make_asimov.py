@@ -62,6 +62,12 @@ def main():
     file_manager = get_files(args.filepaths)
 
     for lepton_channel in [0, 1, 2]:
+        channel_files = file_manager.files[(lepton_channel, utils.Sample.diboson.name)]
+        if len(channel_files) == 0:
+            print(f'No diboson file found for channel {lepton_channel}, skipping')
+            continue
+        elif len(channel_files) > 1:
+            print(f'Multiple files found for channel {lepton_channel}, using first as template')
         f_template = file_manager.files[(lepton_channel, utils.Sample.diboson.name)][0]
         f_out = ROOT.TFile(args.output.format(lep=lepton_channel), 'RECREATE')
         for key in f_template.GetListOfKeys():

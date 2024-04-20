@@ -39,9 +39,9 @@ parameters in [optimize_binning].
 RUN
 ------------------------------------------------------------------------------------------
 
-    unfolding.py path/to/reader/hists/diboson.root diboson 1
+    unfolding.py path/to/hists/{lep}_{sample}-0.root diboson 1
 
-Optionally specify
+Where the filepath includes formatters. See [utils.FileManager]. Optionally specify
 
     --optimize 500,3000
 
@@ -328,7 +328,8 @@ def plot_fid_reco(mtx, var, **kwargs):
 ##########################################################################################
 
 _default_vars = [
-    utils.Variable.vv_m,
+    utils.Variable.fatjet_pt,
+    # utils.Variable.vv_m,
     # utils.Variable.vv_mt,
 ]
 
@@ -352,8 +353,7 @@ def main(
         to a single variable.
     '''
     ### Output dir ###
-    if not os.path.exists(output):
-        os.makedirs(output)
+    os.makedirs(output, exist_ok=True)
 
     ### Config ###
     common_subtitle = [
@@ -370,15 +370,10 @@ def main(
     ### Run ###
     for var in vars:
         ### Get base histogram ###
-        if var.name == 'fatjet_pt':
-            var_name = 'vhad_pt'
-        else:
-            var_name = f'{var}'
-            
         mtx = file_manager.get_hist(
             lep=lepton_channel, 
             sample=sample.name, 
-            hist_name_format='{sample}_VV{lep}_Merg_unfoldingMtx_' + var_name
+            hist_name_format='{sample}_VV{lep}_Merg_unfoldingMtx_' + f'{var}'
         )
 
         ### Rebin ###

@@ -193,7 +193,10 @@ def get_bins(lepton_channel : int, var: Variable):
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
             return [600, 690, 810, 940, 1090, 1260, 1430, 1630, 1850, 3000]
     elif var.name == "fatjet_pt" or var.name == "vhad_pt":
-        if lepton_channel == 1:
+        if lepton_channel == 0:
+            # optimized binning with threshold_diag=0.8, threshold_err=0.2, min_reco_count=10
+            return [300, 360, 460, 580, 730, 3000]
+        elif lepton_channel == 1 or True:
             # optimized binning with threshold_diag=0.8, threshold_err=0.4, monotonic_bin_sizes=True
             return [300, 360, 460, 580, 730, 940, 1200, 1460, 3000]
 
@@ -474,7 +477,6 @@ class FileManager:
     def _get_sample_files(self, lep : int, sample : Sample, file_path_formats: list[str]) -> list[ROOT.TFile]:
         files = []
 
-        ROOT.gSystem.RedirectOutput("/dev/null") # mute TFile error messages
         for path in file_path_formats:
             if '{lep}' not in path or '{sample}' not in path:
                 raise NotImplementedError('FileManager._get_sample_files() assumes {lep} and {sample} keys in formatters')
@@ -485,11 +487,12 @@ class FileManager:
                         # else the file will be duplicated
                         continue 
                     formatted_path = path.format(lep=lep_name, sample=stub)
+                    ROOT.gSystem.RedirectOutput("/dev/null") # mute TFile error messages
                     try:
                         files.append(ROOT.TFile(formatted_path))
                     except OSError as e:
                         pass
-        ROOT.gSystem.RedirectOutput(_null_char_p, _null_char_p)
+                    ROOT.gSystem.RedirectOutput(_null_char_p, _null_char_p)
 
         if not files:
             plot.warning(f'FileManager() unable to find files for {sample} in the {lep}-lep channel.')

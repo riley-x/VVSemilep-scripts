@@ -937,7 +937,8 @@ class ChannelConfig:
         self.npcheck_dir = 'ResonanceFinder/NPCheck'
         self.log_base = f'master.py::run_channel({lepton_channel}lep)'
         if lepton_channel == 0:
-            self.variables = [utils.Variable.vv_mt]
+            self.variables = [utils.Variable.fatjet_pt]
+            # self.variables = [utils.Variable.vv_mt]
         elif lepton_channel == 1:
             self.variables = [utils.Variable.fatjet_pt]
             # self.variables = [utils.Variable.vv_m]
@@ -1631,7 +1632,7 @@ def parse_args():
     parser.add_argument('--skip-fits', action='store_true', help="Don't do the GPR or PLU fits. For the former, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-direct-fit', action='store_true', help="Don't do the direct diboson yield fit.")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
-    parser.add_argument('--skip-gpr-if-present', action='store_true', help="Will run the GPR fits but skip the ones that are present in the CSV already.")
+    parser.add_argument('--rerun-gpr', action='store_true', help="By default, will skip GPR fits that are present in the CSV already. This flag will force a rerun of all bins.")
     parser.add_argument('--skip-channels', action='store_true', help="Skips all per-channel processing, and jumps to the multichannel fits.")
     parser.add_argument('--nominal', action='store_true', help="Run without any correlations to other signal strengths or systematic variations.")
     parser.add_argument('--no-systs', action='store_true', help="Run without using the systematic variations, but still does the ttbar/diboson mu adjustments.")
@@ -1684,7 +1685,7 @@ def main():
     ### ttbar fitter ###
     ttbar_fitter = ttbar_fit.TtbarSysFitter(file_manager, mu_stop_0=mu_stop)
 
-    ### Loop over all channels ###
+    ### Single-channel processing ###
     if not args.skip_channels:
         for lepton_channel in channels:
             config = ChannelConfig(
@@ -1698,7 +1699,7 @@ def main():
                 skip_fits=args.skip_fits,
                 skip_direct_fit=args.skip_direct_fit,
                 skip_gpr=args.skip_gpr,
-                skip_gpr_if_present=args.skip_gpr_if_present,
+                skip_gpr_if_present=not args.rerun_gpr,
                 gpr_condor=args.condor,
                 is_asimov=args.asimov,
                 run_plu_val=args.run_plu_val,
@@ -1719,7 +1720,7 @@ def main():
             skip_fits=args.skip_fits,
             skip_direct_fit=args.skip_direct_fit,
             skip_gpr=args.skip_gpr,
-            skip_gpr_if_present=args.skip_gpr_if_present,
+            skip_gpr_if_present=not args.rerun_gpr,
             gpr_condor=args.condor,
             is_asimov=args.asimov,
             run_plu_val=args.run_plu_val,
