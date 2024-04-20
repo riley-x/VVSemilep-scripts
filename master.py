@@ -781,6 +781,68 @@ def plot_correlations(roofit_results, filename : str, subtitle : list[str] = [])
     )
 
 
+def plot_nll(nll_file_path, filename : str, subtitle : list[str] = []):
+    ### Get values ###
+    nll_file = ROOT.TFile(nll_file_path)
+    nll_tree = nll_file.Get('nll')
+    xs = []
+    ys = []
+    for entry in nll_tree:
+        xs.append(getattr(entry, 'mu-diboson'))
+        ys.append(entry.NLL)
+
+    ### Make graph ###
+    ys = np.array(ys, dtype=float)
+    ys -= np.min(ys)
+    g = ROOT.TGraph(len(xs), np.array(xs, dtype=float), ys)
+
+    ### Find 1/2 sigma ranges ###
+    x_min = np.min(xs)
+    x_max = np.max(xs)
+    interval_1s = [x_max, x_min]
+    interval_2s = [x_max, x_min]
+    for i in range(1000):
+        x = x_min + (x_max - x_min) / 1000 * i
+        if g.Eval(x, 0, 'S') < 0.5:
+            interval_1s = [min(interval_1s[0], x), max(interval_1s[1], x)]
+        if g.Eval(x, 0, 'S') < 2:
+            interval_2s = [min(interval_2s[0], x), max(interval_2s[1], x)]
+
+    ### Plot ###
+    mu = (interval_1s[1] + interval_1s[0]) / 2
+    err = (interval_1s[1] - interval_1s[0]) / 2
+    plot.notice(f'master.py::plot_nll({nll_file_path}) mu={mu:.3f} +- {err:.3f}')
+
+    c = ROOT.TCanvas('c1', 'c1', 1000, 800)
+    plotter = plot._plot(
+        c=c,
+        objs=[g],
+        opts='CP',
+        subtitle=[
+            '#sqrt{s}=13 TeV, 140 fb^{-1}',
+            *subtitle,
+            f'#mu = {mu:.3f} #pm {err:.3f}',
+        ],
+        ytitle='Negative Log Likelihood',
+        xtitle='#mu(diboson)',
+    )
+
+    ### Sigma lines ###
+    plotter.draw_hline(0.5, style=ROOT.kDashed, width=1)
+    plotter.draw_hline(2, style=ROOT.kDashed, width=1)
+    for x in interval_1s:
+        l = ROOT.TLine(x, 0, x, 0.5)
+        l.SetLineStyle(ROOT.kDashed)
+        l.Draw()
+        plotter.cache.append(l)
+    for x in interval_2s:
+        l = ROOT.TLine(x, 0, x, 2)
+        l.SetLineStyle(ROOT.kDashed)
+        l.Draw()
+        plotter.cache.append(l)
+
+    plot.save_canvas(c, filename)
+
 
 ##########################################################################################
 ###                                       CONFIG                                       ###
@@ -1211,13 +1273,18 @@ def run_diboson_fit(config: ChannelConfig, var : utils.Variable):
     plot_correlations(
         roofit_results=roofit_results, 
         filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_corr',
-        subtitle=[f'{config.lepton_channel}-lepton channel {var} fit'],
+        subtitle=[f'{config.lepton_channel}-lepton channel {var.title} fit'],
     )
 
     ### Run NLL ###
     if not config.skip_fits:
         plot.notice(f'{config.log_base} running diboson-xsec NLL')
         run_nll(config.output_dir, f'{config.lepton_channel}lep_{var}.diboson', ws_path)
+    plot_nll(
+        f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.diboson_nll.root',
+        f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_nll',
+        subtitle=[f'{config.lepton_channel}-lepton channel {var.title} fit'],
+    )
 
 
 def run_diboson_fit_multichannel(config : NewChannelConfig):
@@ -1295,6 +1362,14 @@ def run_diboson_fit_multichannel(config : NewChannelConfig):
         plot.notice(f'Running multichannel diboson-xsec NLL')
         run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=False)
         run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=True)
+    plot_nll(
+        f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_nll.root',
+        f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll',
+    )
+    plot_nll(
+        f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_nll-asimov.root',
+        f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll-asimov',
+    )
 
 
 def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asimov=False):
@@ -1302,16 +1377,20 @@ def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asi
     with open(log_name, 'w') as f:
         # For some reason passing the fccs file breaks this
         res = subprocess.run(
-            ['./runNLL.py', ws_path, '--granularity', str(granularity), '--doAsimov' if asimov else '--no-doAsimov'],  # the './' is necessary!
+            ['./runNLL.py', ws_path, '--granularity', str(granularity), '--doAsimov' if asimov else '--no-doAsimov', '--no-doPlot'],  # the './' is necessary!
             cwd='ResonanceFinder/NPCheck',
             stdout=f,
             stderr=f,
         )
     res.check_returncode()
     shutil.copyfile(
-        'ResonanceFinder/NPCheck/Plots/NLL/summary.pdf', 
-        f'{output_dir}/plots/{base_name}_nll' + ('-asimov' if asimov else '') + '.pdf',
+        'ResonanceFinder/NPCheck/nllscan/nll.root', 
+        f'{output_dir}/rf/{base_name}_nll' + ('-asimov' if asimov else '') + '.root',
     )
+    # shutil.copyfile(
+    #     'ResonanceFinder/NPCheck/Plots/NLL/summary.pdf', 
+    #     f'{output_dir}/plots/{base_name}_nll' + ('-asimov' if asimov else '') + '.pdf',
+    # )
 
 
 
