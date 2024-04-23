@@ -245,6 +245,87 @@ def plot_gpr_ttbar_and_stop_correlations(config : gpr.FitConfig, filename : str)
     )
 
 
+def plot_gpr_mc_comparisons(config: ChannelConfig, filename : str):
+    ### Systematic adder ###
+    def add_errs(err_cum, get_errs):
+        '''
+        Adds errors from [get_errs] to [err_cum] in quadrature.
+
+        @param get_errs
+            A function that takes a variation name and returns a set of (absolute) errors.
+        '''
+        err_cum = err_cum ** 2
+        for vari in utils.variations_hist:
+            diffs_up = get_errs(vari + utils.variation_up_key)
+            diffs_down = get_errs(vari + utils.variation_down_key)
+            errs = (diffs_up + diffs_down) / 2
+            err_cum += errs ** 2
+        return np.sqrt(err_cum)
+
+    ### Get GPR nominal ###
+    gpr_config = config.gpr_nominal_config
+    csv_base_spec = {
+        'lep': config.lepton_channel,
+        'fitter': f'{gpr_config.gpr_version}_marg_post',
+        'vary': gpr_config.var.name,
+        'bins': gpr_config.bins_y,
+    }
+    g_gpr_nom = config.gpr_results.get_graph(**csv_base_spec, variation=utils.variation_nom, unscale_width=True)
+
+    ### Get GPR with systematics ###
+    def get_diffs(vari):
+        g = config.gpr_results.get_graph(**csv_base_spec, variation=vari, unscale_width=True)
+        return np.array([abs(g.GetPointY(i) - g_gpr_nom.GetPointY(i)) for i in range(g.GetN())])
+
+    err_cum = np.array([g_gpr_nom.GetErrorY(i) for i in range(g_gpr_nom.GetN())])
+    err_cum = add_errs(err_cum, get_diffs)
+
+    g_gpr_systs = g_gpr_nom.Clone()
+    for i in range(g_gpr_systs.GetN()):
+        g_gpr_systs.SetPointEYhigh(i, err_cum[i])
+        g_gpr_systs.SetPointEYlow(i, err_cum[i])
+
+    ### Get MC nominal ###
+    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(gpr_config.var, config.lepton_channel).name
+    def get_hist(variation):
+        h_wjets = config.file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name, variation=variation)
+        h_zjets = config.file_manager.get_hist(config.lepton_channel, utils.Sample.zjets, hist_name, variation=variation)
+        h_vjets = h_wjets.Clone()
+        h_vjets.Add(h_zjets)
+        return plot.rebin(h_vjets, gpr_config.bins_y)
+    
+    h_mc_nom = get_hist(utils.variation_nom)
+    
+    ### Get MC with systematics ###
+    def get_diffs(vari):
+        h_var = get_hist(vari)
+        return np.array([abs(h_var[i] - h_mc_nom[i]) for i in range(1, h_var.GetNbinsX() + 1)])
+
+    err_cum = np.array([h_mc_nom.GetBinError(i) for i in range(1, h_mc_nom.GetNbinsX() + 1)])
+    err_cum = add_errs(err_cum, get_diffs)
+
+    h_mc_systs = h_mc_nom.Clone()
+    for i in range(1, h_mc_systs.GetNbinsX() + 1):
+        h_mc_systs.SetBinError(i, err_cum[i - 1])
+
+    ### Plot ###
+    gpr.plot_summary_distribution(
+        hists=[h_mc_nom, h_mc_systs, g_gpr_nom, g_gpr_systs],
+        filename=filename,
+        subtitle=[
+            '#sqrt{s}=13 TeV, 140 fb^{-1}',
+            f'{config.lepton_channel}-lepton channel SR',
+        ],
+        legend=['MC Stat. Only', 'MC Syst.', 'GPR Nominal', 'GPR + Syst. Corr.'],
+        ytitle='Events',
+        ytitle2='#frac{GPR}{MC}',
+        xtitle=f'{gpr_config.var:title}',
+        edge_labels=[str(x) for x in gpr_config.bins_y],
+        ydivs2=503,
+        ratio_denom=lambda i: 0 if i >= 2 else None,
+    )
+    
+
 def _plot_yield_comparison(filename, h_fit, h_mc, h_eft=None, eft_legend=None, **plot_opts):
     '''
     Plots a 1D comparison between a fit and MC. The fit is shown as data points while the
@@ -1007,16 +1088,17 @@ class ChannelConfig:
             # self.variables = [utils.Variable.fatjet_pt]
             self.variables = [utils.Variable.vv_mt]
         elif lepton_channel == 1:
-            self.variables = [utils.Variable.fatjet_pt]
-            # self.variables = [utils.Variable.vv_m]
+            # self.variables = [utils.Variable.fatjet_pt]
+            self.variables = [utils.Variable.vv_m]
         elif lepton_channel == 2:
-            self.variables = [utils.Variable.fatjet_pt]
-            # self.variables = [utils.Variable.vv_m]
+            # self.variables = [utils.Variable.fatjet_pt]
+            self.variables = [utils.Variable.vv_m]
 
         ### Set in run_channel ###
         self.response_matrix_filepath = None
 
         ### Set by run_gpr ###
+        self.gpr_nominal_config : gpr.FitConfig = None
         self.gpr_results : gpr.FitResults = None
         self.gpr_sigcontam_corrs : list[float] = None
 
@@ -1534,6 +1616,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
     ### Summary plots ###
     def summary_actions():
         fit_config = make_config(utils.variation_nom, channel_config.mu_stop)
+        channel_config.gpr_nominal_config = fit_config
         channel_config.gpr_results = fit_config.fit_results
         if not channel_config.nominal_only:
             channel_config.gpr_sigcontam_corrs = plot_gpr_mu_diboson_correlations(
@@ -1542,6 +1625,7 @@ def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
                 filename=f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_diboson_mu_scan',
             )
             plot_gpr_ttbar_and_stop_correlations(fit_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_ttbar_stop_mu_scan')
+            plot_gpr_mc_comparisons(channel_config, f'{channel_config.output_dir}/plots/{fit_config.lepton_channel}lep_{fit_config.var}.gpr_mc_comparison')
 
             ### Get diboson (1 - mu) histograms ###
             make_gpr_floating_correlation_hists(fit_config, channel_config, var)

@@ -925,7 +925,7 @@ def _fractional_uncertainties(hists, opts, postfix='3', percents=False):
             for i in range(h.GetN()):
                 v = h.GetPointY(i)
                 if v > 0:
-                    h.SetPointY(i, mult * max(h.GetErrorYhigh(i), h.GetErrorYlow(i)) / v)
+                    h.SetPointY(i, mult * h.GetErrorY(i) / v)
                 else:
                     h.SetPointY(i, 0)
                 h.SetPointEYlow(i, 0)
@@ -985,7 +985,7 @@ def plot_summary_distribution(hists,
         _hists = []
         for i,h in enumerate(hists):
             i_denom = ratio_denom(i)
-            if i == i_denom: continue
+            if i == i_denom or i_denom is None: continue
             h_denom = hists[i_denom]
 
             r = h.Clone()
