@@ -149,8 +149,8 @@ class Sample:
         raise RuntimeError(f"Sample.parse() couldn't parse {name}")
 
 
-Sample.wjets = Sample('wjets', 'W+jets', ['Wjets_Sherpa2211'], ['WLL', 'WHL', 'WHH'])
-Sample.zjets = Sample('zjets', 'Z+jets', ['Zjets_Sherpa2211'], ['ZLL', 'ZHL', 'ZHH'])
+Sample.wjets = Sample('wjets', 'W+jets', ['Wjets_Sherpa2211'], ['WLL', 'WHL', 'WHH', 'Wjets'])
+Sample.zjets = Sample('zjets', 'Z+jets', ['Zjets_Sherpa2211'], ['ZLL', 'ZHL', 'ZHH', 'Zjets'])
 Sample.ttbar = Sample('ttbar', 't#bar{t}', ['ttbar'], ['ttbar'])
 Sample.stop = Sample('stop', 'single top', ['stop'], ['stop'])
 Sample.diboson = Sample('diboson', 'diboson', ['diboson_Sherpa2211', 'Diboson_Sh2211'], ['SMVV'])
@@ -481,15 +481,15 @@ class FileManager:
         files = []
 
         for path in file_path_formats:
-            if '{lep}' not in path or '{sample}' not in path:
-                raise NotImplementedError('FileManager._get_sample_files() assumes {lep} and {sample} keys in formatters')
-            for stub in sample.file_stubs:
-                for lep_name in self.lepton_channel_names[lep]:
-                    if self._filesystem_case_insensitive and lep_name.endswith('Lep'): 
+            sample_keys = sample.file_stubs if '{sample}' in path else [None]
+            lep_keys = self.lepton_channel_names[lep] if '{lep}' in path else [None]
+            for sample_stub in sample_keys:
+                for lep_stub in lep_keys:
+                    if self._filesystem_case_insensitive and lep_stub.endswith('Lep'): 
                         # DON'T try both 1lep and 1Lep in case-insensitive file systems or
                         # else the file will be duplicated
                         continue 
-                    formatted_path = path.format(lep=lep_name, sample=stub)
+                    formatted_path = path.format(lep=lep_stub, sample=sample_stub)
                     ROOT.gSystem.RedirectOutput("/dev/null") # mute TFile error messages
                     try:
                         files.append(ROOT.TFile(formatted_path))

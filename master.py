@@ -296,6 +296,52 @@ def plot_gpr_mc_comparisons(config: ChannelConfig, filename : str):
     
     h_mc_nom = get_hist(utils.variation_nom)
     
+    ### Yi's MadGraph comparison ###
+    try:
+        # So Yi's histograms seem to be ratio plots from nominal, with values around 1.0. So first scale back by the Sherpa.
+        # But the binnings are pretty different...so need to somehow rebin.
+        temp_file_manager = utils.FileManager(
+            samples=[utils.Sample.wjets, utils.Sample.zjets],
+            file_path_formats=['hists/vjets_theory_uncert_smooth.root'],
+            lepton_channels=[config.lepton_channel],
+        )
+        h_wjets_mg = temp_file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name.format(sample='Wjets', lep='{lep}'))
+        h_zjets_mg = temp_file_manager.get_hist(config.lepton_channel, utils.Sample.zjets, hist_name.format(sample='Zjets', lep='{lep}'))
+        
+        ### Scale by Sherpa ###
+        h_wjets_sherpa = config.file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name)
+        h_zjets_sherpa = config.file_manager.get_hist(config.lepton_channel, utils.Sample.zjets, hist_name)
+        
+        bins_old = np.array([h_wjets_mg.GetBinLowEdge(i) for i in range(1, len(h_wjets_mg))])
+        h_wjets_sherpa = plot.rebin(h_wjets_sherpa, bins_old)
+        h_zjets_sherpa = plot.rebin(h_zjets_sherpa, bins_old)
+
+        h_mg_old = h_wjets_mg.Clone()
+        for i in range(1, h_mg_old.GetNbinsX() + 1):
+            h_mg_old[i] = h_wjets_mg[i] * h_wjets_sherpa[i] + h_zjets_mg[i] * h_zjets_sherpa[i]
+
+        ### Rebin ###
+        bins_new = np.array(gpr_config.bins_y, dtype=float)
+        i_new = 0
+        i_old = 0
+        h_mg_new = ROOT.TH1F('h_mg_new', '', len(bins_new) - 1, bins_new)
+        for i_new in range(len(bins_new) - 1):
+            for i_old in range(len(bins_old) - 1):
+                overlap_range = (max(bins_old[i_old], bins_new[i_new]), min(bins_old[i_old + 1], bins_new[i_new + 1]))
+                if overlap_range[1] > overlap_range[0]: 
+                    frac = (overlap_range[1] - overlap_range[0]) / (bins_old[i_old + 1] - bins_old[i_old])
+                    h_mg_new[i_new + 1] += h_mg_old[i_old + 1] * frac
+
+        ### Final diff with nominal sherpa ###
+        print([h_mg_new[i] for i in range(1, h_mg_new.GetNbinsX() + 1)])
+        print([h_mc_nom[i] for i in range(1, h_mg_new.GetNbinsX() + 1)])
+        err_mg = np.array([abs(h_mg_new[i] - h_mc_nom[i]) for i in range(1, h_mg_new.GetNbinsX() + 1)])
+        
+    except Exception as e:
+        plot.warning('master.py::plot_gpr_mc_comparisons() Failed to find theory uncertainty for V+jets at hists/vjets_theory_uncert_smooth.root.')
+        plot.warning(str(e))
+        err_mg = None
+
     ### Get MC with systematics ###
     def get_diffs(vari):
         h_var = get_hist(vari)
@@ -303,6 +349,9 @@ def plot_gpr_mc_comparisons(config: ChannelConfig, filename : str):
 
     err_cum = np.array([h_mc_nom.GetBinError(i) for i in range(1, h_mc_nom.GetNbinsX() + 1)])
     err_cum = add_errs(err_cum, get_diffs)
+    if err_mg is not None:
+        print(err_mg)
+        err_cum = np.sqrt(err_cum ** 2 + err_mg ** 2)
 
     h_mc_systs = h_mc_nom.Clone()
     for i in range(1, h_mc_systs.GetNbinsX() + 1):
@@ -1587,6 +1636,7 @@ def make_gpr_floating_correlation_hists(gpr_config : gpr.FitConfig, channel_conf
     f_output = ROOT.TFile(gpr_config.output_root_file_path, 'UPDATE')
     h_diff.Write()
     h_neg.Write()
+    f_output.Close()
 
 
 def run_gpr(channel_config : ChannelConfig, var : utils.Variable):
