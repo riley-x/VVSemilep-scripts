@@ -333,8 +333,6 @@ def plot_gpr_mc_comparisons(config: ChannelConfig, filename : str):
                     h_mg_new[i_new + 1] += h_mg_old[i_old + 1] * frac
 
         ### Final diff with nominal sherpa ###
-        print([h_mg_new[i] for i in range(1, h_mg_new.GetNbinsX() + 1)])
-        print([h_mc_nom[i] for i in range(1, h_mg_new.GetNbinsX() + 1)])
         err_mg = np.array([abs(h_mg_new[i] - h_mc_nom[i]) for i in range(1, h_mg_new.GetNbinsX() + 1)])
         
     except Exception as e:
@@ -350,7 +348,6 @@ def plot_gpr_mc_comparisons(config: ChannelConfig, filename : str):
     err_cum = np.array([h_mc_nom.GetBinError(i) for i in range(1, h_mc_nom.GetNbinsX() + 1)])
     err_cum = add_errs(err_cum, get_diffs)
     if err_mg is not None:
-        print(err_mg)
         err_cum = np.sqrt(err_cum ** 2 + err_mg ** 2)
 
     h_mc_systs = h_mc_nom.Clone()
