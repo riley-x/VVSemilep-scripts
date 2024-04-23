@@ -297,9 +297,15 @@ def plot_gpr_mc_comparisons(config: ChannelConfig, filename : str):
     h_mc_nom = get_hist(utils.variation_nom)
     
     ### Yi's MadGraph comparison ###
-    try:
-        # So Yi's histograms seem to be ratio plots from nominal, with values around 1.0. So first scale back by the Sherpa.
-        # But the binnings are pretty different...so need to somehow rebin.
+    def get_madgraph_shape_error():
+        '''
+        Gets an uncertainty by taking the difference between Sherpa and Madgraph, using
+        Yi's smoothed histograms stored in `hists/vjets_theory_uncert_smooth.root`.
+        
+        Note these are ratio plots from Sherpa, with values around 1.0. So first scale
+        back by the Sherpa. Then need to rebin, but the bins don't align. So do a linear
+        split along nearest bins.
+        '''
         temp_file_manager = utils.FileManager(
             samples=[utils.Sample.wjets, utils.Sample.zjets],
             file_path_formats=['hists/vjets_theory_uncert_smooth.root'],
@@ -333,12 +339,7 @@ def plot_gpr_mc_comparisons(config: ChannelConfig, filename : str):
                     h_mg_new[i_new + 1] += h_mg_old[i_old + 1] * frac
 
         ### Final diff with nominal sherpa ###
-        err_mg = np.array([abs(h_mg_new[i] - h_mc_nom[i]) for i in range(1, h_mg_new.GetNbinsX() + 1)])
-        
-    except Exception as e:
-        plot.warning('master.py::plot_gpr_mc_comparisons() Failed to find theory uncertainty for V+jets at hists/vjets_theory_uncert_smooth.root.')
-        plot.warning(str(e))
-        err_mg = None
+        return np.array([abs(h_mg_new[i] - h_mc_nom[i]) for i in range(1, h_mg_new.GetNbinsX() + 1)])
 
     ### Get MC with systematics ###
     def get_diffs(vari):
@@ -347,8 +348,8 @@ def plot_gpr_mc_comparisons(config: ChannelConfig, filename : str):
 
     err_cum = np.array([h_mc_nom.GetBinError(i) for i in range(1, h_mc_nom.GetNbinsX() + 1)])
     err_cum = add_errs(err_cum, get_diffs)
-    if err_mg is not None:
-        err_cum = np.sqrt(err_cum ** 2 + err_mg ** 2)
+    err_mg = get_madgraph_shape_error()
+    err_cum = np.sqrt(err_cum ** 2 + err_mg ** 2)
 
     h_mc_systs = h_mc_nom.Clone()
     for i in range(1, h_mc_systs.GetNbinsX() + 1):
