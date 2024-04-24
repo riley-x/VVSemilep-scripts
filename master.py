@@ -423,6 +423,43 @@ def _plot_yield_comparison(filename, h_fit, h_mc, h_eft=None, eft_legend=None, *
     ROOT.gStyle.SetErrorX()
 
 
+def plot_naive_bin_yields(config : ChannelConfig, variable : utils.Variable, filename : str):
+    '''
+    Plots the bin-by-bin yields taken by just doing Data - Bkgs.
+    '''
+    ### Get hists ###
+    f_gpr = ROOT.TFile(f'{config.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
+    h_gpr = f_gpr.Get('Vjets_SR_' + variable.name)
+
+    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
+    bins = utils.get_bins(config.lepton_channel, variable)
+    def get_hist(sample):
+        h = config.file_manager.get_hist(config.lepton_channel, sample, hist_name)
+        return plot.rebin(h, bins)
+    
+    h_diboson = get_hist(utils.Sample.diboson)
+    h_ttbar = get_hist(utils.Sample.ttbar)
+    h_stop =  get_hist(utils.Sample.stop)
+    h_data =  get_hist(utils.Sample.data)
+
+    h_yield = h_data.Clone()
+    h_yield.Add(h_gpr, -1)
+    h_yield.Add(h_ttbar, -config.ttbar_fitter.mu_ttbar_nom[0])
+    h_yield.Add(h_stop, -config.mu_stop[0])
+
+    _plot_yield_comparison(
+        h_fit=h_yield,
+        h_mc=h_diboson,
+        filename=filename,
+        subtitle=[
+            '#sqrt{s}=13 TeV, 140 fb^{-1}',
+            f'{config.lepton_channel}-lepton channel',
+            'Naive diboson yield (Data - Bkg)',
+        ],
+        xtitle=f'{variable:title}',
+    )
+
+
 def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_results, filename : str):
     '''
     Uses [plot_yield_comparison] to plot the PLU unfolded result against the fiducial MC.
@@ -1542,7 +1579,7 @@ def save_rebinned_histograms(config : ChannelConfig):
     output_files = {}
     def file(sample):
         if sample not in output_files:
-            output_files[sample] = ROOT.TFile(config.rebinned_hists_filepath.format(sample=sample), 'RECREATE')
+            output_files[sample] = ROOT.TFile(config.rebinned_hists_filepath.format(sample=sample), 'UPDATE')
         return output_files[sample]
 
     ### All histo variations ###
@@ -1805,10 +1842,6 @@ def run_channel(config : ChannelConfig):
         if config.gpr_condor:
             continue
 
-        ### Diboson yield ###
-        if not config.skip_fits and not config.skip_direct_fit:
-            run_direct_fit(config, var)
-
         ### Prefit plot (pre-likelihood fits but using GPR) ###
         plot_mc_gpr_stack(
             config=config,
@@ -1816,6 +1849,17 @@ def run_channel(config : ChannelConfig):
             subtitle=[f'{config.lepton_channel}-lepton channel prefit (post-GPR)'],
             filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.prefit',
         )
+
+        ### Naive yields ###
+        plot_naive_bin_yields(
+            config=config,
+            variable=var,
+            filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.naive_yields'
+        )
+
+        ### Diboson yield ###
+        if not config.skip_fits and not config.skip_direct_fit:
+            run_direct_fit(config, var)
 
         ### Resonance finder fits ###
         try: # This requires ResonanceFinder!
@@ -1847,8 +1891,8 @@ def parse_args():
     parser.add_argument('-o', '--output', default='./output')
     parser.add_argument('--skip-hist-gen', action='store_true', help="Skip generating the response matrix and rebinned histograms.")
     parser.add_argument('--skip-fits', action='store_true', help="Don't do the GPR or PLU fits. For the former, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
-    parser.add_argument('--skip-direct-fit', action='store_true', help="Don't do the direct diboson yield fit.")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
+    parser.add_argument('--fit-bin-yields', action='store_true', help="Also do direct bin-by-bin diboson yield fits (old, diagnostic test).")
     parser.add_argument('--rerun-gpr', action='store_true', help="By default, will skip GPR fits that are present in the CSV already. This flag will force a rerun of all bins.")
     parser.add_argument('--skip-channels', action='store_true', help="Skips all per-channel processing, and jumps to the multichannel fits.")
     parser.add_argument('--nominal', action='store_true', help="Run without any correlations to other signal strengths or systematic variations.")
@@ -1914,7 +1958,7 @@ def main():
                 nominal_only=args.nominal,
                 skip_hist_gen=args.skip_hist_gen,
                 skip_fits=args.skip_fits,
-                skip_direct_fit=args.skip_direct_fit,
+                skip_direct_fit=not args.fit_bin_yields,
                 skip_gpr=args.skip_gpr,
                 skip_gpr_if_present=not args.rerun_gpr,
                 gpr_condor=args.condor,
