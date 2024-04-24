@@ -54,17 +54,19 @@ def _add_diboson(runner, lepton_channel, lumi_uncert, variable, region, hist_fil
 
     runner.channel(region).addSample('diboson', hist_file_format.format(lep=lepton_channel, sample='diboson'), hist_name.format('diboson'))
     sample = runner.channel(region).sample('diboson')
+
+    mu_factor = RF.MultiplicativeFactor('mu-diboson', 1, 0, 5, RF.MultiplicativeFactor.FREE)
     sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
-    sample.multiplyBy('mu-diboson', 1, 0, 5, RF.MultiplicativeFactor.FREE)
+    sample.multiplyBy(mu_factor)
     sample.setUseStatError(True)
     for variation in utils.variations_hist:
         sample.addVariation(variation)
 
     ### Add sig. contam. correction for GPR ###   
-    if gpr_mu_corrs or False: # TODO 
+    if gpr_mu_corrs: 
         runner.channel(region).addSample('diff_pos', f'{output_dir}/gpr/gpr_{lepton_channel}lep_vjets_yield.root', f'gpr_mu-diboson_posdiff_{variable}')
         runner.channel(region).addSample('diff_neg', f'{output_dir}/gpr/gpr_{lepton_channel}lep_vjets_yield.root', f'gpr_mu-diboson_negdiff_{variable}')
-        runner.channel(region).sample('diff_neg').multiplyBy('mu-diboson')
+        runner.channel(region).sample('diff_neg').multiplyBy(mu_factor)
 
     runner.defineSignal(sample, 'diboson')
     runner.addPOI('mu-diboson')

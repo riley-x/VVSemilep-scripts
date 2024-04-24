@@ -181,10 +181,10 @@ def plot_gpr_mu_diboson_correlations(
             h = h.Clone()
             for i in range(h.GetN()):
                 delta_delta = (h.GetPointY(i) - h_nom.GetPointY(i)) / h_nom.GetPointY(i) / (1 - mu)
+                average_corr_factor[i] += (h_nom.GetPointY(i) - h.GetPointY(i)) / (1 - mu)
                 h.SetPointY(i, delta_delta)
                 h.SetPointEYhigh(i, 0)
                 h.SetPointEYlow(i, 0)
-                average_corr_factor[i] += (h_nom.GetPointY(i) - h.GetPointY(i)) / (1 - mu)
             ratios.append(h)
         return ratios
 
@@ -1037,6 +1037,7 @@ class GlobalConfig:
             skip_direct_fit : bool,
             skip_gpr : bool,
             skip_gpr_if_present : bool,
+            skip_plu : bool,
             gpr_condor : bool,
             is_asimov : bool,
             run_plu_val : bool,
@@ -1058,6 +1059,7 @@ class GlobalConfig:
         self.skip_direct_fit = skip_direct_fit or skip_fits
         self.skip_gpr = skip_gpr or skip_fits
         self.skip_gpr_if_present = skip_gpr_if_present
+        self.skip_plu = skip_plu
         self.gpr_condor = gpr_condor
         self.is_asimov = is_asimov
         self.plu_validation_iters = 100 if run_plu_val else 0
@@ -1147,6 +1149,7 @@ class ChannelConfig:
             skip_direct_fit : bool,
             skip_gpr : bool,
             skip_gpr_if_present : bool,
+            skip_plu : bool,
             gpr_condor : bool,
             is_asimov : bool,
             run_plu_val : bool,
@@ -1162,6 +1165,7 @@ class ChannelConfig:
         self.skip_direct_fit = skip_direct_fit or skip_fits
         self.skip_gpr = skip_gpr or skip_fits
         self.skip_gpr_if_present = skip_gpr_if_present
+        self.skip_plu = skip_plu
         self.gpr_condor = gpr_condor
         self.is_asimov = is_asimov
         self.plu_validation_iters = 100 if run_plu_val else 0
@@ -1220,7 +1224,7 @@ def run_npcheck_drawfit(config : ChannelConfig, var : utils.Variable, ws_path : 
     shutil.copyfile(npcheck_output_path, target_path)
 
 
-def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, stat_validation_index : int = None):
+def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, skip_fits : bool, stat_validation_index : int = None):
     '''
     Runs the resonance finder script for a single channel. Common to both the PLU and
     diboson-signal strength fits.
@@ -1235,7 +1239,7 @@ def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, stat_valida
     os.makedirs(f'{config.output_dir}/rf', exist_ok=True)
 
     ### Create RF workspace ###
-    if not config.skip_fits:
+    if not skip_fits:
         plot.notice(f'{config.log_base} creating ResonanceFinder workspace for {mode} fit')
         ws_path = rf_plu.run(
             mode=mode,
@@ -1263,7 +1267,7 @@ def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, stat_valida
         fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.{mode}_fcc.root'
     else:
         fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.{mode}_fcc_var{stat_validation_index:03}.root'
-    if not config.skip_fits:
+    if not skip_fits:
         plot.notice(f'{config.log_base} running {mode} fits')
         with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}.{mode}_fcc.txt', 'w') as f:
             res = subprocess.run(
@@ -1295,7 +1299,7 @@ def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index 
     Runs the profile likelihood unfolding fit using ResonanceFinder. Assumes the
     GPR/response matrices have been created already.
     '''
-    ws_path, roofit_results, plu_fit_results = run_rf(config, var, 'PLU', stat_validation_index)
+    ws_path, roofit_results, plu_fit_results = run_rf(config, var, 'PLU', config.skip_plu, stat_validation_index)
 
     ### Plots ###
     if stat_validation_index is None:
@@ -1415,7 +1419,7 @@ def run_diboson_fit(config: ChannelConfig, var : utils.Variable):
     Runs a ResonanceFinder fit to the diboson signal strength. Complementary to the PLU
     fits, but not broken into fiducial response bins. 
     '''
-    ws_path, roofit_results, dict_results = run_rf(config, var, 'diboson')
+    ws_path, roofit_results, dict_results = run_rf(config, var, 'diboson', False)
     
     ### Plot fit ###
     mu_diboson = dict_results['mu-diboson']
@@ -1892,6 +1896,7 @@ def parse_args():
     parser.add_argument('--skip-hist-gen', action='store_true', help="Skip generating the response matrix and rebinned histograms.")
     parser.add_argument('--skip-fits', action='store_true', help="Don't do the GPR or PLU fits. For the former, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
+    parser.add_argument('--skip-plu', action='store_true', help="Skips the PLU fit.")
     parser.add_argument('--fit-bin-yields', action='store_true', help="Also do direct bin-by-bin diboson yield fits (old, diagnostic test).")
     parser.add_argument('--rerun-gpr', action='store_true', help="By default, will skip GPR fits that are present in the CSV already. This flag will force a rerun of all bins.")
     parser.add_argument('--skip-channels', action='store_true', help="Skips all per-channel processing, and jumps to the multichannel fits.")
@@ -1961,6 +1966,7 @@ def main():
                 skip_direct_fit=not args.fit_bin_yields,
                 skip_gpr=args.skip_gpr,
                 skip_gpr_if_present=not args.rerun_gpr,
+                skip_plu=args.skip_plu,
                 gpr_condor=args.condor,
                 is_asimov=args.asimov,
                 run_plu_val=args.run_plu_val,
@@ -1979,9 +1985,10 @@ def main():
             nominal_only=args.nominal,
             skip_hist_gen=args.skip_hist_gen,
             skip_fits=args.skip_fits,
-            skip_direct_fit=args.skip_direct_fit,
+            skip_direct_fit=not args.fit_bin_yields,
             skip_gpr=args.skip_gpr,
             skip_gpr_if_present=not args.rerun_gpr,
+            skip_plu=args.skip_plu,
             gpr_condor=args.condor,
             is_asimov=args.asimov,
             run_plu_val=args.run_plu_val,
