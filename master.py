@@ -1702,7 +1702,7 @@ def save_data_variation_histograms(config : ChannelConfig, f : ROOT.TFile):
         h_nom.SetName(hist_name.format(lep=f'{config.lepton_channel}Lep', sample='data'))
 
         f.cd()
-        h_nom.Write()
+        h_nom.Write(plot.nullptr_char, ROOT.TObject.kOverwrite)
 
         ### Create variations ###
         rng = np.random.default_rng()
@@ -1711,7 +1711,7 @@ def save_data_variation_histograms(config : ChannelConfig, f : ROOT.TFile):
             h = ROOT.TH1F(name, name, len(bins) - 1, bins)
             for x in range(1, h_nom.GetNbinsX() + 1):
                 h[x] = rng.poisson(h_nom[x])
-            h.Write()
+            h.Write(plot.nullptr_char, ROOT.TObject.kOverwrite)
 
 
 def make_gpr_floating_correlation_hists(gpr_config : gpr.FitConfig, channel_config : ChannelConfig, variable : utils.Variable):
