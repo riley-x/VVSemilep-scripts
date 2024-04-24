@@ -1675,7 +1675,7 @@ def save_rebinned_histograms(config : ChannelConfig):
 
                     f = file(sample_name)
                     f.cd()
-                    hist.Write()
+                    hist.Write(plot.nullptr_char, ROOT.TObject.kOverwrite)
 
     ### Data rebinned histograms for PLU stat test ###
     save_data_variation_histograms(config, file(utils.Sample.data.name))
@@ -1734,8 +1734,8 @@ def make_gpr_floating_correlation_hists(gpr_config : gpr.FitConfig, channel_conf
     h_neg.Scale(-1)
 
     f_output = ROOT.TFile(gpr_config.output_root_file_path, 'UPDATE')
-    h_diff.Write()
-    h_neg.Write()
+    h_diff.Write(plot.nullptr_char, ROOT.TObject.kOverwrite)
+    h_neg.Write(plot.nullptr_char, ROOT.TObject.kOverwrite)
     f_output.Close()
 
 

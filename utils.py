@@ -435,9 +435,6 @@ def get_hists_sum(tfile, hist_names):
         raise RuntimeError(f"get_hists_sum() unable to retrieve histograms from {tfile}.")
     return h_sum
 
-# If you just pass a python 0 to the ROOT char*, I think it gets interpreted as '0' or something.
-_null_char_p = ctypes.c_char_p(0)
-
 
 class FileManager:
     '''
@@ -495,7 +492,7 @@ class FileManager:
                         files.append(ROOT.TFile(formatted_path))
                     except OSError as e:
                         pass
-                    ROOT.gSystem.RedirectOutput(_null_char_p, _null_char_p)
+                    ROOT.gSystem.RedirectOutput(plot.nullptr_char, plot.nullptr_char)
 
         if not files:
             plot.warning(f'FileManager() unable to find files for {sample} in the {lep}-lep channel.')
