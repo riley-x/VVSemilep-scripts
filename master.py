@@ -946,14 +946,14 @@ def plot_correlations(roofit_results, filename : str, subtitle : list[str] = [])
     )
 
 
-def plot_nll(nll_file_path, filename : str, subtitle : list[str] = []):
+def plot_nll(nll_file_path, signal_name, file_name : str, xtitle : str, subtitle : list[str] = []):
     ### Get values ###
     nll_file = ROOT.TFile(nll_file_path)
     nll_tree = nll_file.Get('nll')
     xs = []
     ys = []
     for entry in nll_tree:
-        xs.append(getattr(entry, 'mu-diboson'))
+        xs.append(getattr(entry, signal_name))
         ys.append(entry.NLL)
 
     ### Make graph ###
@@ -989,7 +989,7 @@ def plot_nll(nll_file_path, filename : str, subtitle : list[str] = []):
             f'#mu = {mu:.3f} #pm {err:.3f}',
         ],
         ytitle='Negative Log Likelihood',
-        xtitle='#mu(diboson)',
+        xtitle=xtitle,
     )
 
     ### Sigma lines ###
@@ -1006,7 +1006,7 @@ def plot_nll(nll_file_path, filename : str, subtitle : list[str] = []):
         l.Draw()
         plotter.cache.append(l)
 
-    plot.save_canvas(c, filename)
+    plot.save_canvas(c, file_name)
 
 
 ##########################################################################################
@@ -1038,6 +1038,7 @@ class GlobalConfig:
             skip_gpr : bool,
             skip_gpr_if_present : bool,
             skip_plu : bool,
+            skip_diboson : bool,
             gpr_condor : bool,
             is_asimov : bool,
             run_plu_val : bool,
@@ -1059,7 +1060,8 @@ class GlobalConfig:
         self.skip_direct_fit = skip_direct_fit or skip_fits
         self.skip_gpr = skip_gpr or skip_fits
         self.skip_gpr_if_present = skip_gpr_if_present
-        self.skip_plu = skip_plu
+        self.skip_plu = skip_plu or skip_fits
+        self.skip_diboson = skip_diboson or skip_fits
         self.gpr_condor = gpr_condor
         self.is_asimov = is_asimov
         self.plu_validation_iters = 100 if run_plu_val else 0
@@ -1150,6 +1152,7 @@ class ChannelConfig:
             skip_gpr : bool,
             skip_gpr_if_present : bool,
             skip_plu : bool,
+            skip_diboson : bool,
             gpr_condor : bool,
             is_asimov : bool,
             run_plu_val : bool,
@@ -1165,7 +1168,8 @@ class ChannelConfig:
         self.skip_direct_fit = skip_direct_fit or skip_fits
         self.skip_gpr = skip_gpr or skip_fits
         self.skip_gpr_if_present = skip_gpr_if_present
-        self.skip_plu = skip_plu
+        self.skip_plu = skip_plu or skip_fits
+        self.skip_diboson = skip_diboson or skip_fits
         self.gpr_condor = gpr_condor
         self.is_asimov = is_asimov
         self.plu_validation_iters = 100 if run_plu_val else 0
@@ -1283,7 +1287,7 @@ def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, skip_fits :
     fcc_file = ROOT.TFile(fcc_path)
     results_name = 'PlotsAfterGlobalFit/unconditionnal/fitResult'
     roofit_results = fcc_file.Get(results_name)
-    if not config.skip_fits:
+    if not skip_fits:
         roofit_results.Print()
 
     ### Parse results ###
@@ -1419,7 +1423,7 @@ def run_diboson_fit(config: ChannelConfig, var : utils.Variable):
     Runs a ResonanceFinder fit to the diboson signal strength. Complementary to the PLU
     fits, but not broken into fiducial response bins. 
     '''
-    ws_path, roofit_results, dict_results = run_rf(config, var, 'diboson', False)
+    ws_path, roofit_results, dict_results = run_rf(config, var, 'diboson', config.skip_diboson)
     
     ### Plot fit ###
     mu_diboson = dict_results['mu-diboson']
@@ -1449,12 +1453,14 @@ def run_diboson_fit(config: ChannelConfig, var : utils.Variable):
     )
 
     ### Run NLL ###
-    if not config.skip_fits:
+    if not config.skip_diboson:
         plot.notice(f'{config.log_base} running diboson-xsec NLL')
         run_nll(config.output_dir, f'{config.lepton_channel}lep_{var}.diboson', ws_path)
     plot_nll(
         f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.diboson_nll.root',
-        f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_nll',
+        file_name=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_nll',
+        signal_name='mu-diboson',
+        xtitle='#mu(diboson)',
         subtitle=[f'{config.lepton_channel}-lepton channel {var.title} fit'],
     )
 
@@ -1536,11 +1542,15 @@ def run_diboson_fit_multichannel(config : NewChannelConfig):
         run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=True)
     plot_nll(
         f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_nll.root',
-        f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll',
+        filename=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll',
+        signal_name='mu-diboson',
+        xtitle='#mu(diboson)',
     )
     plot_nll(
         f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_nll-asimov.root',
-        f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll-asimov',
+        filename=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll-asimov',
+        signal_name='mu-diboson',
+        xtitle='#mu(diboson)',
     )
 
 
@@ -1564,6 +1574,57 @@ def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asi
     #     f'{output_dir}/plots/{base_name}_nll' + ('-asimov' if asimov else '') + '.pdf',
     # )
 
+
+def run_eft_fits(config: ChannelConfig, var : utils.Variable):
+    '''
+    Runs a ResonanceFinder fit to the EFT Wilson coefficients. 
+    '''
+    mode = 'cw_lin'
+    ws_path, roofit_results, dict_results = run_rf(config, var, mode, config.skip_fits)
+    
+    ### Plot fit ###
+    operator = mode.split('_')[0]
+    if operator == 'cw':
+        operator_title = 'c_{W}'
+
+    mu = dict_results[f'mu-{operator}']
+    plot.success(str(mu))
+    # plot_mc_gpr_stack(
+    #     config=config, 
+    #     variable=var,
+    #     subtitle=[
+    #         f'{config.lepton_channel}-lepton channel postfit',
+    #         f'Diboson #mu = {mu_diboson[0]:.2f} #pm {mu_diboson[1]:.2f}',
+    #     ],
+    #     mu_diboson=mu_diboson[0],
+    #     filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.{mode}_postfit',
+    # )
+
+    ### Draw pulls ###
+    # plot_pulls(
+    #     fit_results=dict_results, 
+    #     filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.{mode}_pulls',
+    #     subtitle=[f'{config.lepton_channel}-lepton channel {var.title} pulls'],
+    # )
+
+    ### Draw correlation matrix ###
+    # plot_correlations(
+    #     roofit_results=roofit_results, 
+    #     filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.{mode}_corr',
+    #     subtitle=[f'{config.lepton_channel}-lepton channel {var.title} fit'],
+    # )
+
+    ### Run NLL ###
+    if not config.skip_fits:
+        plot.notice(f'{config.log_base} running {mode} NLL')
+        run_nll(config.output_dir, f'{config.lepton_channel}lep_{var}.{mode}', ws_path)
+    plot_nll(
+        f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.{mode}_nll.root',
+        file_name=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.{mode}_nll',
+        subtitle=[f'{config.lepton_channel}-lepton channel {var.title} {mode} fit'],
+        signal_name=f'mu-{operator}',
+        xtitle=operator_title,
+    )
 
 
 
@@ -1874,7 +1935,11 @@ def run_channel(config : ChannelConfig):
             if config.plu_validation_iters:
                 run_plu_val(config, var, plu_results)
             
+            ### Diboson fit ###
             run_diboson_fit(config, var)
+
+            ### EFT fits ###
+            run_eft_fits(config, var)
         except Exception as e:
             plot.error(str(e))
             raise e
@@ -1897,6 +1962,7 @@ def parse_args():
     parser.add_argument('--skip-fits', action='store_true', help="Don't do the GPR or PLU fits. For the former, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-plu', action='store_true', help="Skips the PLU fit.")
+    parser.add_argument('--skip-diboson', action='store_true', help="Skips the diboson cross section fit.")
     parser.add_argument('--fit-bin-yields', action='store_true', help="Also do direct bin-by-bin diboson yield fits (old, diagnostic test).")
     parser.add_argument('--rerun-gpr', action='store_true', help="By default, will skip GPR fits that are present in the CSV already. This flag will force a rerun of all bins.")
     parser.add_argument('--skip-channels', action='store_true', help="Skips all per-channel processing, and jumps to the multichannel fits.")
@@ -1967,6 +2033,7 @@ def main():
                 skip_gpr=args.skip_gpr,
                 skip_gpr_if_present=not args.rerun_gpr,
                 skip_plu=args.skip_plu,
+                skip_diboson=args.skip_diboson,
                 gpr_condor=args.condor,
                 is_asimov=args.asimov,
                 run_plu_val=args.run_plu_val,
@@ -1989,6 +2056,7 @@ def main():
             skip_gpr=args.skip_gpr,
             skip_gpr_if_present=not args.rerun_gpr,
             skip_plu=args.skip_plu,
+            skip_diboson=args.skip_diboson,
             gpr_condor=args.condor,
             is_asimov=args.asimov,
             run_plu_val=args.run_plu_val,
