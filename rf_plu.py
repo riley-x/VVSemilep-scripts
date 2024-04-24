@@ -63,10 +63,11 @@ def _add_diboson(runner, lepton_channel, lumi_uncert, variable, region, hist_fil
         sample.addVariation(variation)
 
     ### Add sig. contam. correction for GPR ###   
-    if gpr_mu_corrs: 
+    if gpr_mu_corrs or False: 
         runner.channel(region).addSample('diff_pos', f'{output_dir}/gpr/gpr_{lepton_channel}lep_vjets_yield.root', f'gpr_mu-diboson_posdiff_{variable}')
         runner.channel(region).addSample('diff_neg', f'{output_dir}/gpr/gpr_{lepton_channel}lep_vjets_yield.root', f'gpr_mu-diboson_negdiff_{variable}')
         runner.channel(region).sample('diff_neg').multiplyBy(mu_factor)
+        # Note the name "diff_neg" is really important so that ResonanceFinder/Root/BadBinFixer.cxx doesn't remove the histogram entirely
 
     runner.defineSignal(sample, 'diboson')
     runner.addPOI('mu-diboson')

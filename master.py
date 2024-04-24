@@ -181,7 +181,7 @@ def plot_gpr_mu_diboson_correlations(
             h = h.Clone()
             for i in range(h.GetN()):
                 delta_delta = (h.GetPointY(i) - h_nom.GetPointY(i)) / h_nom.GetPointY(i) / (1 - mu)
-                average_corr_factor[i] += (h_nom.GetPointY(i) - h.GetPointY(i)) / (1 - mu)
+                average_corr_factor[i] += (h.GetPointY(i) - h_nom.GetPointY(i)) / (1 - mu)
                 h.SetPointY(i, delta_delta)
                 h.SetPointEYhigh(i, 0)
                 h.SetPointEYlow(i, 0)
