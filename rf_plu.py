@@ -48,7 +48,8 @@ def _add_plu(runner, lepton_channel, variable, region, response_matrix_path, **_
         runner.addPOI(poiName)
     return signal_names
 
-def _add_diboson(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist_name, **_):
+
+def _add_diboson(runner, lepton_channel, lumi_uncert, variable, region, hist_file_format, hist_name, gpr_mu_corrs, output_dir, **_):
     from ROOT import RF # type: ignore
 
     runner.channel(region).addSample('diboson', hist_file_format.format(lep=lepton_channel, sample='diboson'), hist_name.format('diboson'))
@@ -58,6 +59,12 @@ def _add_diboson(runner, lepton_channel, lumi_uncert, region, hist_file_format, 
     sample.setUseStatError(True)
     for variation in utils.variations_hist:
         sample.addVariation(variation)
+
+    ### Add sig. contam. correction for GPR ###   
+    if gpr_mu_corrs or False: # TODO 
+        runner.channel(region).addSample('diff_pos', f'{output_dir}/gpr/gpr_{lepton_channel}lep_vjets_yield.root', f'gpr_mu-diboson_posdiff_{variable}')
+        runner.channel(region).addSample('diff_neg', f'{output_dir}/gpr/gpr_{lepton_channel}lep_vjets_yield.root', f'gpr_mu-diboson_negdiff_{variable}')
+        runner.channel(region).sample('diff_neg').multiplyBy('mu-diboson')
 
     runner.defineSignal(sample, 'diboson')
     runner.addPOI('mu-diboson')
@@ -173,6 +180,8 @@ def run(
                 'hist_file_format': hist_file_format,
                 'hist_name': hist_name,
                 'lumi_uncert': lumi_uncert,
+                'gpr_mu_corrs': gpr_mu_corrs,
+                'output_dir': output_dir,
             }
             if mode == 'PLU':
                 signal_name = _add_plu(**common_args, response_matrix_path=response_matrix_path)
