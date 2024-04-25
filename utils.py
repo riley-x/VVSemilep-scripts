@@ -192,6 +192,9 @@ def get_bins(lepton_channel : int, var: Variable):
         if lepton_channel == 0:
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
             return [600, 690, 810, 940, 1090, 1260, 1430, 1630, 1850, 3000]
+        elif lepton_channel == 1:
+            # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
+            return [600, 710, 830, 960, 1100, 1260, 1430, 1600, 6000]
     elif var.name == "fatjet_pt" or var.name == "vhad_pt":
         if lepton_channel == 0:
             # optimized binning with threshold_diag=0.8, threshold_err=0.2, min_reco_count=10

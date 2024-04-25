@@ -163,7 +163,7 @@ def get_response_matrix(h):
 
 def optimize_binning(
         h, fid_range,
-        threshold_diag=0.8,
+        threshold_diag=0.7,
         max_mc_frac_err=0.2,
         min_reco_count=10,
         monotonic_bin_sizes=False,
@@ -328,9 +328,9 @@ def plot_fid_reco(mtx, var, **kwargs):
 ##########################################################################################
 
 _default_vars = [
-    utils.Variable.fatjet_pt,
+    # utils.Variable.fatjet_pt,
     # utils.Variable.vv_m,
-    # utils.Variable.vv_mt,
+    utils.Variable.vv_mt,
 ]
 
 def main(
