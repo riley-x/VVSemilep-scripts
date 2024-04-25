@@ -245,7 +245,7 @@ def plot_gpr_ttbar_and_stop_correlations(config : gpr.FitConfig, filename : str)
     )
 
 
-def plot_gpr_mc_comparisons(config: ChannelConfig, filename : str):
+def plot_gpr_mc_comparisons(config: SingleChannelConfig, filename : str):
     ### Systematic adder ###
     def add_errs(err_cum, get_errs):
         '''
@@ -286,10 +286,10 @@ def plot_gpr_mc_comparisons(config: ChannelConfig, filename : str):
         g_gpr_systs.SetPointEYlow(i, err_cum[i])
 
     ### Get MC nominal ###
-    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(gpr_config.var, config.lepton_channel).name
+    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + config.var_reader_name
     def get_hist(variation):
-        h_wjets = config.file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name, variation=variation)
-        h_zjets = config.file_manager.get_hist(config.lepton_channel, utils.Sample.zjets, hist_name, variation=variation)
+        h_wjets = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name, variation=variation)
+        h_zjets = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.zjets, hist_name, variation=variation)
         h_vjets = h_wjets.Clone()
         h_vjets.Add(h_zjets)
         return plot.rebin(h_vjets, gpr_config.bins_y)
@@ -315,8 +315,8 @@ def plot_gpr_mc_comparisons(config: ChannelConfig, filename : str):
         h_zjets_mg = temp_file_manager.get_hist(config.lepton_channel, utils.Sample.zjets, hist_name.format(sample='Zjets', lep='{lep}'))
         
         ### Scale by Sherpa ###
-        h_wjets_sherpa = config.file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name)
-        h_zjets_sherpa = config.file_manager.get_hist(config.lepton_channel, utils.Sample.zjets, hist_name)
+        h_wjets_sherpa = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.wjets, hist_name)
+        h_zjets_sherpa = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.zjets, hist_name)
         
         bins_old = np.array([h_wjets_mg.GetBinLowEdge(i) for i in range(1, len(h_wjets_mg))])
         h_wjets_sherpa = plot.rebin(h_wjets_sherpa, bins_old)
@@ -423,19 +423,18 @@ def _plot_yield_comparison(filename, h_fit, h_mc, h_eft=None, eft_legend=None, *
     ROOT.gStyle.SetErrorX()
 
 
-def plot_naive_bin_yields(config : ChannelConfig, variable : utils.Variable, filename : str):
+def plot_naive_bin_yields(config : SingleChannelConfig, filename : str):
     '''
     Plots the bin-by-bin yields taken by just doing Data - Bkgs.
     '''
     ### Get hists ###
-    f_gpr = ROOT.TFile(f'{config.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
-    h_gpr = f_gpr.Get('Vjets_SR_' + variable.name)
+    f_gpr = ROOT.TFile(f'{config.gbl.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
+    h_gpr = f_gpr.Get('Vjets_SR_' + config.variable.name)
 
-    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
-    bins = utils.get_bins(config.lepton_channel, variable)
+    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + config.var_reader_name
     def get_hist(sample):
-        h = config.file_manager.get_hist(config.lepton_channel, sample, hist_name)
-        return plot.rebin(h, bins)
+        h = config.gbl.file_manager.get_hist(config.lepton_channel, sample, hist_name)
+        return plot.rebin(h, config.bins)
     
     h_diboson = get_hist(utils.Sample.diboson)
     h_ttbar = get_hist(utils.Sample.ttbar)
@@ -444,8 +443,8 @@ def plot_naive_bin_yields(config : ChannelConfig, variable : utils.Variable, fil
 
     h_yield = h_data.Clone()
     h_yield.Add(h_gpr, -1)
-    h_yield.Add(h_ttbar, -config.ttbar_fitter.mu_ttbar_nom[0])
-    h_yield.Add(h_stop, -config.mu_stop[0])
+    h_yield.Add(h_ttbar, -config.gbl.ttbar_fitter.mu_ttbar_nom[0])
+    h_yield.Add(h_stop, -config.gbl.mu_stop[0])
 
     _plot_yield_comparison(
         h_fit=h_yield,
@@ -456,19 +455,17 @@ def plot_naive_bin_yields(config : ChannelConfig, variable : utils.Variable, fil
             f'{config.lepton_channel}-lepton channel',
             'Naive diboson yield (Data - Bkg)',
         ],
-        xtitle=f'{variable:title}',
+        xtitle=f'{config.variable:title}',
     )
 
 
-def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_results, filename : str):
+def plot_plu_yields(config : SingleChannelConfig, plu_fit_results, filename : str):
     '''
     Uses [plot_yield_comparison] to plot the PLU unfolded result against the fiducial MC.
     '''
-    bins = np.array(utils.get_bins(config.lepton_channel, variable), dtype=float)
-
     ### Fit ###
-    h_fit = ROOT.TH1F('h_fit', '', len(bins) - 1, bins)
-    for i in range(1, len(bins)):
+    h_fit = ROOT.TH1F('h_fit', '', len(config.bins) - 1, config.bins)
+    for i in range(1, len(config.bins)):
         mu = plu_fit_results[f'mu_{i:02}']
         h_fit.SetBinContent(i, mu[0])
         h_fit.SetBinError(i, mu[1])
@@ -476,7 +473,7 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
     ### MC ###
     # Buggy response matrix in eos_v3 files, so point to local files in interim
     # Note fixed in https://gitlab.cern.ch/CxAODFramework/CxAODReader_VVSemileptonic/-/merge_requests/445
-    if 'v3' in config.file_manager.file_path_formats[0]:
+    if 'v3' in config.gbl.file_manager.file_path_formats[0]:
         plot.warning('master.py::plot_plu_yields() Not using v3 histograms with buggy response matrix. Using hardcoded local path!')
         temp_file_manager = utils.FileManager(
             samples=[utils.Sample.diboson, utils.Sample.cw_lin, utils.Sample.cw_quad],
@@ -484,11 +481,11 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
             lepton_channels=[0, 1, 2],
         )
     else:
-        temp_file_manager = config.file_manager
+        temp_file_manager = config.gbl.file_manager
     def get(sample):
-        # h = config.file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + variable.name)
-        h = temp_file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + variable.name)
-        return plot.rebin(h.ProjectionX(), bins)
+        # h = config.gbl.file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + variable.name)
+        h = temp_file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + config.variable.name)
+        return plot.rebin(h.ProjectionX(), config.bins)
     h_mc = get(utils.Sample.diboson)
 
     ### EFT ###
@@ -510,14 +507,14 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
             f'{config.lepton_channel}-lepton channel fiducial region',
             'MC errors are stat only',
         ],
-        xtitle=f'{variable:title}',
+        xtitle=f'{config.variable:title}',
     )
     _plot_yield_comparison(**yield_args, filename=filename)
     _plot_yield_comparison(**yield_args, h_eft=h_cw_quad, eft_legend='c_{W}^{quad}=' + f'{cw:.2f}', filename=filename + '_cw')
 
 
 def plot_mc_gpr_stack(
-        config : ChannelConfig,
+        config : SingleChannelConfig,
         filename : str, 
         subtitle : list[str] = [], 
         mu_diboson : float = 1,
@@ -526,23 +523,22 @@ def plot_mc_gpr_stack(
     Plots a stack plot comparing data to MC backgrounds and the GPR V+jets estimate.
     '''
     ### Get hists ###
-    f_gpr = ROOT.TFile(f'{config.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
-    h_gpr = f_gpr.Get('Vjets_SR_' + variable.name)
+    f_gpr = ROOT.TFile(f'{config.gbl.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
+    h_gpr = f_gpr.Get('Vjets_SR_' + config.variable.name)
 
-    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
-    h_diboson = config.file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name)
-    h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
-    h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name)
-    h_data = config.file_manager.get_hist(config.lepton_channel, utils.Sample.data, hist_name)
+    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + config.var_reader_name
+    h_diboson = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name)
+    h_ttbar = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
+    h_stop = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name)
+    h_data = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.data, hist_name)
 
-    bins = utils.get_bins(config.lepton_channel, variable)
-    h_diboson = plot.rebin(h_diboson, bins)
-    h_ttbar = plot.rebin(h_ttbar, bins)
-    h_stop = plot.rebin(h_stop, bins)
-    h_data = plot.rebin(h_data, bins)
+    h_diboson = plot.rebin(h_diboson, config.bins)
+    h_ttbar = plot.rebin(h_ttbar, config.bins)
+    h_stop = plot.rebin(h_stop, config.bins)
+    h_data = plot.rebin(h_data, config.bins)
 
-    h_ttbar.Scale(config.ttbar_fitter.mu_ttbar_nom[0])
-    h_stop.Scale(config.mu_stop[0])
+    h_ttbar.Scale(config.gbl.ttbar_fitter.mu_ttbar_nom[0])
+    h_stop.Scale(config.gbl.mu_stop[0])
     h_diboson.Scale(mu_diboson)
 
     ### Sum and ratios ###
@@ -601,7 +597,7 @@ def plot_mc_gpr_stack(
     ### Subplot ###
     plotter2 = pads.make_plotter2(
         ytitle='Data / Bkgs',
-        xtitle=f'{variable:title}',
+        xtitle=f'{config.variable:title}',
         ignore_outliers_y=False,
         y_range=(0.5, 1.5),
     )
@@ -625,37 +621,36 @@ def plot_mc_gpr_stack(
     plot.save_canvas(pads.c, filename)
 
 
-def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results : dict[str, tuple[float, float]]):
+def plot_plu_fit(config : SingleChannelConfig, fit_results : dict[str, tuple[float, float]]):
     '''
     Plots a stack plot comparing data to backgrounds after the PLU fit.
     '''
-    bins = utils.get_bins(config.lepton_channel, variable)
 
     ######################################################################################
     ### HISTS
     ######################################################################################
 
     ### GPR ###
-    f_gpr = ROOT.TFile(f'{config.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
-    h_gpr = f_gpr.Get('Vjets_SR_' + variable.name)
+    f_gpr = ROOT.TFile(f'{config.gbl.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
+    h_gpr = f_gpr.Get('Vjets_SR_' + config.variable.name)
 
     ### Response matrix ###
-    f_response_mtx = ROOT.TFile(config.response_matrix_filepath)
+    f_response_mtx = ROOT.TFile(config.gbl.response_matrix_filepath)
     h_signals = []
-    for i in range(1, len(bins)):
-        h = f_response_mtx.Get(f'ResponseMatrix_{variable}_fid{i:02}')
+    for i in range(1, len(config.bins)):
+        h = f_response_mtx.Get(f'ResponseMatrix_{config.variable}_fid{i:02}')
         h.Scale(fit_results[f'mu_{i:02}'][0])
         h_signals.append(h)
 
     ### MC + data ###
-    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
-    h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
-    h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name)
-    h_data = config.file_manager.get_hist(config.lepton_channel, utils.Sample.data, hist_name)
+    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + config.var_reader_name
+    h_ttbar = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name)
+    h_stop = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name)
+    h_data = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.data, hist_name)
 
-    h_ttbar = plot.rebin(h_ttbar, bins)
-    h_stop = plot.rebin(h_stop, bins)
-    h_data = plot.rebin(h_data, bins)
+    h_ttbar = plot.rebin(h_ttbar, config.bins)
+    h_stop = plot.rebin(h_stop, config.bins)
+    h_data = plot.rebin(h_data, config.bins)
 
     h_ttbar.Scale(fit_results['mu-ttbar'][0])
     h_stop.Scale(fit_results['mu-stop'][0])
@@ -710,7 +705,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
             return bkg_colors[i - len(h_signals)]
 
     ### Legend ###
-    legend = [f'Bin {i}' for i in range(1, len(bins))][::-1]
+    legend = [f'Bin {i}' for i in range(1, len(config.bins))][::-1]
     legend += [x[2] for x in stack]
 
     ### Plot stack ###
@@ -747,7 +742,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
     ### Subplot ###
     plotter2 = pads.make_plotter2(
         ytitle='Data / Fit',
-        xtitle=f'{variable:title}',
+        xtitle=f'{config.variable:title}',
         ignore_outliers_y=False,
         y_range=[0.5, 1.5],
     )
@@ -768,7 +763,7 @@ def plot_plu_fit(config : ChannelConfig, variable : utils.Variable, fit_results 
     plotter2.draw()
     plotter2.draw_hline(1, ROOT.kDashed)
 
-    plot.save_canvas(pads.c, f'{config.output_dir}/plots/{config.lepton_channel}lep_{variable}.plu_postfit')
+    plot.save_canvas(pads.c, f'{config.gbl.output_dir}/plots/{config.base_name}.plu_postfit')
 
 
 def plot_pulls(fit_results : dict[str, tuple[float, float]], filename : str, subtitle : list[str] = []):
@@ -1171,7 +1166,7 @@ class SingleChannelConfig(MultiChannelConfig):
 def run_npcheck_drawfit(config : SingleChannelConfig, ws_path : str):
     '''
     DEPRECATED.
-    
+
     Runs drawPostFit.C from NPCheck. This is supplanted by [plot_plu_fit].
 
     Uses the default fccs file in the NPCheck dir, so must call in sync with the fit!
