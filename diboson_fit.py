@@ -25,18 +25,17 @@ import master
 
 
 def run_fit(
-        config : master.ChannelConfig,
-        variable : utils.Variable,
+        config : master.SingleChannelConfig,
         bin : tuple[float, float],
         gpr_mu_corr : float,
     ):
     from scipy import optimize, stats
 
     ### Setup ###
-    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + utils.generic_var_to_lep(variable, config.lepton_channel).name
+    hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + config.var_reader_name
     gpr_csv_args = dict(
         lep=config.lepton_channel,
-        vary=variable.name,
+        vary=config.variable.name,
         fitter='rbf_marg_post',
         bin=bin,
         unscale_width=True,
@@ -46,7 +45,7 @@ def run_fit(
 
     ### Get nominal yields ###
     def _subr_get_nominal(asimov : bool):
-        hists = config.file_manager.get_hist_all_samples(config.lepton_channel, hist_name, utils.variation_nom)
+        hists = config.gbl.file_manager.get_hist_all_samples(config.lepton_channel, hist_name, utils.variation_nom)
         
         ### Data and diboson ###
         n_data_nom = plot.integral_user(hists['data'], bin)
@@ -54,11 +53,11 @@ def run_fit(
         n_diboson_nom = plot.integral_user(hists['diboson'], bin, return_error=True)
         
         ### MC top backgrounds (sum) ###
-        mu_ttbar_nom = config.ttbar_fitter.mu_ttbar_nom
+        mu_ttbar_nom = config.gbl.ttbar_fitter.mu_ttbar_nom
         n_ttbar_nom = plot.integral_user(hists['ttbar'], bin, return_error=True)
         n_stop_nom = plot.integral_user(hists['stop'], bin, return_error=True)
-        val = mu_ttbar_nom[0] * n_ttbar_nom[0] + config.mu_stop[0] * n_stop_nom[0]
-        err = ((mu_ttbar_nom[0] * n_ttbar_nom[1])**2 + (config.mu_stop[0] * n_stop_nom[1])**2)**0.5
+        val = mu_ttbar_nom[0] * n_ttbar_nom[0] + config.gbl.mu_stop[0] * n_stop_nom[0]
+        err = ((mu_ttbar_nom[0] * n_ttbar_nom[1])**2 + (config.gbl.mu_stop[0] * n_stop_nom[1])**2)**0.5
         n_mc_nom = (val, err)
 
         ### MC V+jets for comparison ###
@@ -79,13 +78,13 @@ def run_fit(
         mu_diboson_val = numerator / n_diboson_nom[0]
         mu_diboson_nom = (mu_diboson_val, mu_diboson_val * mu_diboson_err**0.5)
 
-        print(f'diboson_fit.py::run_fit({variable}, {bin}):')
+        print(f'diboson_fit.py::run_fit({config.variable}, {bin}):')
         print(f'    Nominal:')
         print('    ' + '-' * 33)
         print(f'    {"Data":10}: {n_data_nom:10.2f}')
         print('    ' + '-' * 33)
         print(f'    {"ttbar":10}: {mu_ttbar_nom[0] * n_ttbar_nom[0]:10.2f} {mu_ttbar_nom[0] * n_ttbar_nom[1]:10.2f}')
-        print(f'    {"stop":10}: {config.mu_stop[0] * n_stop_nom[0]:10.2f} {config.mu_stop[0] * n_stop_nom[1]:10.2f}')
+        print(f'    {"stop":10}: {config.gbl.mu_stop[0] * n_stop_nom[0]:10.2f} {config.gbl.mu_stop[0] * n_stop_nom[1]:10.2f}')
         print(f'    {"gpr":10}: {n_gpr_nom[0]:10.2f} {n_gpr_nom[1]:10.2f}')
         print(f'    {"wjets":10}: {n_wjets_nom[0]:10.2f} {n_wjets_nom[1]:10.2f}')
         print(f'    {"zjets":10}: {n_zjets_nom[0]:10.2f} {n_zjets_nom[1]:10.2f}')
@@ -121,27 +120,27 @@ def run_fit(
             variation_updown = variation_base + updown
 
             ### Get MC background total (ttbar + stop) ###
-            h_ttbar = config.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name, variation_updown)
-            h_stop = config.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name, variation_updown)
+            h_ttbar = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.ttbar, hist_name, variation_updown)
+            h_stop = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name, variation_updown)
             n_ttbar = plot.integral_user(h_ttbar, bin)
             n_stop = plot.integral_user(h_stop, bin)
 
             ### Get signal strengths ###
-            mu_ttbar = config.ttbar_fitter.get_var(variation_updown)
+            mu_ttbar = config.gbl.ttbar_fitter.get_var(variation_updown)
             if variation_base == 'mu-stop':
                 if updown == utils.variation_up_key:
-                    mu_stop_1 = config.mu_stop[0] + config.mu_stop[1]
+                    mu_stop_1 = config.gbl.mu_stop[0] + config.gbl.mu_stop[1]
                 else:
-                    mu_stop_1 = config.mu_stop[0] - config.mu_stop[1]
+                    mu_stop_1 = config.gbl.mu_stop[0] - config.gbl.mu_stop[1]
             else:
-                mu_stop_1 = config.mu_stop[0]
+                mu_stop_1 = config.gbl.mu_stop[0]
 
             ### Get diff ###
             val = n_ttbar * mu_ttbar + n_stop * mu_stop_1
             mc_err += (val - n_mc_nom[0]) * (1 if updown == utils.variation_up_key else -1)
 
             ### Get GPR err ###
-            if config.nominal_only:
+            if config.gbl.nominal_only:
                 gpr_err = 0
             else:
                 val = config.gpr_results.get_entry(

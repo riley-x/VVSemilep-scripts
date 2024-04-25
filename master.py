@@ -1094,7 +1094,7 @@ class MultiChannelConfig():
         self.lepton_tag = '-'.join(str(x) for x in lepton_channels)
         if variables is not None:
             self.variables = variables
-            self.variable_tag = '-'.join(str(x) for k,v in variables.items() for x in v)
+            self.variable_tag = '-'.join(str(x) for k,v in self.variables.items() for x in v)
         else:
             self.variables = MultiChannelConfig._parse_variable_tag(variable_tag, lepton_channels)
             self.variable_tag = variable_tag
@@ -1123,7 +1123,7 @@ class MultiChannelConfig():
         Splits out configs for the individual channels.
         '''
         out = []
-        for lep,variables in self.variables:
+        for lep,variables in self.variables.items():
             for var in variables:
                 out.append(SingleChannelConfig(
                     global_config=self.gbl,
@@ -1145,7 +1145,7 @@ class SingleChannelConfig(MultiChannelConfig):
             lepton_channel : int,
             variable : utils.Variable,
         ):
-        super().__init__(global_config, [lepton_channel], variables={lepton_channel: variable})
+        super().__init__(global_config, [lepton_channel], variables={lepton_channel: [variable]})
         self.lepton_channel = lepton_channel
         self.variable = variable
         self.var_reader_name = utils.generic_var_to_lep(variable, lepton_channel).name
@@ -1554,7 +1554,7 @@ def save_rebinned_histograms(config : SingleChannelConfig):
     ### Data rebinned histograms for PLU stat test ###
     save_data_variation_histograms(config, file(utils.Sample.data.name))
 
-    plot.success(f'Saved rebinned histograms to {config.rebinned_hists_filepath}')
+    plot.success(f'Saved rebinned histograms to {config.gbl.rebinned_hists_filepath}')
 
 
 def save_data_variation_histograms(config : SingleChannelConfig, f : ROOT.TFile):
@@ -1719,7 +1719,6 @@ def run_direct_fit(config : SingleChannelConfig):
     for i in range(len(bins) - 1):
         res = diboson_fit.run_fit(
             config=config,
-            variable=config.variable,
             bin=(bins[i], bins[i+1]),
             gpr_mu_corr=config.gpr_sigcontam_corrs[i] if config.gpr_sigcontam_corrs is not None else None,
         )
@@ -1756,7 +1755,7 @@ def run_single_channel(config : SingleChannelConfig):
             lepton_channel=config.lepton_channel,
             output=f'{config.gbl.output_dir}/response_matrix',
             output_plots=f'{config.gbl.output_dir}/plots',
-            vars=config.variable,
+            vars=[config.variable],
         )
 
         ### Rebin reco histograms ###
