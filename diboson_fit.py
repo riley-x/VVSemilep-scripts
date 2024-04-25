@@ -3,7 +3,7 @@
 @file diboson_fit.py 
 @author Riley Xu - riley.xu@gmail.com, riley.xu@cern.ch 
 @date February 22, 2024 
-@brief Functions for fitting the diboson yield directly, bin-by-bin
+@brief DEPRECATED. Functions for fitting the diboson yield bin-by-bin, using scipy.optimize.
 '''
 
 import ROOT # type: ignore

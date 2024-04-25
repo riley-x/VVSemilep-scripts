@@ -40,7 +40,6 @@ master.py /path/to/hists/hist_{sample}_{lep}-0.root \
     [--channels 1] \ 
     [--output ./output] \
     [--skip-fits] \
-    [--skip-gpr] \
     [--condor] \
     [--asimov] 
 ```
@@ -57,7 +56,7 @@ This script takes care of the following tasks, many of which can be called indiv
 
 The main input is a formatter path to the histogram files. These are assumed to follow a systematic naming scheme. Use python-esque formatters `{sample}` and `{lep}` to encode variable fields that will be replaced by the sample name and the lepton channel name. These are all hardcoded in [utils.py](utils.py). The `Sample` class is defined with the filestubs that will be tried for each sample, and the lepton stubs are taken from `FileManager.lepton_channel_names`. Note that `FileManager` implements the file and histogram fetcher and is used throughout. Be careful to not duplicate files; the script will greedily try every possible combination of names and will add them together if multiple are found (good for when you have separate files that need to be added anyways, like different campaigns. But bad if you're not expecting it). Multiple formatters can be passed to `master.py`, but again be careful about accidentally duplicating files.
 
-Outputs are stored to the output directory, which defaults to `./output`. Most importantly are the plots in the `plots` subdirectory. GPR results, which take the longest runtime, are stored in `gpr/gpr_fit_results.csv`. Note that these can be batched by calling `--condor`, which is especially helpful when running systematics. The results of each run can be merged with `merge_gpr_condor.py`. You can then rerun `master.py` by passing `--skip-gpr` to skip running the GPR and just read the CSV instead. This can also be used i.e. if you generate the GPR results without condor but just want to rerun something else. Similarly, `--skip-fits` also skips the PLU fit in addition, and will use the stored fit results in `rf/{lep}lep_{var}.fcc.root`.
+Outputs are stored to the output directory, which defaults to `./output`. Most importantly are the plots in the `plots` subdirectory. GPR results, which take the longest runtime, are stored in `gpr/gpr_fit_results.csv`. Note that these can be batched by calling `--condor`, which is especially helpful when running systematics. The results of each run can be merged with `merge_gpr_condor.py`. You can then rerun `master.py` by passing `--skip-gpr` to skip running the GPR and just read the CSV instead. This can also be used i.e. if you generate the GPR results without condor but just want to rerun something else. Similarly, `--skip-fits` will skip all the fits in the script (assuming you have run them before), and will use the stored fit results in `{output}/rf`. This is useful if you want to remake plots or something. 
 
 ### Config
 

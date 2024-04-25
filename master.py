@@ -634,7 +634,7 @@ def plot_plu_fit(config : SingleChannelConfig, fit_results : dict[str, tuple[flo
     h_gpr = f_gpr.Get('Vjets_SR_' + config.variable.name)
 
     ### Response matrix ###
-    f_response_mtx = ROOT.TFile(config.gbl.response_matrix_filepath)
+    f_response_mtx = ROOT.TFile(config.gbl.response_matrix_filepath.format(lep=config.lepton_channel))
     h_signals = []
     for i in range(1, len(config.bins)):
         h = f_response_mtx.Get(f'ResponseMatrix_{config.variable}_fid{i:02}')
@@ -1382,11 +1382,11 @@ def run_plu_val(config : SingleChannelConfig, results_nom : dict[str, tuple[floa
     )
 
 
-def run_diboson_fit(config : MultiChannelConfig):
+def run_diboson_fit(config : MultiChannelConfig, skip_fits : bool = False):
     '''
     Runs the resonance finder script to fit the diboson cross section in all channels. 
     '''
-    ws_path, roofit_results, dict_results = run_rf(config, 'diboson', config.gbl.skip_diboson)
+    ws_path, roofit_results, dict_results = run_rf(config, 'diboson', skip_fits)
     mu_diboson = dict_results['mu-diboson']
     
     ### Plot fit ###
@@ -1418,19 +1418,19 @@ def run_diboson_fit(config : MultiChannelConfig):
     )
 
     ### NLL ###
-    if not config.gbl.skip_fits:
-        plot.notice(f'Running multichannel diboson-xsec NLL')
+    if not skip_fits:
+        plot.notice(f'master.py::run_diboson_fit() Running {config.base_name} diboson-xsec NLL')
         run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=False)
         run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=True)
     plot_nll(
         f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_nll.root',
-        filename=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll',
+        file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll',
         signal_name='mu-diboson',
         xtitle='#mu(diboson)',
     )
     plot_nll(
         f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_nll-asimov.root',
-        filename=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll-asimov',
+        file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll-asimov',
         signal_name='mu-diboson',
         xtitle='#mu(diboson)',
     )
@@ -1497,7 +1497,7 @@ def run_eft_fits(config: SingleChannelConfig):
     # )
 
     ### Run NLL ###
-    if not config.skip_fits:
+    if not config.gbl.skip_fits:
         plot.notice(f'master.py::run_eft_fits({config.base_name}) running {mode} NLL')
         run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path)
     plot_nll(
@@ -1773,13 +1773,13 @@ def run_single_channel(config : SingleChannelConfig):
     plot_mc_gpr_stack(
         config=config,
         subtitle=[f'{config.lepton_channel}-lepton channel prefit (post-GPR)'],
-        filename=f'{config.output_dir}/plots/{config.base_name}.prefit',
+        filename=f'{config.gbl.output_dir}/plots/{config.base_name}.prefit',
     )
 
     ### Naive yields ###
     plot_naive_bin_yields(
         config=config,
-        filename=f'{config.output_dir}/plots/{config.base_name}.naive_yields'
+        filename=f'{config.gbl.output_dir}/plots/{config.base_name}.naive_yields'
     )
 
     ### Diboson yield ###
@@ -1796,7 +1796,7 @@ def run_single_channel(config : SingleChannelConfig):
             run_plu_val(config, plu_results)
         
         ### Diboson fit ###
-        run_diboson_fit(config)
+        run_diboson_fit(config, skip_fits=config.gbl.skip_diboson)
 
         ### EFT fits ###
         run_eft_fits(config)
@@ -1914,7 +1914,7 @@ def main():
 
     ### Diboson signal strength fit ###
     if len(channels) > 1:
-        run_diboson_fit_multichannel(config)
+        run_diboson_fit(config, skip_fits=global_config.skip_fits)
 
 
 if __name__ == "__main__":
