@@ -85,12 +85,11 @@ class CondorSubmitMaker:
         ...
         maker.close()
     '''
-    def __init__(self, config : ChannelConfig, var : utils.Variable, filepath : str):
+    def __init__(self, config : SingleChannelConfig, filepath : str):
         self.config = config
-        self.var = var
         self.filepath = filepath
-        if not os.path.exists(f'{config.output_dir}/condor_logs'):
-            os.makedirs(f'{config.output_dir}/condor_logs')
+        if not os.path.exists(f'{config.gbl.output_dir}/condor_logs'):
+            os.makedirs(f'{config.gbl.output_dir}/condor_logs')
         if not os.path.exists(os.path.dirname(filepath)):
             os.makedirs(os.path.dirname(filepath))
 
@@ -101,9 +100,9 @@ Universe = vanilla
 getenv = True
 
 # Log paths
-output = {config.output_dir}/condor_logs/$(ClusterId).$(ProcId).out
-error = {config.output_dir}/condor_logs/$(ClusterId).$(ProcId).err
-log = {config.output_dir}/condor_logs/$(ClusterId).$(ProcId).log
+output = {config.gbl.output_dir}/condor_logs/$(ClusterId).$(ProcId).out
+error = {config.gbl.output_dir}/condor_logs/$(ClusterId).$(ProcId).err
+log = {config.gbl.output_dir}/condor_logs/$(ClusterId).$(ProcId).log
 
 # Queue
 +JobFlavour = "10 minutes"
@@ -122,16 +121,16 @@ queue arguments from (
 ''')
 
     def add(self, fit_config : gpr.FitConfig):
-        input_paths = [os.path.abspath(x) for x in self.config.file_manager.file_path_formats]
+        input_paths = [os.path.abspath(x) for x in self.config.gbl.file_manager.file_path_formats]
         output_path = os.path.abspath(fit_config.output_plots_dir)
         # Output hists and plots to same finely binned directory so no overwrite between jobs!
 
         self.f.write('    ')
         self.f.write(' '.join(input_paths))
         self.f.write(f' --lepton {self.config.lepton_channel}')
-        self.f.write(f' --var {self.var}')
+        self.f.write(f' --var {self.config.var}')
         self.f.write(f' --output {output_path}')
-        if self.config.is_asimov:
+        if self.config.gbl.is_asimov:
             self.f.write(f' --closure-test')
         self.f.write(f' --variation {fit_config.variation}')
         self.f.write(f' --mu-ttbar {fit_config.mu_ttbar}')
