@@ -140,7 +140,8 @@ def run(
             - 'diboson': Runs a direct fit to the diboson signal strength, with the
               diboson MC as the only floating signal. Note this only looks at a single
               channel at a time though.
-            - an EFT term: TODO
+            - an EFT term: cw_lin/quad. Runs a fit to a single EFT operator, with the SM
+              diboson signal strength fixed to 1 (TODO?)
     @param stat_validation_index
         Runs a validation test by using an alternate data sample, i.e. one that have been Poisson
         varied. The histograms should be named with prefix 'data_var{stat_validation_index:03}'.

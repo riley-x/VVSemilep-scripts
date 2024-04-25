@@ -1959,7 +1959,7 @@ def parse_args():
     parser.add_argument('filepaths', nargs='+')
     parser.add_argument('-o', '--output', default='./output')
     parser.add_argument('--skip-hist-gen', action='store_true', help="Skip generating the response matrix and rebinned histograms.")
-    parser.add_argument('--skip-fits', action='store_true', help="Don't do the GPR or PLU fits. For the former, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
+    parser.add_argument('--skip-fits', action='store_true', help="Don't do any fits. For GPR, uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'. For the others, will look for the ResonanceFinder fcc files at '{output}/rf/*_fcc.root'")
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-plu', action='store_true', help="Skips the PLU fit.")
     parser.add_argument('--skip-diboson', action='store_true', help="Skips the diboson cross section fit.")
