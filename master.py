@@ -517,8 +517,7 @@ def plot_plu_yields(config : ChannelConfig, variable : utils.Variable, plu_fit_r
 
 
 def plot_mc_gpr_stack(
-        config : ChannelConfig, 
-        variable : utils.Variable, 
+        config : ChannelConfig,
         filename : str, 
         subtitle : list[str] = [], 
         mu_diboson : float = 1,
@@ -1069,9 +1068,10 @@ class GlobalConfig:
         self.plu_validation_iters = 100 if run_plu_val else 0
 
 
-class ChannelConfigBase:
+class MultiChannelConfig():
     '''
-    Abstract base class for channel configuration.
+    Contains configuration parameters for an aggregate of run channels, or potentially
+    just a single channel.
 
     @property gbl
         Reference to a [GlobalConfig].
@@ -1079,49 +1079,7 @@ class ChannelConfigBase:
         Naming tags for the lepton/variable configuration.
     @property base_name
         Base name containing the lepton/variable configuration.
-    '''
-    def __init__(
-            self,
-            global_config : GlobalConfig,
-            lepton_tag : str,
-            variable_tag : str,
-        ):
-        self.gbl = global_config
-        self.lepton_tag = lepton_tag
-        self.variable_tag = variable_tag
-        self.base_name = f'{self.lepton_tag}lep_{self.variable_tag}'
-
-
-class SingleChannelConfig(ChannelConfigBase):
-    '''
-    Contains configuration parameters for a single run channel, i.e. a lepton channel and
-    variable combination. Used primarily for GPR and PLU fits.
-    '''
-    def __init__(
-            self, 
-            global_config : GlobalConfig, 
-            lepton_channel : int,
-            variable : utils.Variable,
-        ):
-        super().__init__(global_config, str(lepton_channel), str(variable))
-        self.lepton_channel = lepton_channel
-        self.variable = variable
-        self.var_reader_name = utils.generic_var_to_lep(variable, lepton_channel).name
-        self.bins = np.array(utils.get_bins(lepton_channel, variable), dtype=float)
-
-        ### Set by run_gpr ###
-        self.gpr_nominal_config : gpr.FitConfig = None
-        self.gpr_results : gpr.FitResults = None
-        self.gpr_sigcontam_corrs : list[float] = None
-
-
-class MultiChannelConfig(ChannelConfigBase):
-    '''
-    Contains configuration parameters for an aggregate of run channels, i.e. for running
-    diboson-xsec fits, or simply for looping over individual channels using
-    [split_config]. 
-
-    @property channel_variables
+    @property variables
         Dictionary of variables per lepton channel.
     '''
     def __init__(
@@ -1137,15 +1095,17 @@ class MultiChannelConfig(ChannelConfigBase):
             setup (see [_parse_variable_tag]). The dictionary always takes precedence if 
             set.
         '''
+        self.gbl = global_config
         self.lepton_channels = lepton_channels
-        lepton_tag = '-'.join(str(x) for x in lepton_channels)
+        self.lepton_tag = '-'.join(str(x) for x in lepton_channels)
         if variables is not None:
             self.variables = variables
-            variable_tag = '-'.join(str(x) for k,v in variables.items() for x in v)
+            self.variable_tag = '-'.join(str(x) for k,v in variables.items() for x in v)
         else:
             self.variables = MultiChannelConfig._parse_variable_tag(variable_tag, lepton_channels)
-            variable_tag = variable_tag
-        super().__init__(global_config, lepton_tag, variable_tag)
+            self.variable_tag = variable_tag
+
+        self.base_name = f'{self.lepton_tag}lep_{self.variable_tag}'
 
 
     def _parse_variable_tag(tag, lepton_channels) -> dict[int, list[utils.Variable]]:
@@ -1179,91 +1139,120 @@ class MultiChannelConfig(ChannelConfigBase):
         return out
 
 
+class SingleChannelConfig(MultiChannelConfig):
+    '''
+    Contains configuration parameters for a single run channel, i.e. a lepton channel and
+    variable combination. Used primarily for GPR and PLU fits. Exposes simpler properties
+    than [MultiChannelConfig].
+    '''
+    def __init__(
+            self, 
+            global_config : GlobalConfig, 
+            lepton_channel : int,
+            variable : utils.Variable,
+        ):
+        super().__init__(global_config, [lepton_channel], variables={lepton_channel: variable})
+        self.lepton_channel = lepton_channel
+        self.variable = variable
+        self.var_reader_name = utils.generic_var_to_lep(variable, lepton_channel).name
+        self.bins = np.array(utils.get_bins(lepton_channel, variable), dtype=float)
+
+        ### Set by run_gpr ###
+        self.gpr_nominal_config : gpr.FitConfig = None
+        self.gpr_results : gpr.FitResults = None
+        self.gpr_sigcontam_corrs : list[float] = None
+
 
 ##########################################################################################
 ###                                  RESONANCE FINDER                                  ###
 ##########################################################################################
 
 
-def run_npcheck_drawfit(config : ChannelConfig, var : utils.Variable, ws_path : str):
+def run_npcheck_drawfit(config : SingleChannelConfig, ws_path : str):
     '''
+    DEPRECATED.
+    
     Runs drawPostFit.C from NPCheck. This is supplanted by [plot_plu_fit].
 
     Uses the default fccs file in the NPCheck dir, so must call in sync with the fit!
     '''
-    plot.notice(f'{config.log_base} drawing PLU fits using NPCheck')
-    with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}.draw_fit.txt', 'w') as f:
+    plot.notice(f'Drawing PLU fits using NPCheck')
+    with open(f'{config.gbl.output_dir}/rf/log.{config.base_name}.draw_fit.txt', 'w') as f:
         res = subprocess.run(
             ['./runDrawFit.py', ws_path,
                 '--mu', '1',
                 '--fccs', 'fccs/FitCrossChecks.root'
             ],
-            cwd=config.npcheck_dir,
+            cwd=config.gbl.npcheck_dir,
             stdout=f,
             stderr=f,
             # capture_output=True,
             # text=True,
         )
     res.check_returncode()
-    npcheck_output_path = f'{config.npcheck_dir}/Plots/PostFit/summary_postfit_doAsimov0_doCondtional0_mu1.pdf'
-    target_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.plu_postfit.pdf'
+    npcheck_output_path = f'{config.gbl.npcheck_dir}/Plots/PostFit/summary_postfit_doAsimov0_doCondtional0_mu1.pdf'
+    target_path = f'{config.gbl.output_dir}/rf/{config.base_name}.plu_postfit.pdf'
     shutil.copyfile(npcheck_output_path, target_path)
 
 
-def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, skip_fits : bool, stat_validation_index : int = None):
+def run_rf(config : MultiChannelConfig, mode : str, skip_fits : bool, stat_validation_index : int = None):
     '''
-    Runs the resonance finder script for a single channel. Common to both the PLU and
-    diboson-signal strength fits.
+    Runs the resonance finder script. Common to all likelihood fits.
 
     @param mode
         Same options as in [rf.run].
+    @param skip_fits
+        Set to true to skip the fits but still fetch the results from the saved files.
+
+    @returns (ws_path, roofit_results, dict_results)
+        - ws_path: path to the generated ResonanceFinder workspace.
+        - roofit_results: fit results from RooFit.
+        - dict_results: the RooFit results parsed into a dictionary of name: (val, err).
     '''
     # Really important this import is here otherwise segfaults occur, due to the
     # `from ROOT import RF` line I think. But somehow hiding it here is fine.
     import rf_plu
 
-    os.makedirs(f'{config.output_dir}/rf', exist_ok=True)
-
     ### Create RF workspace ###
     if not skip_fits:
-        plot.notice(f'{config.log_base} creating ResonanceFinder workspace for {mode} fit')
+        plot.notice(f'master.py::run_rf({config.base_name}) creating ResonanceFinder workspace for {mode} fit')
         ws_path = rf_plu.run(
             mode=mode,
-            variables={config.lepton_channel: [var]},
-            response_matrix_path=config.response_matrix_filepath,
-            output_dir=config.output_dir,
-            base_name=f'{config.lepton_channel}lep_{var}',
-            hist_file_format=config.rebinned_hists_filepath,
-            mu_stop=config.mu_stop,
-            mu_ttbar=config.ttbar_fitter.mu_ttbar_nom,
-            gpr_mu_corrs=not config.nominal_only,
+            variables=config.variables,
+            response_matrix_path=config.gbl.response_matrix_filepath,
+            output_dir=config.gbl.output_dir,
+            base_name=config.base_name,
+            hist_file_format=config.gbl.rebinned_hists_filepath,
+            mu_stop=config.gbl.mu_stop,
+            mu_ttbar=config.gbl.ttbar_fitter.mu_ttbar_nom,
+            gpr_mu_corrs=not config.gbl.nominal_only,
             stat_validation_index=stat_validation_index,
         )
     else:
         ws_path = rf_plu.ws_path(
             mode=mode,
-            output_dir=config.output_dir, 
-            base_name=f'{config.lepton_channel}lep_{var}',
+            output_dir=config.gbl.output_dir, 
+            base_name=config.base_name,
             stat_validation_index=stat_validation_index,
         )
     ws_path = os.path.abspath(ws_path)
 
     ### Run fits ###
     if stat_validation_index is None:
-        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.{mode}_fcc.root'
+        fcc_path = f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_fcc.root'
     else:
-        fcc_path = f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.{mode}_fcc_var{stat_validation_index:03}.root'
+        fcc_path = f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_fcc_var{stat_validation_index:03}.root'
     if not skip_fits:
-        plot.notice(f'{config.log_base} running {mode} fits')
-        with open(f'{config.output_dir}/rf/log.{config.lepton_channel}lep_{var}.{mode}_fcc.txt', 'w') as f:
+        plot.notice(f'master.py::run_rf({config.base_name}) running {mode} fits')
+        with open(f'{config.gbl.output_dir}/rf/log.{config.base_name}.{mode}_fcc.txt', 'w') as f:
             res = subprocess.run(
                 ['./runFitCrossCheck.py', ws_path],  # the './' is necessary!
-                cwd=config.npcheck_dir,
+                cwd=config.gbl.npcheck_dir,
                 stdout=f,
                 stderr=f
             )
         res.check_returncode()
-        shutil.copyfile(f'{config.npcheck_dir}/fccs/FitCrossChecks.root', fcc_path)
+        shutil.copyfile(f'{config.gbl.npcheck_dir}/fccs/FitCrossChecks.root', fcc_path)
 
     ### Get fit result ###
     fcc_file = ROOT.TFile(fcc_path)
@@ -1274,52 +1263,51 @@ def run_rf(config : ChannelConfig, var : utils.Variable, mode : str, skip_fits :
 
     ### Parse results ###
     dict_results = { v.GetName() : (v.getValV(), v.getError()) for v in roofit_results.floatParsFinal() }
-    dict_results['mu-stop'] = convert_alpha(dict_results['alpha_mu-stop'], config.mu_stop)
-    dict_results['mu-ttbar'] = convert_alpha(dict_results['alpha_mu-ttbar'], config.ttbar_fitter.mu_ttbar_nom)
+    dict_results['mu-stop'] = convert_alpha(dict_results['alpha_mu-stop'], config.gbl.mu_stop)
+    dict_results['mu-ttbar'] = convert_alpha(dict_results['alpha_mu-ttbar'], config.gbl.ttbar_fitter.mu_ttbar_nom)
 
     return ws_path, roofit_results, dict_results
 
 
-def run_plu(config : ChannelConfig, var : utils.Variable, stat_validation_index : int = None):
+def run_plu(config : SingleChannelConfig, stat_validation_index : int = None):
     '''
     Runs the profile likelihood unfolding fit using ResonanceFinder. Assumes the
     GPR/response matrices have been created already.
     '''
-    ws_path, roofit_results, plu_fit_results = run_rf(config, var, 'PLU', config.skip_plu, stat_validation_index)
+    ws_path, roofit_results, plu_fit_results = run_rf(config, 'PLU', config.gbl.skip_plu, stat_validation_index)
 
     ### Plots ###
     if stat_validation_index is None:
         ### Draw fit ###
-        plot_plu_fit(config, var, plu_fit_results)
+        plot_plu_fit(config, plu_fit_results)
 
         ### Draw pulls ###
         plot_pulls(
             fit_results=plu_fit_results, 
-            filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_pulls',
-            subtitle=[f'{config.lepton_channel}-lepton channel {var.title} pulls'],
+            filename=f'{config.gbl.output_dir}/plots/{config.base_name}.plu_pulls',
+            subtitle=[f'{config.lepton_channel}-lepton channel {config.variable.title} pulls'],
         )
 
         ### Draw correlation matrix ###
         plot_correlations(
             roofit_results=roofit_results, 
-            filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_corr',
-            subtitle=[f'{config.lepton_channel}-lepton channel {var} fit'],
+            filename=f'{config.gbl.output_dir}/plots/{config.base_name}.plu_corr',
+            subtitle=[f'{config.lepton_channel}-lepton channel {config.variable.title} fit'],
             )
 
         ### Draw yield vs MC ###
-        plot_plu_yields(config, var, plu_fit_results, f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.plu_yields')
+        plot_plu_yields(config, plu_fit_results, f'{config.gbl.output_dir}/plots/{config.base_name}.plu_yields')
 
     return plu_fit_results
 
 
-def run_plu_val(config : ChannelConfig, variable : utils.Variable, results_nom : dict[str, tuple[float, float]]):
+def run_plu_val(config : SingleChannelConfig, results_nom : dict[str, tuple[float, float]]):
     '''
     Runs a validation test for the PLU fit by creating statistical variations of the data
     histograms (see [save_data_variation_histograms]) and running the PLU on each of them,
     generating a distribution of the output results.
     '''
-    bins = utils.get_bins(config.lepton_channel, variable)
-    nbins = len(bins) - 1
+    nbins = len(config.bins) - 1
 
     ### Create histograms ###
     hists = []
@@ -1329,8 +1317,8 @@ def run_plu_val(config : ChannelConfig, variable : utils.Variable, results_nom :
     sum_squares = np.zeros(nbins)
 
     ### Run PLU multiple times ###
-    for val_index in range(config.plu_validation_iters):
-        results = run_plu(config, variable, val_index)
+    for val_index in range(config.gbl.plu_validation_iters):
+        results = run_plu(config, val_index)
         for i in range(nbins):
             name = f'mu_{i + 1:02}'
             val_nom = results_nom[name]
@@ -1341,8 +1329,8 @@ def run_plu_val(config : ChannelConfig, variable : utils.Variable, results_nom :
             sum_squares[i] += val**2
 
     ### Mean and std dev callback ###
-    means = sums / config.plu_validation_iters
-    std_devs = np.sqrt(sum_squares / config.plu_validation_iters - means**2)
+    means = sums / config.gbl.plu_validation_iters
+    std_devs = np.sqrt(sum_squares / config.gbl.plu_validation_iters - means**2)
     def callback(plotter):
         for i in range(nbins):
             line = ROOT.TLine(means[i], i, means[i], i + 0.5)
@@ -1382,7 +1370,7 @@ def run_plu_val(config : ChannelConfig, variable : utils.Variable, results_nom :
     plot.plot_tiered(
         hists=[[h] for h in hists],
         text_pos='top',
-        tier_labels=[f'Bin {i:02}' for i in range(1, len(bins))],
+        tier_labels=[f'Bin {i:02}' for i in range(1, len(config.bins))],
         subtitle=[
             '#sqrt{s}=13 TeV, 140 fb^{-1}',
             f'{config.lepton_channel}-lepton channel',
@@ -1396,114 +1384,32 @@ def run_plu_val(config : ChannelConfig, variable : utils.Variable, results_nom :
         bottom_margin=0.2,
         fillcolor=plot.colors.pastel,
         callback=callback,
-        filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{variable}.plu_validation',
+        filename=f'{config.gbl.output_dir}/plots/{config.base_name}.plu_validation',
     )
 
 
-def run_diboson_fit(config: ChannelConfig, var : utils.Variable):
-    '''
-    Runs a ResonanceFinder fit to the diboson signal strength. Complementary to the PLU
-    fits, but not broken into fiducial response bins. 
-    '''
-    ws_path, roofit_results, dict_results = run_rf(config, var, 'diboson', config.skip_diboson)
-    
-    ### Plot fit ###
-    mu_diboson = dict_results['mu-diboson']
-    plot_mc_gpr_stack(
-        config=config, 
-        variable=var,
-        subtitle=[
-            f'{config.lepton_channel}-lepton channel postfit',
-            f'Diboson #mu = {mu_diboson[0]:.2f} #pm {mu_diboson[1]:.2f}',
-        ],
-        mu_diboson=mu_diboson[0],
-        filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_postfit',
-    )
-
-    ### Draw pulls ###
-    plot_pulls(
-        fit_results=dict_results, 
-        filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_pulls',
-        subtitle=[f'{config.lepton_channel}-lepton channel {var.title} pulls'],
-    )
-
-    ### Draw correlation matrix ###
-    plot_correlations(
-        roofit_results=roofit_results, 
-        filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_corr',
-        subtitle=[f'{config.lepton_channel}-lepton channel {var.title} fit'],
-    )
-
-    ### Run NLL ###
-    if not config.skip_diboson:
-        plot.notice(f'{config.log_base} running diboson-xsec NLL')
-        run_nll(config.output_dir, f'{config.lepton_channel}lep_{var}.diboson', ws_path)
-    plot_nll(
-        f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.diboson_nll.root',
-        file_name=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.diboson_nll',
-        signal_name='mu-diboson',
-        xtitle='#mu(diboson)',
-        subtitle=[f'{config.lepton_channel}-lepton channel {var.title} fit'],
-    )
-
-
-def run_diboson_fit_multichannel(config : MultiChannelConfig):
+def run_diboson_fit(config : MultiChannelConfig):
     '''
     Runs the resonance finder script to fit the diboson cross section in all channels. 
     '''
-    # Really important this import is here otherwise segfaults occur, due to the
-    # `from ROOT import RF` line I think. But somehow hiding it here is fine.
-    import rf_plu
-
-    os.makedirs(f'{config.gbl.output_dir}/rf', exist_ok=True)
-
-    ### Create RF workspace ###
-    if not config.gbl.skip_fits:
-        plot.notice(f'Creating ResonanceFinder workspace for all-channel fit')
-        ws_path = rf_plu.run(
-            mode='diboson',
-            variables=config.variables,
-            response_matrix_path=config.gbl.response_matrix_filepath,
-            output_dir=config.gbl.output_dir,
-            base_name=config.base_name,
-            hist_file_format=config.gbl.rebinned_hists_filepath,
-            mu_stop=config.gbl.mu_stop,
-            mu_ttbar=config.gbl.ttbar_fitter.mu_ttbar_nom,
-            gpr_mu_corrs=not config.gbl.nominal_only,
+    ws_path, roofit_results, dict_results = run_rf(config, 'diboson', config.gbl.skip_diboson)
+    mu_diboson = dict_results['mu-diboson']
+    
+    ### Plot fit ###
+    sc_configs = config.split_config()
+    filename = f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_postfit'
+    for sc_config in sc_configs:
+        if len(sc_configs) > 1:
+            filename += f'_{sc_config.base_name}'
+        plot_mc_gpr_stack(
+            config=config, 
+            subtitle=[
+                f'{sc_config.lepton_channel}-lepton channel postfit',
+                f'Diboson #mu = {mu_diboson[0]:.2f} #pm {mu_diboson[1]:.2f}',
+            ],
+            mu_diboson=mu_diboson[0],
+            filename=filename,
         )
-    else:
-        ws_path = rf_plu.ws_path(
-            mode='diboson',
-            output_dir=config.gbl.output_dir, 
-            base_name=config.base_name,
-        )
-    ws_path = os.path.abspath(ws_path)
-
-    ### Run fits ###
-    fcc_path = f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_fcc.root'
-    if not config.gbl.skip_fits:
-        plot.notice(f'Running multichannel diboson fit')
-        with open(f'{config.gbl.output_dir}/rf/log.{config.base_name}.diboson_fcc.txt', 'w') as f:
-            res = subprocess.run(
-                ['./runFitCrossCheck.py', ws_path],  # the './' is necessary!
-                cwd='ResonanceFinder/NPCheck',
-                stdout=f,
-                stderr=f
-            )
-        res.check_returncode()
-        shutil.copyfile('ResonanceFinder/NPCheck/fccs/FitCrossChecks.root', fcc_path)
-
-    ### Get fit result ###
-    fcc_file = ROOT.TFile(fcc_path)
-    results_name = 'PlotsAfterGlobalFit/unconditionnal/fitResult'
-    roofit_results = fcc_file.Get(results_name)
-    if not config.gbl.skip_fits:
-        roofit_results.Print()
-
-    ### Parse results ###
-    dict_results = { v.GetName() : (v.getValV(), v.getError()) for v in roofit_results.floatParsFinal() }
-    dict_results['mu-stop'] = convert_alpha(dict_results['alpha_mu-stop'], config.gbl.mu_stop)
-    dict_results['mu-ttbar'] = convert_alpha(dict_results['alpha_mu-ttbar'], config.gbl.ttbar_fitter.mu_ttbar_nom)
 
     ### Draw pulls ###
     plot_pulls(
@@ -1557,12 +1463,12 @@ def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asi
     # )
 
 
-def run_eft_fits(config: ChannelConfig, var : utils.Variable):
+def run_eft_fits(config: SingleChannelConfig):
     '''
     Runs a ResonanceFinder fit to the EFT Wilson coefficients. 
     '''
     mode = 'cw_lin'
-    ws_path, roofit_results, dict_results = run_rf(config, var, mode, config.skip_fits)
+    ws_path, roofit_results, dict_results = run_rf(config,  mode, config.gbl.skip_fits)
     
     ### Plot fit ###
     operator = mode.split('_')[0]
@@ -1598,12 +1504,12 @@ def run_eft_fits(config: ChannelConfig, var : utils.Variable):
 
     ### Run NLL ###
     if not config.skip_fits:
-        plot.notice(f'{config.log_base} running {mode} NLL')
-        run_nll(config.output_dir, f'{config.lepton_channel}lep_{var}.{mode}', ws_path)
+        plot.notice(f'master.py::run_eft_fits({config.base_name}) running {mode} NLL')
+        run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path)
     plot_nll(
-        f'{config.output_dir}/rf/{config.lepton_channel}lep_{var}.{mode}_nll.root',
-        file_name=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.{mode}_nll',
-        subtitle=[f'{config.lepton_channel}-lepton channel {var.title} {mode} fit'],
+        f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll.root',
+        file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll',
+        subtitle=[f'{config.lepton_channel}-lepton channel {config.variable.title} {mode} fit'],
         signal_name=f'mu-{operator}',
         xtitle=operator_title,
     )
