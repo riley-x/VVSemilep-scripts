@@ -347,8 +347,11 @@ def plot_gpr_mc_comparisons(config: SingleChannelConfig, filename : str):
 
     err_cum = np.array([h_mc_nom.GetBinError(i) for i in range(1, h_mc_nom.GetNbinsX() + 1)])
     err_cum = add_errs(err_cum, get_diffs)
-    err_mg = get_madgraph_shape_error()
-    err_cum = np.sqrt(err_cum ** 2 + err_mg ** 2)
+    try:
+        err_mg = get_madgraph_shape_error()
+        err_cum = np.sqrt(err_cum ** 2 + err_mg ** 2)
+    except Exception as e:
+        plot.warning('master.py::plot_gpr_mc_comparisons() Unable to get MadGraph shape error')
 
     h_mc_systs = h_mc_nom.Clone()
     for i in range(1, h_mc_systs.GetNbinsX() + 1):
