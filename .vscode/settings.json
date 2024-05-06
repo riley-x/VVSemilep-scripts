@@ -8,6 +8,9 @@
         "drawNLL.C": "cpp",
         "makeNLL.C": "cpp",
         "Minimization.C": "cpp",
-        "asimovdatamaking.c": "cpp"
+        "asimovdatamaking.c": "cpp",
+        "drawRankingPlot.C": "cpp",
+        "drawLimitPlot.C": "cpp",
+        "makeRanking.C": "cpp"
     }
 }

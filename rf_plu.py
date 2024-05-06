@@ -75,7 +75,12 @@ def _add_diboson(runner, lepton_channel, lumi_uncert, variable, region, hist_fil
 
 
 def _add_eft(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist_name, mode, **_):
+    '''
+    @param mode
+        Should be [cw]_[lin/quad].
+    '''
     from ROOT import RF # type: ignore
+    operator = mode.split('_')[0]
 
     ### Add diboson as background ###
     runner.channel(region).addSample('diboson', hist_file_format.format(lep=lepton_channel, sample='diboson'), hist_name.format('diboson'))
@@ -85,11 +90,7 @@ def _add_eft(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist
     for variation in utils.variations_hist:
         sample.addVariation(variation)
 
-    ### EFT signal ###
-    # [mode] should be [cw]_[lin/quad]
-    operator = mode.split('_')[0]
-    mu_factor = RF.MultiplicativeFactor(f'mu-{operator}', 1, -5, 5, RF.MultiplicativeFactor.FREE)
-
+    ### Add quadratic term ###
     if 'quad' in mode:
         runner.channel(region).addSample(f'{operator}_quad', hist_file_format.format(lep=lepton_channel, sample=f'{operator}_quad'), hist_name.format(f'{operator}_quad'))
         sample = runner.channel(region).sample(f'{operator}_quad')
@@ -97,18 +98,22 @@ def _add_eft(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist
         sample.setUseStatError(True)
         for variation in utils.variations_hist:
             sample.addVariation(variation)
-        sample.multiplyBy(mu_factor)
-        # sample.multiplyBy(mu_factor) # TODO RF can't scale twice by the same factor I think, at least not like this.
-        runner.defineSignal(sample, 'eft')
-    else: # TODO
-        runner.channel(region).addSample(f'{operator}_lin', hist_file_format.format(lep=lepton_channel, sample=f'{operator}_lin'), hist_name.format(f'{operator}_lin'))
-        sample = runner.channel(region).sample(f'{operator}_lin')
-        sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
-        sample.setUseStatError(True)
-        for variation in utils.variations_hist:
-            sample.addVariation(variation)
+        
+        mu_factor = RF.MultiplicativeFactor(f'mu-{operator}-quad', 1) # TODO
         sample.multiplyBy(mu_factor)
         runner.defineSignal(sample, 'eft')
+
+    ### Add linear term ###
+    runner.channel(region).addSample(f'{operator}_lin', hist_file_format.format(lep=lepton_channel, sample=f'{operator}_lin'), hist_name.format(f'{operator}_lin'))
+    sample = runner.channel(region).sample(f'{operator}_lin')
+    sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
+    sample.setUseStatError(True)
+    for variation in utils.variations_hist:
+        sample.addVariation(variation)
+    
+    mu_factor = RF.MultiplicativeFactor(f'mu-{operator}', 1, -5, 5, RF.MultiplicativeFactor.FREE)
+    sample.multiplyBy(mu_factor)
+    runner.defineSignal(sample, 'eft')
 
     runner.addPOI(f'mu-{operator}')
     return mode

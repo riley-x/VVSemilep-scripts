@@ -1479,6 +1479,23 @@ def run_eft_fits(config: SingleChannelConfig):
 
     mu = dict_results[f'mu-{operator}']
     plot.success(str(mu))
+
+
+
+    mode = 'cw_quad'
+    ws_path, roofit_results, dict_results = run_rf(config,  mode, config.gbl.skip_fits)
+    
+    ### Plot fit ###
+    operator = mode.split('_')[0]
+    if operator == 'cw':
+        operator_title = 'c_{W}'
+
+    mu = dict_results[f'mu-{operator}']
+    plot.success(str(mu))
+
+
+
+
     # plot_mc_gpr_stack(
     #     config=config, 
     #     variable=var,
