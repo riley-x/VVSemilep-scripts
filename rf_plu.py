@@ -80,7 +80,6 @@ def _add_eft(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist
         Should be [cw]_[lin/quad].
     '''
     from ROOT import RF # type: ignore
-    operator = mode.split('_')[0]
 
     ### Add diboson as background ###
     runner.channel(region).addSample('diboson', hist_file_format.format(lep=lepton_channel, sample='diboson'), hist_name.format('diboson'))
@@ -89,6 +88,24 @@ def _add_eft(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist
     sample.setUseStatError(True)
     for variation in utils.variations_hist:
         sample.addVariation(variation)
+
+    ### Config ###
+    signal_names = ''
+    operator = mode.split('_')[0]
+
+    ### Add linear term ###
+    runner.channel(region).addSample(f'{operator}_lin', hist_file_format.format(lep=lepton_channel, sample=f'{operator}_lin'), hist_name.format(f'{operator}_lin'))
+    sample = runner.channel(region).sample(f'{operator}_lin')
+    sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
+    sample.setUseStatError(True)
+    for variation in utils.variations_hist:
+        sample.addVariation(variation)
+    
+    mu_factor = RF.MultiplicativeFactor(f'mu-{operator}', 1, -5, 5, RF.MultiplicativeFactor.FREE)
+    sample.multiplyBy(mu_factor)
+    runner.defineSignal(sample, 'eft')
+    runner.addPOI(f'mu-{operator}')
+    signal_names += f'{operator}_lin'
 
     ### Add quadratic term ###
     if 'quad' in mode:
@@ -102,21 +119,9 @@ def _add_eft(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist
         mu_factor = RF.MultiplicativeFactor(f'mu-{operator}-quad', 1) # TODO
         sample.multiplyBy(mu_factor)
         runner.defineSignal(sample, 'eft')
+        signal_names += f'-{operator}_quad'
 
-    ### Add linear term ###
-    runner.channel(region).addSample(f'{operator}_lin', hist_file_format.format(lep=lepton_channel, sample=f'{operator}_lin'), hist_name.format(f'{operator}_lin'))
-    sample = runner.channel(region).sample(f'{operator}_lin')
-    sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
-    sample.setUseStatError(True)
-    for variation in utils.variations_hist:
-        sample.addVariation(variation)
-    
-    mu_factor = RF.MultiplicativeFactor(f'mu-{operator}', 1, -5, 5, RF.MultiplicativeFactor.FREE)
-    sample.multiplyBy(mu_factor)
-    runner.defineSignal(sample, 'eft')
-
-    runner.addPOI(f'mu-{operator}')
-    return mode
+    return signal_names
 
 
 
