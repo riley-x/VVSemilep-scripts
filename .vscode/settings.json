@@ -11,6 +11,7 @@
         "asimovdatamaking.c": "cpp",
         "drawRankingPlot.C": "cpp",
         "drawLimitPlot.C": "cpp",
-        "makeRanking.C": "cpp"
+        "makeRanking.C": "cpp",
+        "chrono": "cpp"
     }
 }

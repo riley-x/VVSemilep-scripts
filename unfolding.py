@@ -414,7 +414,6 @@ def main(
     return rf_output_path
 
 
-
 if __name__ == "__main__":
     ### Args ###
     parser = ArgumentParser(
