@@ -1103,6 +1103,10 @@ class MultiChannelConfig():
             self.variable_tag = variable_tag
 
         self.base_name = f'{self.lepton_tag}lep_{self.variable_tag}'
+        if len(self.lepton_channels) > 1:
+            self.lep_title = f'{self.lepton_tag} lepton channels'
+        else: 
+            self.lep_title = f'{self.lepton_tag}-lepton channel'
 
 
     def _parse_variable_tag(tag, lepton_channels) -> dict[int, list[utils.Variable]]:
@@ -1139,6 +1143,11 @@ class MultiChannelConfig():
                     variable=var,
                 ))
         return out
+
+    def __format__(self, format_spec: str) -> str:
+        if format_spec == 'lep_title':
+            return self.lep_title
+        return self.base_name
 
 
 class SingleChannelConfig(MultiChannelConfig):
@@ -1398,6 +1407,7 @@ def run_diboson_fit(config : MultiChannelConfig, skip_fits : bool = False):
     mu_diboson = dict_results['mu-diboson']
     
     ### Plot fit ###
+    # TODO this doesn't adjust the GPR distribution for the correlation correction
     sc_configs = config.split_config()
     filename = f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_postfit'
     for sc_config in sc_configs:
@@ -1465,47 +1475,35 @@ def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asi
     # )
 
 
-def run_eft_fits(config: SingleChannelConfig):
+def run_eft_fit(config : MultiChannelConfig, mode : str, skip_fits : bool = False):
     '''
     Runs a ResonanceFinder fit to the EFT Wilson coefficients. 
     '''
-    mode = 'cw_lin'
-    ws_path, roofit_results, dict_results = run_rf(config,  mode, config.gbl.skip_fits)
-    
-    ### Plot fit ###
+    ### Parsing ###
     operator = mode.split('_')[0]
     if operator == 'cw':
         operator_title = 'c_{W}'
+    else:
+        raise NotImplementedError(f'master.py::run_eft_fit() Unknown operator {operator}')
 
-    mu = dict_results[f'mu-{operator}']
-    plot.success(str(mu))
+    ### Fit ###
+    ws_path, roofit_results, dict_results = run_rf(config, mode, skip_fits)
 
-
-
-    mode = 'cw_quad'
-    ws_path, roofit_results, dict_results = run_rf(config,  mode, config.gbl.skip_fits)
-    
     ### Plot fit ###
-    operator = mode.split('_')[0]
-    if operator == 'cw':
-        operator_title = 'c_{W}'
-
-    mu = dict_results[f'mu-{operator}']
-    plot.success(str(mu))
-
-
-
-
-    # plot_mc_gpr_stack(
-    #     config=config, 
-    #     variable=var,
-    #     subtitle=[
-    #         f'{config.lepton_channel}-lepton channel postfit',
-    #         f'Diboson #mu = {mu_diboson[0]:.2f} #pm {mu_diboson[1]:.2f}',
-    #     ],
-    #     mu_diboson=mu_diboson[0],
-    #     filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.{mode}_postfit',
-    # )
+    # sc_configs = config.split_config()
+    # filename = f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_postfit'
+    # for sc_config in sc_configs:
+    #     if len(sc_configs) > 1:
+    #         filename += f'_{sc_config.base_name}'
+    #     plot_mc_gpr_stack(
+    #         config=config, 
+    #         subtitle=[
+    #             f'{sc_config.lepton_channel}-lepton channel postfit',
+    #             f'Diboson #mu = {mu_diboson[0]:.2f} #pm {mu_diboson[1]:.2f}',
+    #         ],
+    #         mu_diboson=mu_diboson[0],
+    #         filename=filename,
+    #     )
 
     ### Draw pulls ###
     # plot_pulls(
@@ -1522,17 +1520,24 @@ def run_eft_fits(config: SingleChannelConfig):
     # )
 
     ### Run NLL ###
-    if not config.gbl.skip_fits:
-        plot.notice(f'master.py::run_eft_fits({config.base_name}) running {mode} NLL')
-        run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path)
+    if not skip_fits:
+        plot.notice(f'master.py::run_eft_fit() Running {config.base_name} {mode} NLL')
+        run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=False)
+        run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=True)
     plot_nll(
         f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll.root',
         file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll',
-        subtitle=[f'{config.lepton_channel}-lepton channel {config.variable.title} {mode} fit'],
+        subtitle=[f'{config:lep_title} {mode} fit'],
         signal_name=f'mu-{operator}',
         xtitle=operator_title,
     )
-
+    plot_nll(
+        f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll-asimov.root',
+        file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll-asimov',
+        subtitle=[f'{config:lep_title} {mode} fit'],
+        signal_name=f'mu-{operator}',
+        xtitle=operator_title,
+    )
 
 
 ##########################################################################################
@@ -1824,7 +1829,8 @@ def run_single_channel(config : SingleChannelConfig):
         run_diboson_fit(config, skip_fits=config.gbl.skip_diboson)
 
         ### EFT fits ###
-        run_eft_fits(config)
+        run_eft_fit(config, 'cw_lin')
+        run_eft_fit(config, 'cw_quad')
 
     except Exception as e:
         plot.error(str(e))
@@ -1937,9 +1943,13 @@ def main():
         for sc_config in config.split_config():
             run_single_channel(sc_config)
 
-    ### Diboson signal strength fit ###
     if len(channels) > 1:
+        ### Diboson signal strength fit ###
         run_diboson_fit(config, skip_fits=global_config.skip_fits)
+
+        ### EFT fits ###
+        run_eft_fit(config, 'cw_lin')
+        run_eft_fit(config, 'cw_quad')
 
 
 if __name__ == "__main__":
