@@ -1033,6 +1033,7 @@ class GlobalConfig:
             skip_gpr_if_present : bool,
             skip_plu : bool,
             skip_diboson : bool,
+            skip_eft : bool,
             gpr_condor : bool,
             is_asimov : bool,
             run_plu_val : bool,
@@ -1060,6 +1061,7 @@ class GlobalConfig:
         self.skip_gpr_if_present = skip_gpr_if_present
         self.skip_plu = skip_plu or skip_fits
         self.skip_diboson = skip_diboson or skip_fits
+        self.skip_eft = skip_eft or skip_fits
         self.gpr_condor = gpr_condor
         self.is_asimov = is_asimov
         self.plu_validation_iters = 100 if run_plu_val else 0
@@ -1846,8 +1848,8 @@ def run_single_channel(config : SingleChannelConfig):
         run_diboson_fit(config, skip_fits=config.gbl.skip_diboson)
 
         ### EFT fits ###
-        run_eft_fit(config, 'cw_lin')
-        run_eft_fit(config, 'cw_quad')
+        run_eft_fit(config, 'cw_lin', skip_fits=config.gbl.skip_eft)
+        run_eft_fit(config, 'cw_quad', skip_fits=config.gbl.skip_eft)
 
     except Exception as e:
         plot.error(str(e))
@@ -1872,6 +1874,7 @@ def parse_args():
     parser.add_argument('--skip-gpr', action='store_true', help="Skip only the GPR fits; uses the fit results stored in the CSV. This file should be placed at '{output}/gpr/gpr_fit_results.csv'.")
     parser.add_argument('--skip-plu', action='store_true', help="Skips the PLU fit.")
     parser.add_argument('--skip-diboson', action='store_true', help="Skips the diboson cross section fit.")
+    parser.add_argument('--skip-eft', action='store_true', help="Skips the EFT fits.")
     parser.add_argument('--fit-bin-yields', action='store_true', help="Also do direct bin-by-bin diboson yield fits (old, diagnostic test).")
     parser.add_argument('--rerun-gpr', action='store_true', help="By default, will skip GPR fits that are present in the CSV already. This flag will force a rerun of all bins.")
     parser.add_argument('--skip-channels', action='store_true', help="Skips all per-channel processing, and jumps to the multichannel fits.")
@@ -1943,6 +1946,7 @@ def main():
         skip_gpr_if_present=not args.rerun_gpr,
         skip_plu=args.skip_plu,
         skip_diboson=args.skip_diboson,
+        skip_eft=args.skip_eft,
         gpr_condor=args.condor,
         is_asimov=args.asimov,
         run_plu_val=args.run_plu_val,
@@ -1965,8 +1969,8 @@ def main():
         run_diboson_fit(config, skip_fits=global_config.skip_fits)
 
         ### EFT fits ###
-        run_eft_fit(config, 'cw_lin')
-        run_eft_fit(config, 'cw_quad')
+        run_eft_fit(config, 'cw_lin', skip_fits=global_config.skip_eft)
+        run_eft_fit(config, 'cw_quad', skip_fits=global_config.skip_eft)
 
 
 if __name__ == "__main__":
