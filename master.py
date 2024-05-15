@@ -1454,12 +1454,29 @@ def run_diboson_fit(config : MultiChannelConfig, skip_fits : bool = False):
     )
 
 
-def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asimov=False):
+def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asimov=False, mu=1, range_sigmas=3):
+    '''
+    Calls the NLL macro in NPCheck. This calls the python runner script as a subprocess
+    for simplicity, but also not the macro is side-effectful so probably can't use
+    directly anyways.
+
+    @param range_sigmas
+        The number of standard deviations (as determined from the minimization) of the POI
+        up and down to scan over. [granularity] evenly spaced points will be tested from
+        this range.
+    '''
     log_name = f'{output_dir}/rf/log.{base_name}_nll' + ('-asimov' if asimov else '') + '.txt'
     with open(log_name, 'w') as f:
         # For some reason passing the fccs file breaks this
         res = subprocess.run(
-            ['./runNLL.py', ws_path, '--granularity', str(granularity), '--doAsimov' if asimov else '--no-doAsimov', '--no-doPlot'],  # the './' is necessary!
+            [
+                './runNLL.py', ws_path, # the './' is necessary!
+                '--granularity', str(granularity), 
+                '--doAsimov' if asimov else '--no-doAsimov', 
+                '--mu', str(mu), 
+                '--range', str(range_sigmas),
+                '--no-doPlot',
+            ],  
             cwd='ResonanceFinder/NPCheck',
             stdout=f,
             stderr=f,
@@ -1522,8 +1539,8 @@ def run_eft_fit(config : MultiChannelConfig, mode : str, skip_fits : bool = Fals
     ### Run NLL ###
     if not skip_fits:
         plot.notice(f'master.py::run_eft_fit() Running {config.base_name} {mode} NLL')
-        run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=False)
-        run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=True)
+        run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=False, mu=0, range_sigmas=1.5, granularity=11)
+        run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=True, mu=0, range_sigmas=1.5, granularity=11)
     plot_nll(
         f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll.root',
         file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll',

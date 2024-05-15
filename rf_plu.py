@@ -104,10 +104,11 @@ def _add_eft(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist
     for variation in utils.variations_hist:
         sample.addVariation(variation)
     
-    mu_factor = RF.MultiplicativeFactor(f'mu-{operator}', 1, -5, 5, RF.MultiplicativeFactor.FREE)
+    lin_name = f'mu-{operator}-lin' if 'quad' in mode else f'mu-{operator}' # In quad mode, the postscript will create the true mu-cw variable. Names probably shouldn't collide.
+    mu_factor = RF.MultiplicativeFactor(lin_name, 1, -5, 5, RF.MultiplicativeFactor.FREE)
     sample.multiplyBy(mu_factor)
     runner.defineSignal(sample, 'eft')
-    runner.addPOI(f'mu-{operator}')
+    runner.addPOI(lin_name)
     signal_names += f'{operator}_lin'
 
     ### Add quadratic term ###
@@ -119,7 +120,7 @@ def _add_eft(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist
         for variation in utils.variations_hist:
             sample.addVariation(variation)
         
-        mu_factor = RF.MultiplicativeFactor(f'mu-{operator}-quad', 1) # TODO
+        mu_factor = RF.MultiplicativeFactor(f'mu-{operator}-quad', 1) # this is fixed by Rob's postscript in eft_quad_correction
         sample.multiplyBy(mu_factor)
         runner.defineSignal(sample, 'eft')
         signal_names += f'-{operator}_quad'
