@@ -169,7 +169,7 @@ def get_bins(lepton_channel : int, var: Variable):
     if var.name in ["vv_m", "lvJ_m", "llJ_m"]:
         if lepton_channel == 0:
             # below, but matched to 1lep custom since they're pretty similar
-            return [700, 810, 940, 1090, 1260, 1500, 2000, 3000]
+            return [700, 810, 940, 1090, 1260, 1500, 2000, 6000]
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
             return [700, 790, 930, 1090, 1260, 1440, 1650, 1880, 3000]
         elif lepton_channel == 1:
@@ -183,7 +183,7 @@ def get_bins(lepton_channel : int, var: Variable):
             return [500, 600, 700, 800, 900, 1020, 1170, 1310, 1470, 1780, 2090, 2400, 3000]
         elif lepton_channel == 2:
             # optimized binning with threshold_diag=0.8, threshold_err=0.2, min_reco_count=10
-            return [700, 770, 890, 1040, 1210, 1400, 1640, 3000]
+            return [700, 770, 890, 1040, 1210, 1400, 1640, 6000]
             # manually adjusted
             return [700, 750, 800, 900, 1000, 1100, 1250, 1400, 3000]
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
@@ -191,7 +191,7 @@ def get_bins(lepton_channel : int, var: Variable):
     elif var.name == "vv_mt" or var.name == "vvJ_mT":
         if lepton_channel == 0:
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
-            return [600, 690, 810, 940, 1090, 1260, 1430, 1630, 1850, 3000]
+            return [600, 690, 810, 940, 1090, 1260, 1430, 1630, 1850, 6000]
         elif lepton_channel == 1:
             # optimized binning with threshold_diag=0.7, threshold_err=0.2, min_reco_count=10
             return [600, 710, 830, 960, 1100, 1260, 1430, 1600, 6000]

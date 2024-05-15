@@ -1287,31 +1287,37 @@ def run_plu(config : SingleChannelConfig, stat_validation_index : int = None):
     Runs the profile likelihood unfolding fit using ResonanceFinder. Assumes the
     GPR/response matrices have been created already.
     '''
-    ws_path, roofit_results, plu_fit_results = run_rf(config, 'PLU', config.gbl.skip_plu, stat_validation_index)
+    try:
+        ws_path, roofit_results, plu_fit_results = run_rf(config, 'PLU', config.gbl.skip_plu, stat_validation_index)
 
-    ### Plots ###
-    if stat_validation_index is None:
-        ### Draw fit ###
-        plot_plu_fit(config, plu_fit_results)
+        ### Plots ###
+        if stat_validation_index is None:
+            ### Draw fit ###
+            plot_plu_fit(config, plu_fit_results)
 
-        ### Draw pulls ###
-        plot_pulls(
-            fit_results=plu_fit_results, 
-            filename=f'{config.gbl.output_dir}/plots/{config.base_name}.plu_pulls',
-            subtitle=[f'{config.lepton_channel}-lepton channel {config.variable.title} pulls'],
-        )
-
-        ### Draw correlation matrix ###
-        plot_correlations(
-            roofit_results=roofit_results, 
-            filename=f'{config.gbl.output_dir}/plots/{config.base_name}.plu_corr',
-            subtitle=[f'{config.lepton_channel}-lepton channel {config.variable.title} fit'],
+            ### Draw pulls ###
+            plot_pulls(
+                fit_results=plu_fit_results, 
+                filename=f'{config.gbl.output_dir}/plots/{config.base_name}.plu_pulls',
+                subtitle=[f'{config.lepton_channel}-lepton channel {config.variable.title} pulls'],
             )
 
-        ### Draw yield vs MC ###
-        plot_plu_yields(config, plu_fit_results, f'{config.gbl.output_dir}/plots/{config.base_name}.plu_yields')
+            ### Draw correlation matrix ###
+            plot_correlations(
+                roofit_results=roofit_results, 
+                filename=f'{config.gbl.output_dir}/plots/{config.base_name}.plu_corr',
+                subtitle=[f'{config.lepton_channel}-lepton channel {config.variable.title} fit'],
+                )
 
-    return plu_fit_results
+            ### Draw yield vs MC ###
+            plot_plu_yields(config, plu_fit_results, f'{config.gbl.output_dir}/plots/{config.base_name}.plu_yields')
+
+        return plu_fit_results
+    except Exception as e:
+        if config.gbl.skip_plu:
+            plot.warning(f'master.py::run_plu({config}) skipping, caught error:\n\t{e}')
+        else:
+            raise e
 
 
 def run_plu_val(config : SingleChannelConfig, results_nom : dict[str, tuple[float, float]]):
@@ -1506,7 +1512,8 @@ def run_eft_fit(config : MultiChannelConfig, mode : str, skip_fits : bool = Fals
         raise NotImplementedError(f'master.py::run_eft_fit() Unknown operator {operator}')
 
     ### Fit ###
-    ws_path, roofit_results, dict_results = run_rf(config, mode, skip_fits)
+    try:
+        ws_path, roofit_results, dict_results = run_rf(config, mode, skip_fits)
 
     ### Plot fit ###
     # sc_configs = config.split_config()
@@ -1538,25 +1545,30 @@ def run_eft_fit(config : MultiChannelConfig, mode : str, skip_fits : bool = Fals
     #     subtitle=[f'{config.lepton_channel}-lepton channel {var.title} fit'],
     # )
 
-    ### Run NLL ###
-    if not skip_fits:
-        plot.notice(f'master.py::run_eft_fit() Running {config.base_name} {mode} NLL')
-        run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=False, mu=0, range_sigmas=1.5, granularity=11)
-        run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=True, mu=0, range_sigmas=1.5, granularity=11)
-    plot_nll(
-        f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll.root',
-        file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll',
-        subtitle=[f'{config:lep_title} {mode} fit'],
-        signal_name=f'mu-{operator}',
-        xtitle=operator_title,
-    )
-    plot_nll(
-        f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll-asimov.root',
-        file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll-asimov',
-        subtitle=[f'{config:lep_title} {mode} fit'],
-        signal_name=f'mu-{operator}',
-        xtitle=operator_title,
-    )
+        ### Run NLL ###
+        if not skip_fits:
+            plot.notice(f'master.py::run_eft_fit() Running {config.base_name} {mode} NLL')
+            run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=False, mu=0, range_sigmas=1.5, granularity=11)
+            run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=True, mu=0, range_sigmas=1.5, granularity=11)
+        plot_nll(
+            f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll.root',
+            file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll',
+            subtitle=[f'{config:lep_title} {mode} fit'],
+            signal_name=f'mu-{operator}',
+            xtitle=operator_title,
+        )
+        plot_nll(
+            f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll-asimov.root',
+            file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll-asimov',
+            subtitle=[f'{config:lep_title} {mode} fit'],
+            signal_name=f'mu-{operator}',
+            xtitle=operator_title,
+        )
+    except Exception as e:
+        if skip_fits:
+            plot.warning(f'master.py::run_eft_fit({mode}) skipping, caught error {e}')
+        else:
+            raise e
 
 
 ##########################################################################################
