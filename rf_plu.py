@@ -15,6 +15,7 @@ import shutil
 
 import utils
 from plotting import plot
+import eft_quad_correction
 
 ##########################################################################################
 ###                                       CONFIG                                       ###
@@ -267,7 +268,11 @@ def run(
     ### Copy back ###
     rf_output_path = f'{output_dir}/rf/ws/{analysis}_{signal_name}_{outputWSTag}.root'
     target_path = ws_path(output_dir, base_name, mode, stat_validation_index)
-    shutil.copyfile(rf_output_path, target_path)
+    if 'quad' in mode:
+        operator = mode.split('_')[0]
+        eft_quad_correction.joinPOI(rf_output_path, target_path, operator)
+    else:
+        shutil.copyfile(rf_output_path, target_path)
     plot.success(f'Created workspace at {target_path}')
     return target_path
 
