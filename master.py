@@ -47,6 +47,7 @@ import ROOT # type: ignore
 import numpy as np
 import os
 import sys
+import re
 import gc
 import subprocess
 import shutil
@@ -74,35 +75,14 @@ def convert_alpha(alpha : tuple[float, float], orig : tuple[float, float]) -> tu
     return (val, err)
 
 
-class CondorSubmitMaker:
-    '''
-    Creates the condor.submit file for launching GPR jobs on HT Condor batch systems.
-
-    Usage:
-        maker = CondorSubmitMaker(config, var, 'submit.condor')
-        maker.add(gpr_config1)
-        maker.add(gpr_config2)
-        ...
-        maker.close()
-    '''
-    def __init__(self, config : SingleChannelConfig, filepath : str):
-        self.config = config
-        self.filepath = filepath
-        if not os.path.exists(f'{config.gbl.output_dir}/condor_logs'):
-            os.makedirs(f'{config.gbl.output_dir}/condor_logs')
-        if not os.path.exists(os.path.dirname(filepath)):
-            os.makedirs(os.path.dirname(filepath))
-
-        self.f = open(filepath, 'w')
-        self.f.write(f'''\
-# Setup
+_condorSubmitHead = '''# Setup
 Universe = vanilla
 getenv = True
 
 # Log paths
-output = {config.gbl.output_dir}/condor_logs/$(ClusterId).$(ProcId).out
-error = {config.gbl.output_dir}/condor_logs/$(ClusterId).$(ProcId).err
-log = {config.gbl.output_dir}/condor_logs/$(ClusterId).$(ProcId).log
+output = {output_dir}/condor_logs/$(ClusterId).$(ProcId).out
+error = {output_dir}/condor_logs/$(ClusterId).$(ProcId).err
+log = {output_dir}/condor_logs/$(ClusterId).log
 
 # Queue
 +JobFlavour = "10 minutes"
@@ -113,33 +93,113 @@ on_exit_remove = (ExitBySignal == False) && (ExitCode == 0)
 max_retries = 3
 
 # Command
-Executable = gpr.py
-transfer_input_files = plotting,utils.py
+'''
 
-# Queue
-queue arguments from (
-''')
+class CondorSubmitMaker:
+    '''
+    Base class for creating HTCondor submit files. Derived classes should implement
+    [write_executable] as well as some function to add the arguments.
+    '''
+    def __init__(self, config : GlobalConfig, filepath : str):
+        self.config = config
+        self.filepath = filepath
+        if not os.path.exists(f'{config.output_dir}/condor_logs'):
+            os.makedirs(f'{config.output_dir}/condor_logs')
+        if not os.path.exists(os.path.dirname(filepath)):
+            os.makedirs(os.path.dirname(filepath))
 
-    def add(self, fit_config : gpr.FitConfig):
-        input_paths = [os.path.abspath(x) for x in self.config.gbl.file_manager.file_path_formats]
-        output_path = os.path.abspath(fit_config.output_plots_dir)
-        # Output hists and plots to same finely binned directory so no overwrite between jobs!
+        self.f = open(filepath, 'w')
+        self.f.write(_condorSubmitHead.format(output_dir=config.output_dir))
+        self.write_executable()
 
-        self.f.write('    ')
-        self.f.write(' '.join(input_paths))
-        self.f.write(f' --lepton {self.config.lepton_channel}')
-        self.f.write(f' --var {self.config.var}')
-        self.f.write(f' --output {output_path}')
-        if self.config.gbl.is_asimov:
-            self.f.write(f' --closure-test')
-        self.f.write(f' --variation {fit_config.variation}')
-        self.f.write(f' --mu-ttbar {fit_config.mu_ttbar}')
-        self.f.write(f' --mu-stop {fit_config.mu_stop}\n')
+        self.f.writelines([
+            '\n',
+            '# Queue\n',
+            'queue arguments from (\n',
+        ])
+
+    def write_executable(self):
+        raise NotImplementedError('CondorSubmitMaker() Derived classes must implement write_executable()')
 
     def close(self):
         self.f.write(')')
         self.f.close()
         plot.success(f'Wrote condor submit file to {self.filepath}')
+    
+    def run(self):
+        self.res = subprocess.run(['condor_submit', self.filepath], capture_output=True, text=True)
+        if self.res.returncode == 0:
+            search_string = '(\d*) job\(s\) submitted to cluster (\d*).'
+            m = re.search(search_string, self.res.stdout)
+            if m is not None and len(m.groups()) == 2:
+                self.n_jobs = m.groups()[0]
+                self.cluster = m.groups()[1]
+            plot.success(f"Submitted {self.n_jobs} jobs to cluster {self.cluster}")
+            return self.cluster
+        else:
+            plot.error(f"Couldn't launch condor jobs: {self.res}.")
+            return None
+        
+    def wait(self):
+        done = False
+        while not done:
+            subprocess.run(['condor_q', str(self.cluster)])
+            res = subprocess.run(['condor_wait', f'{self.config.output_dir}/condor_logs/{self.cluster}.log', '-wait', '10'], capture_output=True, text=True)
+            done = res.returncode == 0
+        
+        ### Check jobs completed without errors ###
+        res = subprocess.run(['condor_history', str(self.cluster), '-af', 'clusterId', 'procId', 'ExitStatus'], capture_output=True, text=True)
+        res_lines = res.stdout.splitlines()
+        bad_list = []
+        for x in res_lines:
+            cluster, proc, status = x.split(' ')
+            if status != '0':
+                bad_list.append(proc)
+        if bad_list:
+            plot.error(f"{len(bad_list)} jobs failed in cluster {self.cluster}")
+            raise RuntimeError(f"{len(bad_list)} jobs failed in cluster {self.cluster}")
+        if len(res_lines) != self.n_jobs:
+            plot.warning(f"condor_history returned a different number of jobs ({len(res_lines)}) from expected ({self.n_jobs})")
+
+        plot.success(f"All {self.n_jobs} jobs from cluster {self.cluster} have completed")
+
+
+class GprSubmitMaker(CondorSubmitMaker):
+    '''
+    Creates the condor.submit file for launching GPR jobs on HT Condor batch systems.
+
+    Usage:
+        maker = GprSubmitMaker(config, 'submit.condor')
+        maker.add(gpr_config1)
+        maker.add(gpr_config2)
+        ...
+        maker.close()
+    '''
+    def __init__(self, config: GlobalConfig, filepath: str):
+        super().__init__(config, filepath)
+
+    def write_executable(self):
+        self.f.writelines([
+            "Executable = gpr.py\n",
+            "transfer_input_files = plotting,utils.py\n",
+        ])
+    
+    def add(self, fit_config : gpr.FitConfig):
+        input_paths = [os.path.abspath(x) for x in self.config.file_manager.file_path_formats]
+        output_path = os.path.abspath(fit_config.output_plots_dir)
+        # Output hists and plots to same finely binned directory so no overwrite between jobs!
+
+        self.f.write('    ')
+        self.f.write(' '.join(input_paths))
+        self.f.write(f' --lepton {fit_config.lepton_channel}')
+        self.f.write(f' --var {fit_config.var}')
+        self.f.write(f' --output {output_path}')
+        if self.config.is_asimov:
+            self.f.write(f' --closure-test')
+        self.f.write(f' --variation {fit_config.variation}')
+        self.f.write(f' --mu-ttbar {fit_config.mu_ttbar}')
+        self.f.write(f' --mu-stop {fit_config.mu_stop}\n')
+
 
 ##########################################################################################
 ###                                        PLOTS                                       ###
@@ -373,7 +433,7 @@ def plot_gpr_mc_comparisons(config: SingleChannelConfig, filename : str):
         ydivs2=503,
         ratio_denom=lambda i: 0 if i >= 2 else None,
     )
-    
+
 
 def _plot_yield_comparison(filename, h_fit, h_mc, h_eft=None, eft_legend=None, **plot_opts):
     '''
@@ -1411,61 +1471,73 @@ def run_diboson_fit(config : MultiChannelConfig, skip_fits : bool = False):
     '''
     Runs the resonance finder script to fit the diboson cross section in all channels. 
     '''
-    ws_path, roofit_results, dict_results = run_rf(config, 'diboson', skip_fits)
-    mu_diboson = dict_results['mu-diboson']
-    
-    ### Plot fit ###
-    # TODO this doesn't adjust the GPR distribution for the correlation correction
-    sc_configs = config.split_config()
-    filename = f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_postfit'
-    for sc_config in sc_configs:
-        if len(sc_configs) > 1:
-            filename += f'_{sc_config.base_name}'
-        plot_mc_gpr_stack(
-            config=config, 
-            subtitle=[
-                f'{sc_config.lepton_channel}-lepton channel postfit',
-                f'Diboson #mu = {mu_diboson[0]:.2f} #pm {mu_diboson[1]:.2f}',
-            ],
-            mu_diboson=mu_diboson[0],
-            filename=filename,
+    try:
+        ws_path, roofit_results, dict_results = run_rf(config, 'diboson', skip_fits)
+        mu_diboson = dict_results['mu-diboson']
+        
+        ### Plot fit ###
+        # TODO this doesn't adjust the GPR distribution for the correlation correction
+        sc_configs = config.split_config()
+        filename = f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_postfit'
+        for sc_config in sc_configs:
+            if len(sc_configs) > 1:
+                filename += f'_{sc_config.base_name}'
+            plot_mc_gpr_stack(
+                config=config, 
+                subtitle=[
+                    f'{sc_config.lepton_channel}-lepton channel postfit',
+                    f'Diboson #mu = {mu_diboson[0]:.2f} #pm {mu_diboson[1]:.2f}',
+                ],
+                mu_diboson=mu_diboson[0],
+                filename=filename,
+            )
+
+        ### Draw pulls ###
+        plot_pulls(
+            fit_results=dict_results, 
+            filename=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_pulls',
         )
 
-    ### Draw pulls ###
-    plot_pulls(
-        fit_results=dict_results, 
-        filename=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_pulls',
-    )
+        ### Draw correlation matrix ###
+        plot_correlations(
+            roofit_results=roofit_results, 
+            filename=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_corr',
+        )
 
-    ### Draw correlation matrix ###
-    plot_correlations(
-        roofit_results=roofit_results, 
-        filename=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_corr',
-    )
+        ### NLL ###
+        if not skip_fits:
+            plot.notice(f'master.py::run_diboson_fit() Running {config.base_name} diboson-xsec NLL')
+            run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=False)
+            run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=True)
+        plot_nll(
+            f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_nll.root',
+            file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll',
+            signal_name='mu-diboson',
+            xtitle='#mu(diboson)',
+        )
+        plot_nll(
+            f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_nll-asimov.root',
+            file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll-asimov',
+            signal_name='mu-diboson',
+            xtitle='#mu(diboson)',
+        )
 
-    ### NLL ###
-    if not skip_fits:
-        plot.notice(f'master.py::run_diboson_fit() Running {config.base_name} diboson-xsec NLL')
-        run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=False)
-        run_nll(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path, asimov=True)
-    plot_nll(
-        f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_nll.root',
-        file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll',
-        signal_name='mu-diboson',
-        xtitle='#mu(diboson)',
-    )
-    plot_nll(
-        f'{config.gbl.output_dir}/rf/{config.base_name}.diboson_nll-asimov.root',
-        file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_nll-asimov',
-        signal_name='mu-diboson',
-        xtitle='#mu(diboson)',
-    )
+        ### Ranking ###
+        if not skip_fits:
+            plot.notice(f'master.py::run_diboson_fit() Running {config.base_name} diboson-xsec ranking')
+            run_ranking(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path)
+
+    except Exception as e:
+        if skip_fits:
+            plot.warning(f'master.py::run_diboson_fit({config.base_name}) skipping, caught error {e}')
+        else:
+            raise e
 
 
 def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asimov=False, mu=1, range_sigmas=3):
     '''
     Calls the NLL macro in NPCheck. This calls the python runner script as a subprocess
-    for simplicity, but also not the macro is side-effectful so probably can't use
+    for simplicity, but also note the macro is side-effectful so probably can't use
     directly anyways.
 
     @param range_sigmas
@@ -1495,8 +1567,35 @@ def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asi
         f'{output_dir}/rf/{base_name}_nll' + ('-asimov' if asimov else '') + '.root',
     )
     # shutil.copyfile(
-    #     'ResonanceFinder/NPCheck/Plots/NLL/summary.pdf', 
+    #     'ResonanceFinder/NPCheck/Plots/NLL/summary.pdf',
     #     f'{output_dir}/plots/{base_name}_nll' + ('-asimov' if asimov else '') + '.pdf',
+    # )
+
+
+def run_ranking(output_dir: str, base_name: str, ws_path: str, asimov: bool = False):
+    '''
+    Calls the ranking macro in NPCheck. This calls the python runner script as a subprocess
+    for simplicity, but also note the macro is side-effectful so probably can't use
+    directly anyways.
+    '''
+    outdir = f'../../{output_dir}/rf/ranking/{base_name}'
+    res = subprocess.run(
+        [
+            './runRanking.py', ws_path, # the './' is necessary!
+            '--outname', outdir,
+            '--fccs', ws_path.replace('_ws', '_fcc'),
+            '--doAsimov' if asimov else '--no-doAsimov', 
+            '--condor',
+        ],  
+        cwd='ResonanceFinder/NPCheck',
+        capture_output=True,
+        text=True,
+    )
+    res.check_returncode()
+    print(res.stdout)
+    # shutil.copyfile(
+    #     'ResonanceFinder/NPCheck/nllscan/nll.root', 
+    #     f'{output_dir}/rf/{base_name}_nll' + ('-asimov' if asimov else '') + '.root',
     # )
 
 
@@ -1515,40 +1614,40 @@ def run_eft_fit(config : MultiChannelConfig, mode : str, skip_fits : bool = Fals
     try:
         ws_path, roofit_results, dict_results = run_rf(config, mode, skip_fits)
 
-    ### Plot fit ###
-    # sc_configs = config.split_config()
-    # filename = f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_postfit'
-    # for sc_config in sc_configs:
-    #     if len(sc_configs) > 1:
-    #         filename += f'_{sc_config.base_name}'
-    #     plot_mc_gpr_stack(
-    #         config=config, 
-    #         subtitle=[
-    #             f'{sc_config.lepton_channel}-lepton channel postfit',
-    #             f'Diboson #mu = {mu_diboson[0]:.2f} #pm {mu_diboson[1]:.2f}',
-    #         ],
-    #         mu_diboson=mu_diboson[0],
-    #         filename=filename,
-    #     )
+        ### Plot fit ###
+        # sc_configs = config.split_config()
+        # filename = f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_postfit'
+        # for sc_config in sc_configs:
+        #     if len(sc_configs) > 1:
+        #         filename += f'_{sc_config.base_name}'
+        #     plot_mc_gpr_stack(
+        #         config=config, 
+        #         subtitle=[
+        #             f'{sc_config.lepton_channel}-lepton channel postfit',
+        #             f'Diboson #mu = {mu_diboson[0]:.2f} #pm {mu_diboson[1]:.2f}',
+        #         ],
+        #         mu_diboson=mu_diboson[0],
+        #         filename=filename,
+        #     )
 
-    ### Draw pulls ###
-    # plot_pulls(
-    #     fit_results=dict_results, 
-    #     filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.{mode}_pulls',
-    #     subtitle=[f'{config.lepton_channel}-lepton channel {var.title} pulls'],
-    # )
+        ### Draw pulls ###
+        plot_pulls(
+            fit_results=dict_results, 
+            filename=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_pulls',
+            subtitle=[f'{config.lep_title} {mode} pulls'],
+        )
 
-    ### Draw correlation matrix ###
-    # plot_correlations(
-    #     roofit_results=roofit_results, 
-    #     filename=f'{config.output_dir}/plots/{config.lepton_channel}lep_{var}.{mode}_corr',
-    #     subtitle=[f'{config.lepton_channel}-lepton channel {var.title} fit'],
-    # )
+        ### Draw correlation matrix ###
+        plot_correlations(
+            roofit_results=roofit_results, 
+            filename=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_corr',
+            subtitle=[f'{config.lep_title} {mode} fit'],
+        )
 
         ### Run NLL ###
         if not skip_fits:
             plot.notice(f'master.py::run_eft_fit() Running {config.base_name} {mode} NLL')
-            run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=False, mu=0, range_sigmas=1.5, granularity=11)
+            run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=False, mu=0, range_sigmas=1, granularity=11)
             run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=True, mu=0, range_sigmas=1.5, granularity=11)
         plot_nll(
             f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll.root',
@@ -1676,7 +1775,7 @@ def run_gpr(channel_config : SingleChannelConfig):
 
     ### Condor ###
     if channel_config.gbl.gpr_condor:
-        condor_file = CondorSubmitMaker(channel_config, f'{channel_config.gbl.output_dir}/gpr/{channel_config.base_name}.submit.condor')
+        condor_file = GprSubmitMaker(channel_config.gbl, f'{channel_config.gbl.output_dir}/gpr/{channel_config.base_name}.submit.condor')
 
     ### Config ###
     def make_config(variation, mu_stop):
@@ -1756,16 +1855,15 @@ def run_gpr(channel_config : SingleChannelConfig):
         for updown in [utils.variation_up_key, utils.variation_down_key]:
             run(variation_base + updown)
 
-    ### Outputs ###
+    ### Condor ###
     if channel_config.gbl.gpr_condor:
         condor_file.close()
-        res = subprocess.run(['condor_submit', condor_file.filepath])
-        if res.returncode == 0:
-            plot.success("Launched GPR jobs on condor. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
-        else:
-            plot.error(f"Couldn't launch condor jobs: {res}.")
-    else:
-        summary_actions()
+        condor_file.run()
+        plot.success("Launched GPR jobs on condor. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
+        condor_file.wait()
+    
+    ### Outputs ###
+    summary_actions()
 
 
 def run_direct_fit(config : SingleChannelConfig):
@@ -1827,8 +1925,6 @@ def run_single_channel(config : SingleChannelConfig):
     gc.disable() # https://root-forum.cern.ch/t/segfault-on-creating-canvases-and-pads-in-a-loop-with-pyroot/44729/13
     run_gpr(config) # When skip_gpr, still generates the summary plots
     gc.enable()
-    if config.gbl.gpr_condor:
-        return
 
     ### Prefit plot (pre-likelihood fits but using GPR) ###
     plot_mc_gpr_stack(
@@ -1866,8 +1962,6 @@ def run_single_channel(config : SingleChannelConfig):
     except Exception as e:
         plot.error(str(e))
         raise e
-
-
 
 
 ##########################################################################################
