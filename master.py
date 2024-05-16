@@ -59,7 +59,7 @@ import unfolding
 import gpr
 import ttbar_fit
 import diboson_fit
-
+import merge_gpr_condor
 
 ##########################################################################################
 ###                                        UTILS                                       ###
@@ -99,6 +99,13 @@ class CondorSubmitMaker:
     '''
     Base class for creating HTCondor submit files. Derived classes should implement
     [write_executable] as well as some function to add the arguments.
+
+    Usage:
+        maker = CondorSubmitMaker(config, 'submit.condor')
+        ...[Add arguments with derived class]...
+        maker.close() # finishes writing the submit file
+        maker.run() # submits the jobs
+        maker.wait() # awaits completion
     '''
     def __init__(self, config : GlobalConfig, filepath : str):
         self.config = config
@@ -158,7 +165,7 @@ class CondorSubmitMaker:
         if bad_list:
             plot.error(f"{len(bad_list)} jobs failed in cluster {self.cluster}")
             raise RuntimeError(f"{len(bad_list)} jobs failed in cluster {self.cluster}")
-        if len(res_lines) != self.n_jobs:
+        if len(res_lines) != int(self.n_jobs):
             plot.warning(f"condor_history returned a different number of jobs ({len(res_lines)}) from expected ({self.n_jobs})")
 
         plot.success(f"All {self.n_jobs} jobs from cluster {self.cluster} have completed")
@@ -1859,8 +1866,9 @@ def run_gpr(channel_config : SingleChannelConfig):
     if channel_config.gbl.gpr_condor:
         condor_file.close()
         condor_file.run()
-        plot.success("Launched GPR jobs on condor. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
+        # plot.success("Launched GPR jobs on condor. Once jobs are done, merge the results using merge_gpr_condor.py, then recall master.py using --skip-gpr.")
         condor_file.wait()
+        merge_gpr_condor.merge(channel_config.gbl.output_dir)
     
     ### Outputs ###
     summary_actions()

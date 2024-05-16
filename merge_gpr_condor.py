@@ -20,20 +20,12 @@ import os
 import ROOT # type: ignore
 
 ##########################################################################################
-###                                        MAIN                                        ###
+###                                       MERGE                                        ###
 ##########################################################################################
 
-def parse_args():
-    parser = ArgumentParser(
-        description="Merges the CSV files of condor GPR runs.", 
-        formatter_class=ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument('output_dir')
-    return parser.parse_args()
 
-def main():
-    args = parse_args()
-    base_dir = f'{args.output_dir}/gpr'
+def merge(output_dir):
+    base_dir = f'{output_dir}/gpr'
     csv_name = 'gpr_fit_results.csv'
     root_name = 'gpr_{lep}lep_vjets_yield.root'
 
@@ -73,6 +65,23 @@ def main():
         f.Close()
     
     print(f"Saved merged CSV to {out_file.name}")
+
+##########################################################################################
+###                                        MAIN                                        ###
+##########################################################################################
+
+def parse_args():
+    parser = ArgumentParser(
+        description="Merges the CSV files of condor GPR runs.", 
+        formatter_class=ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument('output_dir')
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    merge(args.output_dir)
 
 
 if __name__ == "__main__":
