@@ -1109,6 +1109,21 @@ def plot_nll(nll_file_path, signal_name, file_name : str, xtitle : str, subtitle
     plot.save_canvas(c, file_name)
 
 
+def plot_ranking(config: MultiChannelConfig, ranking_outputs, file_name: str):
+    res = subprocess.run([
+            'root', '-b', '-l', '-q',
+            f'drawRankingPlot.C("../../{ranking_outputs}", 0, 0, 20, "../../{file_name}")', # doPrefit, doRelative, npMax
+        ],
+        cwd=config.gbl.npcheck_dir,
+        capture_output=True, 
+        text=True,
+    )
+    if res.returncode != 0:
+        print(res.stdout)
+        print(res.stderr)
+        res.check_returncode()
+
+
 ##########################################################################################
 ###                                       CONFIG                                       ###
 ##########################################################################################
@@ -1567,9 +1582,14 @@ def run_diboson_fit(config : MultiChannelConfig, skip_fits : bool = False):
         )
 
         ### Ranking ###
-        if not skip_fits or True:
+        if not skip_fits:
             plot.notice(f'master.py::run_diboson_fit() Running {config.base_name} diboson-xsec ranking')
             run_ranking(config, f'{config.base_name}.diboson', ws_path)
+        plot_ranking(
+            config=config,
+            ranking_outputs=f'{config.gbl.output_dir}/rf/ranking/{config}.diboson',
+            file_name=f'{config.gbl.output_dir}/plots/{config}.diboson_ranking',
+        )
 
     except Exception as e:
         if skip_fits:
