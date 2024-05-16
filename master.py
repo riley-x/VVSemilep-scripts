@@ -208,6 +208,43 @@ class GprSubmitMaker(CondorSubmitMaker):
         self.f.write(f' --mu-stop {fit_config.mu_stop}\n')
 
 
+class RankingSubmitMaker(CondorSubmitMaker):
+    '''
+    Creates the condor.submit file for launching the ranking plot jobs.
+
+    Usage:
+        maker = RankingSubmitMaker(cfg, "submit.condor")
+        maker.add(systs, ...)
+    '''
+    def __init__(self, config: GlobalConfig, filepath: str, ):
+        super().__init__(config, filepath)
+
+    def write_executable(self):
+        self.f.writelines([
+            "Executable = ranking.py\n",
+            "transfer_input_files = ResonanceFinder/NPCheck\n",
+            "request_memory = 512MB\n",
+        ])
+    
+    def add(self, systs: list[str], ws_path: str, fcc_path: str, output_path: str, asimov: bool = False):
+        output_path = os.path.abspath(output_path)
+        os.makedirs(output_path, exist_ok=True)
+
+        for syst in systs:
+            self.f.write('    ')
+            self.f.write(' '.join([
+                ws_path,
+                syst,
+                fcc_path,
+                'NONE', # limit path
+                '1', # postfit
+                str(int(asimov)), # asimov
+                output_path,
+                os.getcwd() + "/ResonanceFinder/NPCheck/macros/makeRanking.C" # macro path
+            ]))
+            self.f.write('\n')
+
+
 ##########################################################################################
 ###                                        PLOTS                                       ###
 ##########################################################################################
@@ -1530,9 +1567,9 @@ def run_diboson_fit(config : MultiChannelConfig, skip_fits : bool = False):
         )
 
         ### Ranking ###
-        if not skip_fits:
+        if not skip_fits or True:
             plot.notice(f'master.py::run_diboson_fit() Running {config.base_name} diboson-xsec ranking')
-            run_ranking(config.gbl.output_dir, f'{config.base_name}.diboson', ws_path)
+            run_ranking(config, f'{config.base_name}.diboson', ws_path)
 
     except Exception as e:
         if skip_fits:
@@ -1579,31 +1616,42 @@ def run_nll(output_dir : str, base_name : str, ws_path : str, granularity=5, asi
     # )
 
 
-def run_ranking(output_dir: str, base_name: str, ws_path: str, asimov: bool = False):
+def run_ranking(config : MultiChannelConfig, base_name: str, ws_path: str, asimov: bool = False):
     '''
     Calls the ranking macro in NPCheck. This calls the python runner script as a subprocess
     for simplicity, but also note the macro is side-effectful so probably can't use
     directly anyways.
     '''
-    outdir = f'../../{output_dir}/rf/ranking/{base_name}'
-    res = subprocess.run(
-        [
-            './runRanking.py', ws_path, # the './' is necessary!
-            '--outname', outdir,
-            '--fccs', ws_path.replace('_ws', '_fcc'),
-            '--doAsimov' if asimov else '--no-doAsimov', 
-            '--condor',
-        ],  
-        cwd='ResonanceFinder/NPCheck',
-        capture_output=True,
-        text=True,
-    )
-    res.check_returncode()
-    print(res.stdout)
-    # shutil.copyfile(
-    #     'ResonanceFinder/NPCheck/nllscan/nll.root', 
-    #     f'{output_dir}/rf/{base_name}_nll' + ('-asimov' if asimov else '') + '.root',
+    # outdir = f'../../{output_dir}/rf/ranking/{base_name}'
+    # res = subprocess.run(
+    #     [
+    #         './runRanking.py', ws_path, # the './' is necessary!
+    #         '--outname', outdir,
+    #         '--fccs', ws_path.replace('_ws', '_fcc'),
+    #         '--doAsimov' if asimov else '--no-doAsimov', 
+    #         '--condor',
+    #     ],  
+    #     cwd='ResonanceFinder/NPCheck',
+    #     capture_output=True,
+    #     text=True,
     # )
+    # res.check_returncode()
+    # print(res.stdout)
+
+    condor = RankingSubmitMaker(
+        config=config.gbl,
+        filepath=f'{config.gbl.output_dir}/rf/{base_name}_ranking.submit',
+    )
+    condor.add(
+        systs=[f'alpha_{x}' for x in utils.variations_custom + utils.variations_hist + [utils.variation_lumi]], 
+        ws_path=ws_path,
+        fcc_path=ws_path.replace('_ws', '_fcc'),
+        output_path=f'{config.gbl.output_dir}/rf/ranking/{base_name}',
+        asimov=asimov,
+    )
+    condor.close()
+    condor.run()
+    condor.wait()
 
 
 def run_eft_fit(config : MultiChannelConfig, mode : str, skip_fits : bool = False):
