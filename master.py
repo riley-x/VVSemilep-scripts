@@ -1679,7 +1679,7 @@ def run_eft_fit(config : MultiChannelConfig, mode : str, skip_fits : bool = Fals
     Runs a ResonanceFinder fit to the EFT Wilson coefficients. 
     '''
     ### Parsing ###
-    operator = mode.split('_')[0]
+    operator, order = mode.split('_')
     if operator == 'cw':
         operator_title = 'c_{W}'
     else:
@@ -1722,8 +1722,8 @@ def run_eft_fit(config : MultiChannelConfig, mode : str, skip_fits : bool = Fals
         ### Run NLL ###
         if not skip_fits:
             plot.notice(f'master.py::run_eft_fit() Running {config.base_name} {mode} NLL')
-            run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=False, mu=0, range_sigmas=1, granularity=11)
-            run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=True, mu=0, range_sigmas=1.5, granularity=11)
+            run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=False, mu=0, range_sigmas=1 if order == 'quad' else 3, granularity=11)
+            run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=True, mu=0, range_sigmas=1.5 if order == 'quad' else 3, granularity=11)
         plot_nll(
             f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll.root',
             file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll',
