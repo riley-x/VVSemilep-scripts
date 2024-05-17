@@ -101,8 +101,11 @@ def _add_eft(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist
     sample = runner.channel(region).sample(f'{operator}_lin')
     sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
     sample.setUseStatError(True)
-    for variation in utils.variations_hist:
-        sample.addVariation(variation)
+    # For some reason adding these variations don't work. Gives a really strong constraint
+    # (like 0.003) and completely disagrees with no-systs, same in both lin and lin+quad.
+    # Wonder if this has to do with the BadBinFixer? Or something similar.
+    # for variation in utils.variations_hist:
+    #     sample.addVariation(variation)
     
     lin_name = f'mu-{operator}-lin' if 'quad' in mode else f'mu-{operator}' # In quad mode, the postscript will create the true mu-cw variable. Names probably shouldn't collide.
     mu_factor = RF.MultiplicativeFactor(lin_name, 1, -5, 5, RF.MultiplicativeFactor.FREE)

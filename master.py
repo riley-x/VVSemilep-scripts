@@ -97,8 +97,8 @@ max_retries = 3
 
 class CondorSubmitMaker:
     '''
-    Base class for creating HTCondor submit files. Derived classes should implement
-    [write_executable] as well as some function to add the arguments.
+    Base class for creating and submitting HTCondor batch jobs. Derived classes should
+    implement [write_executable] as well as some function to add the arguments.
 
     Usage:
         maker = CondorSubmitMaker(config, 'submit.condor')
@@ -139,12 +139,15 @@ class CondorSubmitMaker:
             search_string = '(\d*) job\(s\) submitted to cluster (\d*).'
             m = re.search(search_string, self.res.stdout)
             if m is not None and len(m.groups()) == 2:
-                self.n_jobs = m.groups()[0]
+                self.n_jobs = int(m.groups()[0])
                 self.cluster = m.groups()[1]
-            plot.success(f"Submitted {self.n_jobs} jobs to cluster {self.cluster}")
-            return self.cluster
+                plot.success(f"Submitted {self.n_jobs} jobs to cluster {self.cluster}")
+                return self.cluster
+            else:
+                plot.error(f"Couldn't parse condor_submit output:\n{self.res.stdout}")
+                return None
         else:
-            plot.error(f"Couldn't launch condor jobs: {self.res}.")
+            plot.error(f"Couldn't launch condor jobs:\n{self.res}")
             return None
         
     def wait(self):
@@ -165,7 +168,7 @@ class CondorSubmitMaker:
         if bad_list:
             plot.error(f"{len(bad_list)} jobs failed in cluster {self.cluster}")
             raise RuntimeError(f"{len(bad_list)} jobs failed in cluster {self.cluster}")
-        if len(res_lines) != int(self.n_jobs):
+        if len(res_lines) != self.n_jobs:
             plot.warning(f"condor_history returned a different number of jobs ({len(res_lines)}) from expected ({self.n_jobs})")
 
         plot.success(f"All {self.n_jobs} jobs from cluster {self.cluster} have completed")
@@ -1720,10 +1723,12 @@ def run_eft_fit(config : MultiChannelConfig, mode : str, skip_fits : bool = Fals
         )
 
         ### Run NLL ###
+        # For some reason the quad asimov gets +- 0.000 and the script breaks
+        # These also take really long so just skip the asimov nll.
         if not skip_fits:
             plot.notice(f'master.py::run_eft_fit() Running {config.base_name} {mode} NLL')
             run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=False, mu=0, range_sigmas=1 if order == 'quad' else 3, granularity=11)
-            run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=True, mu=0, range_sigmas=1.5 if order == 'quad' else 3, granularity=11)
+            # run_nll(config.gbl.output_dir, f'{config.base_name}.{mode}', ws_path, asimov=True, mu=0, range_sigmas=1.5 if order == 'quad' else 3, granularity=11)
         plot_nll(
             f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll.root',
             file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll',
@@ -1731,13 +1736,13 @@ def run_eft_fit(config : MultiChannelConfig, mode : str, skip_fits : bool = Fals
             signal_name=f'mu-{operator}',
             xtitle=operator_title,
         )
-        plot_nll(
-            f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll-asimov.root',
-            file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll-asimov',
-            subtitle=[f'{config:lep_title} {mode} fit'],
-            signal_name=f'mu-{operator}',
-            xtitle=operator_title,
-        )
+        # plot_nll(
+        #     f'{config.gbl.output_dir}/rf/{config.base_name}.{mode}_nll-asimov.root',
+        #     file_name=f'{config.gbl.output_dir}/plots/{config.base_name}.{mode}_nll-asimov',
+        #     subtitle=[f'{config:lep_title} {mode} fit'],
+        #     signal_name=f'mu-{operator}',
+        #     xtitle=operator_title,
+        # )
     except Exception as e:
         if skip_fits:
             plot.warning(f'master.py::run_eft_fit({mode}) skipping, caught error {e}')
