@@ -7,5 +7,5 @@ if [ -f "ResonanceFinder/setup_RF_v21.sh" ]; then
 else
     setupATLAS
     lsetup "root recommended"
-    lsetup "python centos7-3.9"
+    lsetup "python recommended"
 fi
