@@ -12,6 +12,8 @@
         "drawRankingPlot.C": "cpp",
         "drawLimitPlot.C": "cpp",
         "makeRanking.C": "cpp",
-        "chrono": "cpp"
+        "chrono": "cpp",
+        "runFitCrossCheckForLimits.C": "cpp",
+        "FitCrossCheckForLimits.C": "cpp"
     }
 }
