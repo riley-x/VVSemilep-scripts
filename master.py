@@ -1570,7 +1570,7 @@ def run_diboson_fit(config : MultiChannelConfig, skip_fits : bool = False):
             if len(sc_configs) > 1:
                 filename += f'_{sc_config.base_name}'
             plot_mc_gpr_stack(
-                config=config, 
+                config=sc_config, 
                 subtitle=[
                     f'{sc_config.lepton_channel}-lepton channel postfit',
                     f'Diboson #mu = {mu_diboson[0]:.2f} #pm {mu_diboson[1]:.2f}',
