@@ -208,6 +208,18 @@ def get_bins(lepton_channel : int, var: Variable):
 
     raise NotImplementedError(f"utils.py::get_bins({lepton_channel}, {var.name})")
 
+def get_adjusted_bins(lepton_channel: int, var: Variable):
+    '''
+    The large overflow bin looks bad in distribution plots. So use these adjusted bins
+    instead, but just for plotting.
+    '''
+    bins = get_bins(lepton_channel, var)
+    if var in [Variable.vv_m, Variable.vv_mt]: 
+        bins[-1] = 3000
+    elif var in [Variable.fatjet_pt]:
+        bins[-1] = 1500
+    return np.array(bins, dtype=float)
+
 
 #########################################################################################
 ###                                    Variations                                     ###

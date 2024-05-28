@@ -252,6 +252,14 @@ class RankingSubmitMaker(CondorSubmitMaker):
 ###                                        PLOTS                                       ###
 ##########################################################################################
 
+def _reassign_bins(h, bins):
+    h_new = ROOT.TH1F(h.GetName() + '_adj', h.GetTitle(), len(bins) - 1, bins)
+    for i in range(len(bins) + 2):
+        h_new.SetBinContent(i, h.GetBinContent(i))
+        h_new.SetBinError(i, h.GetBinError(i))
+    return h_new
+
+
 def plot_gpr_mu_diboson_correlations(
         config : gpr.FitConfig,
         yields : list[float],
@@ -572,9 +580,12 @@ def plot_plu_yields(config : SingleChannelConfig, plu_fit_results, filename : st
     '''
     Uses [plot_yield_comparison] to plot the PLU unfolded result against the fiducial MC.
     '''
+    ### Adjusted bins ###
+    bins = utils.get_adjusted_bins(config.lepton_channel, config.variable)
+
     ### Fit ###
-    h_fit = ROOT.TH1F('h_fit', '', len(config.bins) - 1, config.bins)
-    for i in range(1, len(config.bins)):
+    h_fit = ROOT.TH1F('h_fit', '', len(bins) - 1, bins)
+    for i in range(1, len(bins)):
         mu = plu_fit_results[f'mu_{i:02}']
         h_fit.SetBinContent(i, mu[0])
         h_fit.SetBinError(i, mu[1])
@@ -594,7 +605,8 @@ def plot_plu_yields(config : SingleChannelConfig, plu_fit_results, filename : st
     def get(sample):
         # h = config.gbl.file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + variable.name)
         h = temp_file_manager.get_hist(config.lepton_channel, sample, '{sample}_VV{lep}_Merg_unfoldingMtx_' + config.variable.name)
-        return plot.rebin(h.ProjectionX(), config.bins)
+        h = plot.rebin(h.ProjectionX(), config.bins)
+        return _reassign_bins(h, bins)
     h_mc = get(utils.Sample.diboson)
 
     ### EFT ###
@@ -631,9 +643,13 @@ def plot_mc_gpr_stack(
     '''
     Plots a stack plot comparing data to MC backgrounds and the GPR V+jets estimate.
     '''
+    ### Adjusted bins ###
+    bins = utils.get_adjusted_bins(config.lepton_channel, config.variable)
+
     ### Get hists ###
     f_gpr = ROOT.TFile(f'{config.gbl.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
     h_gpr = f_gpr.Get('Vjets_SR_' + config.variable.name)
+    h_gpr = _reassign_bins(h_gpr, bins)
 
     hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + config.var_reader_name
     h_diboson = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.diboson, hist_name)
@@ -641,10 +657,10 @@ def plot_mc_gpr_stack(
     h_stop = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name)
     h_data = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.data, hist_name)
 
-    h_diboson = plot.rebin(h_diboson, config.bins)
-    h_ttbar = plot.rebin(h_ttbar, config.bins)
-    h_stop = plot.rebin(h_stop, config.bins)
-    h_data = plot.rebin(h_data, config.bins)
+    h_diboson = _reassign_bins(plot.rebin(h_diboson, config.bins), bins)
+    h_ttbar = _reassign_bins(plot.rebin(h_ttbar, config.bins), bins)
+    h_stop = _reassign_bins(plot.rebin(h_stop, config.bins), bins)
+    h_data = _reassign_bins(plot.rebin(h_data, config.bins), bins)
 
     h_ttbar.Scale(config.gbl.ttbar_fitter.mu_ttbar_nom[0])
     h_stop.Scale(config.gbl.mu_stop[0])
@@ -734,14 +750,17 @@ def plot_plu_fit(config : SingleChannelConfig, fit_results : dict[str, tuple[flo
     '''
     Plots a stack plot comparing data to backgrounds after the PLU fit.
     '''
-
     ######################################################################################
     ### HISTS
     ######################################################################################
+    
+    ### Adjusted bins ###
+    bins = utils.get_adjusted_bins(config.lepton_channel, config.variable)
 
     ### GPR ###
     f_gpr = ROOT.TFile(f'{config.gbl.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
     h_gpr = f_gpr.Get('Vjets_SR_' + config.variable.name)
+    h_gpr = _reassign_bins(h_gpr, bins)
 
     ### Response matrix ###
     f_response_mtx = ROOT.TFile(config.gbl.response_matrix_filepath.format(lep=config.lepton_channel))
@@ -749,7 +768,7 @@ def plot_plu_fit(config : SingleChannelConfig, fit_results : dict[str, tuple[flo
     for i in range(1, len(config.bins)):
         h = f_response_mtx.Get(f'ResponseMatrix_{config.variable}_fid{i:02}')
         h.Scale(fit_results[f'mu_{i:02}'][0])
-        h_signals.append(h)
+        h_signals.append(_reassign_bins(h, bins))
 
     ### MC + data ###
     hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + config.var_reader_name
@@ -757,9 +776,9 @@ def plot_plu_fit(config : SingleChannelConfig, fit_results : dict[str, tuple[flo
     h_stop = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.stop, hist_name)
     h_data = config.gbl.file_manager.get_hist(config.lepton_channel, utils.Sample.data, hist_name)
 
-    h_ttbar = plot.rebin(h_ttbar, config.bins)
-    h_stop = plot.rebin(h_stop, config.bins)
-    h_data = plot.rebin(h_data, config.bins)
+    h_ttbar = _reassign_bins(plot.rebin(h_ttbar, config.bins), bins)
+    h_stop = _reassign_bins(plot.rebin(h_stop, config.bins), bins)
+    h_data = _reassign_bins(plot.rebin(h_data, config.bins), bins)
 
     h_ttbar.Scale(fit_results['mu-ttbar'][0])
     h_stop.Scale(fit_results['mu-stop'][0])
