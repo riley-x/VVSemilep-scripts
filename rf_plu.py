@@ -62,7 +62,7 @@ def _add_diboson(runner, lepton_channel, lumi_uncert, variable, region, hist_fil
     sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
     sample.multiplyBy(mu_factor)
     sample.setUseStatError(True)
-    for variation in (utils.variations_hist if lepton_channel != 0 else []):
+    for variation in (utils.variations_hist if lepton_channel != 0 else []): # TODO
         sample.addVariation(variation)
 
     ### Add sig. contam. correction for GPR ###   
@@ -89,7 +89,7 @@ def _add_eft(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist
     sample = runner.channel(region).sample('diboson')
     sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
     sample.setUseStatError(True)
-    for variation in (utils.variations_hist if lepton_channel != 0 else []):
+    for variation in (utils.variations_hist if lepton_channel != 0 else []): # TODO
         sample.addVariation(variation)
 
     ### Config ###
@@ -120,7 +120,7 @@ def _add_eft(runner, lepton_channel, lumi_uncert, region, hist_file_format, hist
         sample = runner.channel(region).sample(f'{operator}_quad')
         sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
         sample.setUseStatError(True)
-        for variation in (utils.variations_hist if lepton_channel != 0 else []):
+        for variation in (utils.variations_hist if lepton_channel != 0 else []): # TODO
             sample.addVariation(variation)
         
         mu_factor = RF.MultiplicativeFactor(f'mu-{operator}-quad', 1) # this is fixed by Rob's postscript in eft_quad_correction
@@ -208,7 +208,7 @@ def run(
             sample.multiplyBy(utils.variation_mu_ttbar, 1, 1 - mu_ttbar[1] / mu_ttbar[0], 1 + mu_ttbar[1] / mu_ttbar[0], RF.MultiplicativeFactor.GAUSSIAN)
             sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
             sample.setUseStatError(True)
-            for variation in (utils.variations_hist if lep != 0 else []):
+            for variation in (utils.variations_hist if lep != 0 else []): # TODO
                 sample.addVariation(variation)
 
             ### Add stop ###
@@ -220,7 +220,7 @@ def run(
             sample.multiplyBy(utils.variation_mu_stop, 1, 1 - mu_stop[1] / mu_stop[0], 1 + mu_stop[1] / mu_stop[0], RF.MultiplicativeFactor.GAUSSIAN)
             sample.multiplyBy(utils.variation_lumi,  1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
             sample.setUseStatError(True)
-            for variation in (utils.variations_hist if lep != 0 else []):
+            for variation in (utils.variations_hist if lep != 0 else []): # TODO
                 sample.addVariation(variation)
 
             ### Add GPR ###
@@ -230,7 +230,7 @@ def run(
             if gpr_mu_corrs:
                 for variation in utils.variations_custom:
                     sample.addVariation(variation)
-                for variation in (utils.variations_hist if lep != 0 else []):
+                for variation in (utils.variations_hist if lep != 0 else []): # TODO
                     sample.addVariation(variation)
 
             ### Mode switch (signals and diboson background) ###

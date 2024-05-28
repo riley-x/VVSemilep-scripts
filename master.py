@@ -544,14 +544,19 @@ def plot_naive_bin_yields(config : SingleChannelConfig, filename : str):
     '''
     Plots the bin-by-bin yields taken by just doing Data - Bkgs.
     '''
+    ### Adjusted bins ###
+    bins = utils.get_adjusted_bins(config.lepton_channel, config.variable)
+
     ### Get hists ###
     f_gpr = ROOT.TFile(f'{config.gbl.output_dir}/gpr/gpr_{config.lepton_channel}lep_vjets_yield.root')
     h_gpr = f_gpr.Get('Vjets_SR_' + config.variable.name)
+    h_gpr = _reassign_bins(h_gpr, bins)
 
     hist_name = '{sample}_VV{lep}_MergHP_Inclusive_SR_' + config.var_reader_name
     def get_hist(sample):
         h = config.gbl.file_manager.get_hist(config.lepton_channel, sample, hist_name)
-        return plot.rebin(h, config.bins)
+        h = plot.rebin(h, config.bins)
+        return _reassign_bins(h, bins)
     
     h_diboson = get_hist(utils.Sample.diboson)
     h_ttbar = get_hist(utils.Sample.ttbar)
