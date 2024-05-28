@@ -1264,6 +1264,12 @@ class MultiChannelConfig():
                 0: [utils.Variable.vv_mt],
                 1: [utils.Variable.vv_mt],
             }
+        elif tag == 'ptJ':
+            out = {
+                0: [utils.Variable.fatjet_pt],
+                1: [utils.Variable.fatjet_pt],
+                2: [utils.Variable.fatjet_pt],
+            }
         else:
             raise NotImplementedError(f'ChannelConfig unknown tag {tag}')
         return { k:v for k,v in out.items() if k in lepton_channels }
