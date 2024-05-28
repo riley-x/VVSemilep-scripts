@@ -1570,8 +1570,8 @@ def run_diboson_fit(config : MultiChannelConfig, skip_fits : bool = False):
         ### Plot fit ###
         # TODO this doesn't adjust the GPR distribution for the correlation correction
         sc_configs = config.split_config()
-        filename = f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_postfit'
         for sc_config in sc_configs:
+            filename = f'{config.gbl.output_dir}/plots/{config.base_name}.diboson_postfit'
             if len(sc_configs) > 1:
                 filename += f'_{sc_config.base_name}'
             plot_mc_gpr_stack(
