@@ -286,6 +286,29 @@ def plot_migration_matrix(mtx, var, **kwargs):
     ROOT.gStyle.SetPalette(ROOT.kBird)
 
 
+def plot_matrix_tiered(h, var, **kwargs):
+    '''
+    Plots the "signal histogram" of each fiducial bin
+    '''
+    projections = []
+    labels = []
+    for i in range(1, h.GetNbinsX() + 1): 
+        projections.append([h.ProjectionY(f'p{i}', i, i)])
+        labels.append(f'{int(h.GetXaxis().GetBinLowEdge(i))},{int(h.GetXaxis().GetBinLowEdge(i+1))}')
+
+    plot.plot_tiered(
+        projections,
+        tier_labels=labels,
+        tier_title=f'Fiducial {var:title}',
+        ytitle='Normalized Events',
+        xtitle=f'Detector {var:title}',
+        plot_style='fill',
+        fillcolor=plot.colors.tableu_40,
+        y_pad_top=0.2,
+        **kwargs,
+    )
+
+
 def plot_eff_acc(mtx, var, **kwargs):
     efficiency = get_unfolding_efficiency(mtx)
     accuracy = get_unfolding_accuracy(mtx)
@@ -323,14 +346,16 @@ def plot_fid_reco(mtx, var, **kwargs):
     )
 
 
+
+
 ##########################################################################################
 ###                                        MAIN                                        ###
 ##########################################################################################
 
 _default_vars = [
     # utils.Variable.fatjet_pt,
-    # utils.Variable.vv_m,
-    utils.Variable.vv_mt,
+    utils.Variable.vv_m,
+    # utils.Variable.vv_mt,
 ]
 
 def main(
@@ -381,6 +406,7 @@ def main(
         else:
             bins = utils.get_bins(lepton_channel, var)
         mtx = plot.rebin2d(mtx, bins, bins)
+        reponse_matrix = get_response_matrix(mtx)
     
         ### Plot ###
         output_plot_basepath = f'{output_plots}/{lepton_channel}lep_{var}.{sample}'
@@ -391,6 +417,14 @@ def main(
                 '% migration from each fiducial bin'
             ],
         )
+        plot_matrix_tiered(get_migration_matrix(mtx), var,
+            filename=f'{output_plot_basepath}_migration_matrix_tiered',
+            subtitle=common_subtitle,
+        )
+        plot_matrix_tiered(reponse_matrix, var,
+            filename=f'{output_plot_basepath}_response_matrix_tiered',
+            subtitle=common_subtitle,
+        )
         plot_eff_acc(mtx, var,
             filename=f'{output_plot_basepath}_eff_acc',
             subtitle=common_subtitle,
@@ -399,9 +433,9 @@ def main(
             filename=f'{output_plot_basepath}_fid_reco',
             subtitle=common_subtitle,
         )
+        
 
         ### Save ###
-        reponse_matrix = get_response_matrix(mtx)
         for x in range(1, reponse_matrix.GetNbinsX() + 1):
             name = f'ResponseMatrix_{var}_fid' + str(x).rjust(2, '0')
             p = reponse_matrix.ProjectionY(name, x, x)
