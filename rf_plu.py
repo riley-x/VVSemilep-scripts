@@ -59,7 +59,7 @@ def _add_diboson(runner, lepton_channel, lumi_uncert, variable, region, hist_fil
     sample = runner.channel(region).sample('diboson')
 
     mu_factor = RF.MultiplicativeFactor('mu-diboson', 1, 0, 5, RF.MultiplicativeFactor.FREE)
-    sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
+    # sample.multiplyBy(utils.variation_lumi, 1, 1 - lumi_uncert, 1 + lumi_uncert, RF.MultiplicativeFactor.GAUSSIAN)
     sample.multiplyBy(mu_factor)
     sample.setUseStatError(True)
     for variation in (utils.variations_hist if lepton_channel != 0 else []): # TODO
