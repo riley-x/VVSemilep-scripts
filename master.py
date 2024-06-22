@@ -594,7 +594,7 @@ def plot_plu_yields(config : SingleChannelConfig, plu_fit_results, filename : st
         mu = plu_fit_results[f'mu_{i:02}']
         h_fit.SetBinContent(i, mu[0])
         h_fit.SetBinError(i, mu[1])
-
+    
     ### MC ###
     # Buggy response matrix in eos_v3 files, so point to local files in interim
     # Note fixed in https://gitlab.cern.ch/CxAODFramework/CxAODReader_VVSemileptonic/-/merge_requests/445
@@ -637,6 +637,13 @@ def plot_plu_yields(config : SingleChannelConfig, plu_fit_results, filename : st
     )
     _plot_yield_comparison(**yield_args, filename=filename)
     _plot_yield_comparison(**yield_args, h_eft=h_cw_quad, eft_legend='c_{W}^{quad}=' + f'{cw:.2f}', filename=filename + '_cw')
+
+    ### Save ###
+    f_out = ROOT.TFile(f'{config.gbl.output_dir}/results/{config.base_name}.plu_yields.root', 'UPDATE')
+    h_fit.Write('fit', ROOT.TObject.kOverwrite)
+    h_mc.Write('SM', ROOT.TObject.kOverwrite)
+    h_cw_quad.Write('cWq=0.12', ROOT.TObject.kOverwrite)
+    plot.success(f'master.py::plot_plu_yields({config.base_name}) saved fit results to {f_out.GetName()}')
 
 
 def plot_mc_gpr_stack(
@@ -1194,8 +1201,9 @@ class GlobalConfig:
         self.response_matrix_filepath = output_dir + GlobalConfig.response_matrix_format.format(sample='diboson', lep='{lep}')
         self.rebinned_hists_filepath = output_dir + GlobalConfig.rebinned_hists_format
         self.resonance_finder_outdir = f'{output_dir}/rf'
-        os.makedirs(f'{self.output_dir}/response_matrix', exist_ok=True)
         os.makedirs(f'{self.output_dir}/rebin', exist_ok=True)
+        os.makedirs(f'{self.output_dir}/response_matrix', exist_ok=True)
+        os.makedirs(f'{self.output_dir}/results', exist_ok=True)
         os.makedirs(f'{self.output_dir}/rf', exist_ok=True)
 
         ### Run management ###
